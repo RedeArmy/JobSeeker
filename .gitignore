@@ -1,1 +1,9 @@
+# Entornos virtuales
 venv/
+
+# Archivos Python compilados
+__pycache__/
+
+
+# Archivos temporales de editores
+uploads/
