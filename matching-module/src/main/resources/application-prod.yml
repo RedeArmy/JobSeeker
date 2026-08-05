@@ -1,0 +1,2 @@
+# Placeholder — prod profile: Supabase connection via environment variables.
+# No hardcoded credentials — see .env.example: SUPABASE_DB_*.

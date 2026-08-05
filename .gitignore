@@ -1,10 +1,29 @@
-# Entornos virtuales
-venv/
-
-# Archivos Python compilados
-__pycache__/
-
-
-# Archivos temporales de editores
-uploads/
 .env
+
+# ---- Java / Maven ----
+target/
+*.class
+*.jar
+*.war
+*.ear
+.mvn/
+!.mvn/wrapper/maven-wrapper.jar
+
+# ---- IDE ----
+.idea/
+*.iml
+*.iws
+.vscode/
+.settings/
+.classpath
+.project
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+
+# ---- Logs ----
+*.log
+
+# ---- Docker ----
+docker-compose.override.local.yml

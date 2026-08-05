@@ -1,0 +1,9 @@
+# Local developer overrides for docker-compose.yml — placeholder.
+#
+# Intended for machine-specific tweaks (port remapping, bind mounts,
+# extra env vars) that should not be committed as part of the base
+# stack definition. Left empty until the base services exist.
+
+version: "3.9"
+
+services: {}

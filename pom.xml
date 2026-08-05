@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.usac.jobseeker</groupId>
+    <artifactId>jobseeker-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>jobseeker-parent</name>
+    <description>Parent POM for the JobSeeker modular monolith. Placeholder — no dependencies or plugin management yet.</description>
+
+    <!--
+        Spring Boot parent/BOM, Java version, and shared dependencyManagement
+        will be added here once the module skeletons are validated.
+    -->
+
+    <modules>
+        <module>common</module>
+        <module>auth-module</module>
+        <module>cv-module</module>
+        <module>job-module</module>
+        <module>matching-module</module>
+        <module>ats-module</module>
+        <module>tracker-module</module>
+    </modules>
+
+</project>

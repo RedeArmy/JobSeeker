@@ -1,0 +1,6 @@
+# Placeholder — backend CI (build + unit tests per module).
+# name: ci-backend
+# on: [pull_request, push]
+# jobs:
+#   build:
+#     # checkout, set up Java 21, mvn -pl <module> verify

@@ -1,0 +1,28 @@
+# Local development stack — placeholder only, no real service definitions yet.
+#
+# Supabase is NOT defined here: it is a cloud-managed Postgres used in
+# production only. This file covers local dev services:
+#
+# services:
+#   postgres:
+#     # image: pgvector/pgvector:pg16 (or equivalent pgvector-enabled Postgres 16 image)
+#     # env: POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB (see .env.example)
+#     # volumes: local named volume + infra/docker/postgres init scripts
+#
+#   redis:
+#     # base Redis image, local dev cache/session store
+#
+#   ollama:
+#     # local LLM runtime; model pull handled via infra/docker/ollama scripts
+#
+#   auth-module:
+#   cv-module:
+#   job-module:
+#   matching-module:
+#   ats-module:
+#   tracker-module:
+#     # one service per business module, built from each module's Dockerfile
+
+version: "3.9"
+
+services: {}

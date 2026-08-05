@@ -1,0 +1,8 @@
+# Placeholder — deploy to staging (build images, run Flyway against Supabase staging, deploy).
+# name: cd-staging
+# on:
+#   push:
+#     branches: [main]
+# jobs:
+#   deploy:
+#     # build + push images, run prod-profile migrations against Supabase, deploy staging
