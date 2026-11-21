@@ -13,7 +13,7 @@
 #     # variables: ver .env.example (configuración OIDC de Clavaris, almacenamiento, correo, BD, Redis)
 #
 #   postgres:
-#     # imagen: pgvector/pgvector:pg16 (o equivalente de Postgres 16 con pgvector)
+#     # imagen: pgvector/pgvector:pg17 (Postgres 17, la versión que ofrece Supabase — ADR-0028)
 #     # variables: POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB (ver .env.example)
 #     # volúmenes: volumen local con nombre + scripts de inicio de infra/docker/postgres
 #

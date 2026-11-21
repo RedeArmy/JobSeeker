@@ -57,7 +57,7 @@ flowchart TB
             Alert["Alertmanager"]
         end
     end
-    PG[("Supabase Postgres 16\n+ pgvector")]
+    PG[("Supabase Postgres 17\n+ pgvector")]
     St[("Supabase Storage\n(S3-compat.)")]
     Clav["Clavaris"]
 

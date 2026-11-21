@@ -51,7 +51,7 @@ class SpikeIntegrationTest {
   @Container
   static PostgreSQLContainer pg =
       new PostgreSQLContainer(
-          DockerImageName.parse("pgvector/pgvector:pg16").asCompatibleSubstituteFor("postgres"));
+          DockerImageName.parse("pgvector/pgvector:pg17").asCompatibleSubstituteFor("postgres"));
 
   @Container
   static GenericContainer<?> redis =

@@ -51,7 +51,7 @@ flowchart TB
     end
 
     subgraph Data["Datos e infraestructura"]
-        PG[("PostgreSQL 16\n+ pgvector — ADR-0002")]
+        PG[("PostgreSQL 17\n+ pgvector — ADR-0002, ADR-0028")]
         Redis[("Redis 7\ncache de scores +\nrate limiting — ADR-0011")]
         Ollama["Ollama\n(embeddings ADR-0018, llama3.2)"]
         Supabase[("Supabase\n(Postgres gestionado, prod)")]
@@ -89,7 +89,7 @@ Thymeleaf + HTMX, renderizado del lado del servidor, sin framework SPA (ADR-0005
 
 ### 4.2 Persistencia
 
-PostgreSQL 16 con extensión `pgvector` para embeddings semánticos (ADR-0002), en vez de una base de datos vectorial dedicada. Flyway como única fuente de verdad del esquema, aplicado igual en Docker local y Supabase en producción (ver `data-model.md` §2).
+PostgreSQL 17 con extensión `pgvector` para embeddings semánticos (ADR-0002), en vez de una base de datos vectorial dedicada. Flyway como única fuente de verdad del esquema, aplicado igual en Docker local y Supabase en producción (ver `data-model.md` §2).
 
 ### 4.3 Caching
 

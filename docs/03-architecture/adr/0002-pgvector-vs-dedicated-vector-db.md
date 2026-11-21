@@ -10,13 +10,15 @@
 
 ---
 
+> **Enmendado por ADR-0028 (20-nov-2026):** la versión de PostgreSQL pasa de 16 a **17**, la que Supabase ofrece a los proyectos nuevos (no ofrece la 16); la decisión de usar pgvector no cambia.
+
 ## Contexto
 
 La capa semántica del motor de matching (BR-MATCH-01) requiere almacenar y consultar embeddings vectoriales de perfiles de candidato y descripciones de vacante, para calcular similitud coseno. El volumen esperado durante la fase de validación es de hasta 10,000 perfiles y 1,000 vacantes activas (NFR-SCAL-02).
 
 ## Decisión
 
-Se adopta **pgvector** como extensión de PostgreSQL 16, ya elegido como base de datos principal del sistema, en vez de introducir una base de datos vectorial dedicada.
+Se adopta **pgvector** como extensión de PostgreSQL 17, ya elegido como base de datos principal del sistema, en vez de introducir una base de datos vectorial dedicada.
 
 ## Alternativas consideradas
 

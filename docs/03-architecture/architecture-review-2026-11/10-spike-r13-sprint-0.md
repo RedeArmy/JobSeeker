@@ -37,7 +37,7 @@ El informe 07 había probado las bibliotecas **una a una**. Este spike prueba lo
 | JaCoCo 0.8.16 | ✅ Genera `jacoco.xml` en `app` |
 | Spotless 3.11.0 con google-java-format 1.36.1 | ✅ Detecta violaciones, las corrige con `apply` y luego pasa |
 | PMD 7.29.0 (plugin 3.28.0) con el conjunto `errorprone` | ✅ Analiza Java 25 y detectó un olor real (`NullAssignment`) en mi entidad de prueba |
-| Testcontainers 2.0.5 con la imagen `pgvector/pgvector:pg16` y `redis:7-alpine` | ✅ |
+| Testcontainers 2.0.5 con la imagen `pgvector/pgvector:pg17` (repetido sobre PostgreSQL 17.12; la primera ejecución fue sobre 16; ADR-0028) y `redis:7-alpine` | ✅ |
 | Jar ejecutable contra contenedores | ✅ Arranca en ~22 s en esta máquina; `health` UP |
 
 ## 3. Hallazgos que cambian el `pom` real (los tres que importan)
