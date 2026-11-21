@@ -3,9 +3,9 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | 🟡 En revisión |
-| **Versión** | 1.0 |
-| **Fecha** | Agosto 2026 |
+| **Estado** | ✅ Aprobado — 20-nov-2026, por el responsable del proyecto, tras la validación descrita al final de este documento |
+| **Versión** | 1.1 — aprobado el 20-nov-2026 tras la validación completa |
+| **Fecha** | Agosto 2026 · aprobado el 20-nov-2026 |
 | **Documento relacionado** | System Design Document, Business Rules, Domain Model |
 
 ---
@@ -18,7 +18,7 @@ Todo score de compatibilidad debe ir acompañado de un desglose explicable por d
 
 Se adopta un **modelo híbrido de dos capas**:
 
-1. **Capa semántica**: similitud coseno entre embeddings de CV y vacante, generados con `nomic-embed-text` vía Ollama.
+1. **Capa semántica**: similitud coseno entre embeddings de CV y vacante, generados vía Ollama con el modelo del ADR-0018 (provisional `qwen3-embedding:0.6b`; `nomic-embed-text` v1.5 dejó de ser el modelo por defecto).
 2. **Capa estructurada ponderada**: reglas explícitas sobre dimensiones estructuradas (habilidades, experiencia, formación, ubicación/modalidad, salario, y otras que se calibren), con pesos configurables — no hardcodeados (BR-MATCH-05).
 
 El score final combina ambas capas; el desglose expuesto al usuario se construye a partir de la capa estructurada, complementado por la señal semántica.
@@ -47,3 +47,9 @@ El score final combina ambas capas; el desglose expuesto al usuario se construye
 
 - ¿Cuáles son los pesos iniciales por defecto antes de la primera calibración empírica con la cohorte de validación?
 - ¿La capa semántica contribuye al score final con un peso propio explícito, o solo se usa para desempatar/ajustar dentro de los rangos que produce la capa estructurada?
+
+## Validación previa a la aprobación (20-nov-2026)
+
+- El bake-off (`08-…`) respalda el diseño: los embeddings separan familia profesional e idioma, pero gradúan mal el encaje fino (diferencia de coseno de 0,007–0,038 entre relevancia 3 y 2), que es justo lo que cubre la capa estructurada (§4.2, recomendación 4).
+- El modelo de embeddings cambia por el ADR-0018 (`nomic-embed-text` v1.5 resultó peor que una línea base léxica); la arquitectura híbrida no cambia.
+- Pendiente, no bloquea: pesos iniciales y su calibración con el protocolo de 300 pares.

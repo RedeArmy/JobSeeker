@@ -3,9 +3,9 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | 🟡 En revisión |
-| **Versión** | 1.0 |
-| **Fecha** | Agosto 2026 |
+| **Estado** | ✅ Aprobado — 20-nov-2026, por el responsable del proyecto, tras la validación descrita al final de este documento |
+| **Versión** | 1.1 — aprobado el 20-nov-2026 tras la validación completa |
+| **Fecha** | Agosto 2026 · aprobado el 20-nov-2026 |
 | **Documento relacionado** | System Design Document |
 
 ---
@@ -41,3 +41,9 @@ Se adopta **Thymeleaf + HTMX**: renderizado del lado del servidor con fragmentos
 ## Preguntas abiertas
 
 - Si en el futuro se requiere una app móvil nativa (fuera de alcance del MVP, ver PRD-MVP §4), ¿se expondría la misma API REST de `api-contract-overview.md`, o se diseñaría una API separada?
+
+## Validación previa a la aprobación (20-nov-2026)
+
+- El *starter* de Thymeleaf carga en Spring Boot 4.1.2 / Java 25 (`07-…`) y el ADR-0020 ya fijó la combinación sesión + CSRF + CSP estricta para `/app/**`.
+- Pendiente de verificar en un navegador real durante el Sprint 0: CSP estricta y cookie `__Host-` con HTMX (`09-…` §10).
+- La pregunta sobre una app móvil queda fuera del MVP (PRD-MVP §4) y no condiciona la decisión.

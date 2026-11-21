@@ -3,9 +3,9 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | 🟡 En revisión |
-| **Versión** | 1.0 |
-| **Fecha** | Agosto 2026 |
+| **Estado** | ✅ Aprobado — 20-nov-2026, por el responsable del proyecto, tras la validación descrita al final de este documento |
+| **Versión** | 1.1 — aprobado el 20-nov-2026 tras la validación completa |
+| **Fecha** | Agosto 2026 · aprobado el 20-nov-2026 |
 | **Documento relacionado** | NFR & Quality Attributes, System Design Document, Integration Design |
 
 ---
@@ -22,9 +22,9 @@ Stack de observabilidad basado enteramente en herramientas **open-source, autoho
 |---|---|---|
 | **Métricas** | Spring Boot Actuator + Micrometer, expuestas en formato Prometheus (`/actuator/prometheus`) | Métricas técnicas estándar (JVM, HTTP, pool de conexiones) más métricas de negocio custom (p. ej. `matching.score.calculated.count`, `job.eligibility.rejected.count`, `applications.submitted.count`, tagueadas por módulo) |
 | **Recolección y almacenamiento** | Prometheus, como servicio adicional en `docker-compose` (desarrollo/staging) | Scrape periódico de `/actuator/prometheus`; retención acotada, sin pretender ser un almacén de métricas de largo plazo |
-| **Visualización** | Grafana, con dashboards versionados como código (JSON en el repo, `infra/observability/`) | Un dashboard por módulo de negocio más uno transversal (salud del sistema); no configuración manual no versionada |
+| **Visualización** | Grafana, con dashboards versionados como código (JSON en el repo, `infra/docker/grafana/`) | Un dashboard por módulo de negocio más uno transversal (salud del sistema); no configuración manual no versionada |
 | **Trazabilidad** | `traceId`/`spanId` de extremo a extremo vía MDC (Mapped Diagnostic Context) de SLF4J, propagado entre módulos dentro del mismo proceso — **no** se adopta OpenTelemetry completo en el MVP | Suficiente para un monolito de un solo proceso (ADR-0001): correlacionar logs de una misma request no requiere un colector de trazas distribuidas diseñado para múltiples servicios de red |
-| **Logging estructurado** | Logback + `logstash-logback-encoder` (JSON), sin PII (BR-DATA-01, NFR-OBS-01) | Cada línea de log incluye `traceId`, `accountId` (identificador, no dato personal), `module`, `timestamp`, nivel — parseable por herramientas de agregación futuras sin cambiar el formato |
+| **Logging estructurado** | Logback con el *structured logging* nativo de Spring Boot (`logging.structured.format.console=logstash`, JSON; sin la dependencia `logstash-logback-encoder`), sin PII (BR-DATA-01, NFR-OBS-01) | Cada línea de log incluye `traceId`, `accountId` (identificador, no dato personal), `module`, `timestamp`, nivel — parseable por herramientas de agregación futuras sin cambiar el formato |
 | **Alertas** | Reglas de alerta de Prometheus (`Alertmanager`), umbrales iniciales ligados a los NFR ya definidos (p. ej. NFR-PERF-01/02, NFR-AVAIL-01/02) | Alertas notifican por el canal disponible del desarrollador único (correo/webhook) — sin guardia rotativa, dado el contexto de tesis |
 
 ## Alternativas consideradas
@@ -53,3 +53,9 @@ Stack de observabilidad basado enteramente en herramientas **open-source, autoho
 - ¿El stack de observabilidad corre también en producción (Supabase + hosting a definir), o el alcance de Prometheus/Grafana se limita a desarrollo/staging, con producción cubierta solo por los health checks y logs estructurados de NFR-OBS-01/02?
 - ¿Qué canal concreto de notificación usa Alertmanager (correo, Slack, webhook genérico) dado que no hay equipo de guardia?
 - ¿Qué retención de métricas en Prometheus es suficiente para la operación continua del producto (más allá de una ventana de validación acotada), sin necesitar almacenamiento de largo plazo (p. ej. Thanos/Mimir)?
+
+## Validación previa a la aprobación (20-nov-2026)
+
+- Enmienda previa a la aprobación: el *logging* estructurado usa el soporte nativo de Spring Boot (`logging.structured.format.console=logstash`, mismo esquema JSON, verificado en `07-…` §6) en lugar de la dependencia `logstash-logback-encoder`.
+- La ruta de los dashboards pasa a `infra/docker/grafana/`, que es la que ya usa el repositorio (cierra el hallazgo D11 de `04-…`); `integration-design.md` se alineó.
+- Las preguntas abiertas (canal de alertas, retención, observabilidad en producción) dependen del ADR-0026, aún en revisión, y no cambian la elección del stack.

@@ -3,9 +3,9 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | 🟡 En revisión |
-| **Versión** | 1.0 |
-| **Fecha** | Agosto 2026 |
+| **Estado** | ✅ Aprobado — 20-nov-2026, por el responsable del proyecto, tras la validación descrita al final de este documento |
+| **Versión** | 1.1 — aprobado el 20-nov-2026 tras la validación completa |
+| **Fecha** | Agosto 2026 · aprobado el 20-nov-2026 |
 | **Documento relacionado** | System Design Document, PRD-MVP §6 |
 
 ---
@@ -31,7 +31,7 @@ Se adopta **Thymeleaf (plantillas HTML) + openhtmltopdf** para la generación de
 
 - Stack 100% Java, sin dependencias externas de otro lenguaje/runtime.
 - Las plantillas de marca del reclutador se definen como plantillas Thymeleaf (HTML + CSS), reutilizando el mismo motor de plantillas que el resto del frontend — no se introduce un segundo lenguaje de templating.
-- Compatible con la consideración de empaquetado GraalVM Native mencionada como criterio transversal del stack.
+- Evita reflexión innecesaria y no cierra la puerta a GraalVM Native, que el ADR-0014 no compromete para el MVP (imagen JVM).
 - Menor superficie de riesgo de inyección comparado con interpolación directa en LaTeX, siempre que se apliquen las prácticas estándar de escape de Thymeleaf.
 
 **Negativas / trade-offs aceptados**
@@ -42,3 +42,9 @@ Se adopta **Thymeleaf (plantillas HTML) + openhtmltopdf** para la generación de
 ## Preguntas abiertas
 
 - ¿Existe un límite de complejidad de diseño (columnas, gráficos, iconografía) que las plantillas de marca de reclutador puedan requerir y que deba validarse contra las capacidades reales de openhtmltopdf antes de construir el generador de CV en la Ola 3 (`roadmap-and-release-plan.md` §5)?
+
+## Validación previa a la aprobación (20-nov-2026)
+
+- `openhtmltopdf-pdfbox` 1.1.113 funciona con Java 25 y Spring Boot 4.1 (`05-…` R1); el riesgo que más preocupaba no se materializó.
+- Se corrigió el texto sobre GraalVM Native: el ADR-0014 no lo compromete para el MVP.
+- Pendiente para la Ola 3, no bloquea: validar los límites de CSS de las plantillas de marca antes de construir el generador.

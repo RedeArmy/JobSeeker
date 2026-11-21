@@ -3,9 +3,9 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | 🟡 En revisión |
-| **Versión** | 1.0 |
-| **Fecha** | Agosto 2026 |
+| **Estado** | ✅ Aprobado — 20-nov-2026, por el responsable del proyecto, tras la validación descrita al final de este documento |
+| **Versión** | 1.1 — aprobado el 20-nov-2026 tras la validación completa |
+| **Fecha** | Agosto 2026 · aprobado el 20-nov-2026 |
 | **Documento relacionado** | System Design Document, Integration Design |
 
 ---
@@ -46,3 +46,9 @@ Se adopta **Ollama local como ruta por defecto** para toda la funcionalidad de I
 
 - ¿Cuáles son, concretamente, los "casos selectivos de alto valor" que justificarían usar un proveedor externo de LLM? Esta decisión no define criterios de activación; deben especificarse antes de implementar esa ruta.
 - ¿Qué proveedor externo específico se usaría, bajo qué modelo de costos, y qué garantías de manejo de datos/PII debe cumplir antes de integrarse (ver `threat-model-stride.md` y `security-architecture.md`)?
+
+## Validación previa a la aprobación (20-nov-2026)
+
+- La enmienda del ADR-0018 (modelo de embeddings) ya está incorporada y el texto de decisión sigue siendo válido: Ollama local por defecto.
+- Spring AI 2.0.2 con Ollama verificado en el entorno (`09-…` §7); `truncate=false` y `keep_alive` globales sí se envían, `num_ctx` solo por llamada.
+- Condición: la ruta con proveedor externo no existe todavía y necesitará su propio ADR (criterios de activación, proveedor, tratamiento de PII) antes de implementarse; por eso las dos preguntas abiertas no bloquean esta decisión.

@@ -3,9 +3,9 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | 🟡 En revisión |
-| **Versión** | 1.0 |
-| **Fecha** | Agosto 2026 |
+| **Estado** | ✅ Aprobado — 20-nov-2026, por el responsable del proyecto, tras la validación descrita al final de este documento |
+| **Versión** | 1.1 — aprobado el 20-nov-2026 tras la validación completa |
+| **Fecha** | Agosto 2026 · aprobado el 20-nov-2026 |
 | **Documento relacionado** | Business Rules (BR-ACCT-01 a 07), Domain Model, Data Model |
 
 ---
@@ -43,10 +43,16 @@ Adicionalmente, tanto el perfil de candidato como el nuevo perfil de reclutador 
 **Negativas / trade-offs aceptados**
 
 - Cambio de esquema no trivial: `accounts.role` (columna única) se reemplaza por dos booleanos, y `full_name`/experiencia/formación migran de `candidate_profiles` a la nueva tabla `professional_profiles`. Aceptable porque el proyecto está en fase de documentación, antes de implementación (las reglas del proyecto §11) — este es el momento de menor costo para el cambio.
-- El diseño de claims de JWT (`security-architecture.md`) debe revisarse para representar un conjunto de roles por cuenta en vez de un valor único — pendiente como pregunta abierta, no resuelto en este ADR.
+- **Resuelto por el ADR-0020:** las capacidades nunca se leen de claims del token; se resuelven desde la base local (`is_candidate_enabled`/`is_recruiter_enabled`) en cada petición.
 - Toda regla de negocio que asumía "el reclutador" y "el candidato" como identidades mutuamente excluyentes requiere una relectura para confirmar que sigue siendo correcta bajo capacidades no excluyentes (BR-ACCT-04 formaliza esto como invariante general, en vez de revisar rule por rule).
 
 ## Preguntas abiertas
 
-- ¿Cómo representa el JWT las capacidades de una cuenta multi-rol — un claim de array de roles, o un token distinto por "rol activo" que el usuario selecciona al iniciar sesión?
-- ¿El embedding de `candidate_profiles` (usado por `matching-module`) se recalcula a partir de `raw_cv_text` (archivo cargado) o de los datos estructurados de `ProfessionalProfile` (experiencia, formación, certificaciones, proyectos), ahora que este último es la fuente compartida del historial profesional?
+- ~~¿Cómo representa el JWT las capacidades de una cuenta multi-rol?~~ **Resuelta por el ADR-0020:** no las representa; se resuelven desde la base local.
+- ~~¿El embedding de `candidate_profiles` se recalcula a partir de `raw_cv_text` o de los datos estructurados?~~ **Resuelta en `data-model.md` §4.4:** se embebe la representación canónica sin nombre del perfil (`02-hld-system-design.md` §4.3).
+
+## Validación previa a la aprobación (20-nov-2026)
+
+- La pregunta sobre los claims del JWT queda resuelta por el ADR-0020: las capacidades nunca se leen del token, se resuelven desde la base local en cada petición.
+- La pregunta sobre el origen del embedding queda resuelta en `data-model.md` §4.4: se embebe la representación canónica sin nombre del perfil (`02-hld-system-design.md` §4.3), no el texto crudo del CV.
+- `accounts.is_candidate_enabled`/`is_recruiter_enabled` y `professional_profiles` ya están en el modelo de datos (§4.1, §4.2).

@@ -3,9 +3,9 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | 🟡 En revisión |
-| **Versión** | 1.0 |
-| **Fecha** | Agosto 2026 |
+| **Estado** | ✅ Aprobado — 20-nov-2026, por el responsable del proyecto, tras la validación descrita al final de este documento |
+| **Versión** | 1.1 — aprobado el 20-nov-2026 tras la validación completa |
+| **Fecha** | Agosto 2026 · aprobado el 20-nov-2026 |
 | **Documento relacionado** | System Design Document, Data Model |
 
 ---
@@ -40,4 +40,10 @@ Se adopta **pgvector** como extensión de PostgreSQL 16, ya elegido como base de
 
 ## Preguntas abiertas
 
-- ¿Qué tipo de índice (`ivfflat` vs. `hnsw`) se calibra como configuración por defecto, y con qué parámetros, dado el volumen esperado de NFR-SCAL-02?
+- ~~¿Qué tipo de índice (`ivfflat` vs. `hnsw`) se calibra por defecto?~~ **Resuelta el 18-nov-2026:** HNSW parcial (`vector_cosine_ops`, `WHERE discoverable`) con `hnsw.iterative_scan=relaxed_order` obligatorio al filtrar; parámetros y medición en `data-model.md` §5 y §5.1.
+
+## Validación previa a la aprobación (20-nov-2026)
+
+- Verificado en noviembre de 2026: pgvector 0.8.x con Hibernate 7.4 (`hibernate-vector`), mapeo JPA probado (`07-…`, `09-…` §4).
+- El índice se decide con evidencia: HNSW parcial `WHERE discoverable`; con filtros, `hnsw.iterative_scan=relaxed_order` es obligatorio (recall 0,38 sin él; `anexos/embeddings-esquema/recall`). Ver `data-model.md` §5 y §5.1.
+- Riesgo aceptado, a verificar en el Sprint 0: la versión real de pgvector del proyecto Supabase (≥ 0.8.0 para `iterative_scan`); solo se verificó contra un Postgres local equivalente.

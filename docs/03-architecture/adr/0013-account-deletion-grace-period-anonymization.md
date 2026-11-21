@@ -3,9 +3,9 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | 🟡 En revisión |
-| **Versión** | 1.0 |
-| **Fecha** | Agosto 2026 |
+| **Estado** | ✅ Aprobado — 20-nov-2026, por el responsable del proyecto, tras la validación descrita al final de este documento |
+| **Versión** | 1.1 — aprobado el 20-nov-2026 tras la validación completa |
+| **Fecha** | Agosto 2026 · aprobado el 20-nov-2026 |
 | **Documento relacionado** | Business Rules (BR-DATA-02 a 06), Security Architecture, Domain Model |
 
 ---
@@ -28,7 +28,7 @@ Además, la identidad real (email, contraseña, redes sociales vinculadas) ya no
 1. Al solicitar la eliminación, la cuenta entra en estado suspendido por `accountDeletionGracePeriodDays` (configurable, no hardcodeado — por defecto 30 días). Volver a iniciar sesión durante ese periodo cancela la solicitud sin pérdida de datos.
 2. Vencido el periodo sin cancelación, un proceso programado (mismo patrón ya establecido para `job-module`, `system-design-document.md` §4.6) **anonimiza** — no borra físicamente — los campos de PII directa: nombre, contacto, texto de CV, foto, y regenera/descarta el embedding derivado de esos datos.
 3. Los registros que dependen de la cuenta (`Application`, `CompatibilityScore`, historial de pipeline) **se conservan**, referenciando el perfil ya anonimizado — preserva la integridad del historial del reclutador (BR-DATA-05).
-4. El mismo proceso llama a la API de administración de Clavaris para eliminar la identidad real (email, credencial, identidades sociales) — sin esto, el borrado en JobSeeker sería cosmético: la PII más sensible (email, forma de autenticarse) seguiría existiendo en el proveedor de identidad.
+4. El mismo proceso llama a la API de administración de Clavaris para eliminar la identidad real (email, credencial, identidades sociales) — sin esto, el borrado en JobSeeker sería cosmético: la PII más sensible (email, forma de autenticarse) seguiría existiendo en el proveedor de identidad. La credencial es una Secret Key de la organización con el scope `platform:accounts:delete`, que solo alcanza las cuentas de esa organización.
 
 ## Alternativas consideradas
 
@@ -56,7 +56,14 @@ Además, la identidad real (email, contraseña, redes sociales vinculadas) ya no
 
 - ¿`accountDeletionGracePeriodDays` = 30 días es el valor correcto para esta jurisdicción/producto, o debe calibrarse?
 - ¿Qué pasa si la cuenta tiene ambas capacidades (candidato y reclutador, ADR-0008) y solo se pide eliminar una? ¿Se permite eliminar una capacidad sin eliminar la cuenta completa, dado que comparten `ProfessionalProfile`?
-- Especificación exacta columna por columna de qué se anonimiza (`data-model.md` §4.19).
+- Especificación exacta columna por columna de qué se anonimiza (bloques «Anonimización» de `data-model.md` §4.1, §4.4 y §4.5).
 - ¿El candidato puede solicitar una copia de sus datos antes de pedir la eliminación (portabilidad), o queda fuera del alcance del MVP?
 - **Importante, pendiente de revisar cuando Clavaris tenga más de un producto cliente:** este ADR asume que la identidad en Clavaris es 1:1 con la cuenta de JobSeeker, por lo que "eliminar mi cuenta de JobSeeker" puede cascadear a "eliminar mi identidad en Clavaris" sin ambigüedad. Si en el futuro la misma identidad de Clavaris se usa para iniciar sesión en JobSeeker *y* en otro producto (SSO real entre productos propios, no solo reutilización del software), esta cascada deja de ser correcta — eliminaría el acceso a productos que la persona nunca pidió abandonar. En ese escenario, la acción correcta sería "desvincular JobSeeker de mi identidad" (revocar solo los tokens/consentimiento de este cliente OAuth), no eliminar la cuenta en Clavaris. No se resuelve aquí porque hoy JobSeeker es el único cliente de Clavaris.
 - ¿La cascada hacia Clavaris (BR-DATA-06) es una llamada síncrona dentro del mismo batch, o asíncrona con reintento si Clavaris no responde?
+
+## Validación previa a la aprobación (20-nov-2026)
+
+- La cascada hacia Clavaris está verificada con Clavaris real: una Secret Key de la organización con el scope `platform:accounts:delete` borra las cuentas de **su** organización y recibe 403 sobre las ajenas (`06-…`, validación de G1/TD-SEC-101 y addendum 12). Con ello G1 queda resuelto técnicamente y la credencial queda decidida en este ADR.
+- Un id ya borrado también devuelve 403 para una Secret Key (ADR-0047 de Clavaris), de modo que el proceso no puede tratar «no existe» como éxito: registra localmente que la llamada tuvo éxito y solo reintenta mientras no haya recibido un 2xx.
+- Corregida la referencia `data-model.md` §4.19, que no existe: la anonimización por columna está en los bloques «Anonimización» de §4.1, §4.4 y §4.5.
+- Pendiente para el TDD de `cv-module`, no bloquea: la lista final columna por columna, el valor de 30 días para esta jurisdicción, la portabilidad previa al borrado y si la cascada es síncrona o con reintento.

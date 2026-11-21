@@ -3,9 +3,9 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | 🟡 En revisión |
-| **Versión** | 1.0 |
-| **Fecha** | Agosto 2026 |
+| **Estado** | ✅ Aprobado — 20-nov-2026, por el responsable del proyecto, tras la validación descrita al final de este documento |
+| **Versión** | 1.1 — aprobado el 20-nov-2026 tras la validación completa |
+| **Fecha** | Agosto 2026 · aprobado el 20-nov-2026 |
 | **Documento relacionado** | System Design Document |
 
 ---
@@ -41,4 +41,10 @@ Se adopta un **monolito modular**: un único desplegable Spring Boot en el que c
 
 ## Preguntas abiertas
 
-- ¿Se debe reforzar la regla de dependencia entre módulos con un chequeo automatizado (p. ej. ArchUnit) en CI, o queda solo como revisión manual documentada en `coding-standards.md`?
+- ~~¿Se debe reforzar la regla de dependencia entre módulos con un chequeo automatizado (p. ej. ArchUnit) en CI?~~ **Resuelta el 18-nov-2026 por el ADR-0015:** ArchUnit (ARCH-01..10) corre como paso bloqueante de cada build.
+
+## Validación previa a la aprobación (20-nov-2026)
+
+- Decisión vigente: el único desplegable es el módulo `app` (aplicado en el repositorio; ADR-0026 propuesto) y los límites entre módulos se comprueban en cada build con ArchUnit (ADR-0015, aprobado).
+- Es el mismo patrón que opera `../Clavaris` con seis módulos y 126 migraciones: la decisión no es especulativa.
+- La pregunta abierta sobre reforzar la regla con un chequeo automatizado queda resuelta por el ADR-0015.

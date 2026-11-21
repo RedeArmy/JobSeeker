@@ -3,9 +3,9 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | 🟡 En revisión |
-| **Versión** | 1.0 |
-| **Fecha** | Agosto 2026 |
+| **Estado** | ✅ Aprobado — 20-nov-2026, por el responsable del proyecto, tras la validación descrita al final de este documento |
+| **Versión** | 1.1 — aprobado el 20-nov-2026 tras la validación completa |
+| **Fecha** | Agosto 2026 · aprobado el 20-nov-2026 |
 | **Documento relacionado** | Business Rules (BR-ELIG-01 a 08), Domain Model, Data Model |
 
 ---
@@ -55,3 +55,8 @@ La interpretación de `criteria` (qué operador aplica — pertenencia a lista, 
 
 - ¿Se valida la forma de `criteria` con JSON Schema por `ruleType` en la capa de aplicación antes de persistir, o solo en el formulario del reclutador (capa de presentación)?
 - Si el catálogo de `ruleType` crece significativamente (más de ~15-20 tipos), ¿sigue siendo preferible este modelo genérico, o conviene reevaluar hacia un catálogo de tipos de regla en tabla (`eligibility_rule_types`) en vez de un `CHECK` de enum fijo?
+
+## Validación previa a la aprobación (20-nov-2026)
+
+- El modelo genérico ya está reflejado en `data-model.md` §4.11 y `business-rules.md` §3, y se reutiliza para las preguntas de postulación (BR-APPQ), como preveía el ADR.
+- Las dos preguntas abiertas (validación de `criteria` con JSON Schema; qué hacer si el catálogo crece) son de implementación y se resuelven en el TDD de `job-module`; no cambian la decisión.

@@ -3,9 +3,9 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | 🟡 En revisión |
-| **Versión** | 1.0 |
-| **Fecha** | Agosto 2026 |
+| **Estado** | ✅ Aprobado — 20-nov-2026, por el responsable del proyecto, tras la validación descrita al final de este documento |
+| **Versión** | 1.1 — aprobado el 20-nov-2026 tras la validación completa |
+| **Fecha** | Agosto 2026 · aprobado el 20-nov-2026 |
 | **Documento relacionado** | Security Architecture, Threat Model STRIDE, API Contract Overview |
 
 ---
@@ -23,7 +23,7 @@ El rate limiting existía hasta ahora solo como menciones dispersas y sin mecani
 | Alcance de aplicación | Un interceptor/filtro transversal (`infrastructure/config/` de cada módulo, o un filtro compartido en `shared-kernel`) — no una implementación ad-hoc por endpoint |
 | Clave de bucket | Combinación de `accountId` (si autenticado) o IP (si no autenticado, p. ej. login/registro) + identificador de la política aplicada |
 | Configuración | Límites (capacidad del bucket, tasa de recarga) definidos en configuración de aplicación (`application.yml`), **no hardcodeados** — mismo criterio que `archivalDelayDays` (BR-JOB-06) y los pesos de scoring (BR-MATCH-05); permite ajustar sin redeploy de código, solo de configuración |
-| Políticas iniciales | `login`: estricto, por IP + por cuenta (mitiga fuerza bruta, `threat-model-stride.md` §3.1); `apply`/mutaciones generales: moderado, por cuenta; `matching-suggestions`/lectura de listados: más permisivo, por cuenta — valores concretos a calibrar, no fijados en este ADR |
+| Políticas iniciales | `login` (inicio y *callback* del flujo OIDC; el formulario de login vive en Clavaris, que aplica su propio límite de fuerza bruta — ADR-0020): estricto, por IP (mitiga fuerza bruta, `threat-model-stride.md` §3.1); `apply`/mutaciones generales: moderado, por cuenta; `matching-suggestions`/lectura de listados: más permisivo, por cuenta — valores concretos a calibrar, no fijados en este ADR |
 | Respuesta al exceder el límite | `429 Too Many Requests`, con el sobre de error estándar de `api-contract-overview.md` §6 (código `RATE_LIMIT_EXCEEDED`) más encabezados `Retry-After` y `X-RateLimit-*` |
 | Excepciones | Los batches internos de `job-module` (`system-design-document.md` §4.6) no pasan por este filtro — no son tráfico de cliente |
 
@@ -52,3 +52,9 @@ El rate limiting existía hasta ahora solo como menciones dispersas y sin mecani
 
 - ¿Los valores concretos de capacidad/tasa de recarga por política (login, apply, sugerencias, etc.) se calibran antes del cierre de la Ola 1, o se ajustan empíricamente con tráfico real en la Ola 3 (`roadmap-and-release-plan.md` §5)?
 - ¿Existe una política diferenciada para cuentas con ambas capacidades (ADR-0008) — p. ej. límites separados para sus acciones como candidato vs. como reclutador, o un único límite por cuenta sin distinción de capacidad activa?
+
+## Validación previa a la aprobación (20-nov-2026)
+
+- Bucket4j 8.22.0 sobre Lettuce 7.5.2 verificado en el entorno (`07-…`): un cubo de capacidad 3 concede 3 de 5 intentos y las claves de otras cuentas son independientes.
+- Ajuste por el ADR-0020: el formulario de login vive en Clavaris, que aplica su propio límite de fuerza bruta; la política `login` de JobSeeker cubre solo el inicio y el *callback* del flujo OIDC, por IP.
+- Los valores concretos por política y la política para cuentas con ambas capacidades se calibran con tráfico real; no bloquean el mecanismo.
