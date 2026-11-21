@@ -1,18 +1,59 @@
-# Marcador de posición — CI del backend (compilación + pruebas unitarias por módulo).
-# Es válido pero inerte: solo se ejecuta a mano (workflow_dispatch) para no generar
-# ejecuciones fallidas vacías en cada push. El CI real (Java 25, mvn verify, ArchUnit,
-# gitleaks, acciones fijadas por SHA) se define en el Sprint 0.
+# CI del backend: compila los módulos y ejecuta `mvn verify`, que incluye formato (Spotless), análisis
+# estático (PMD), las pruebas unitarias y de integración, las reglas de arquitectura ARCH-01..10
+# (ADR-0015) y el informe de cobertura (JaCoCo). Una violación de cualquiera rompe el build.
 name: ci-backend
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
+# Privilegio mínimo: este workflow no necesita escribir en el repositorio.
 permissions:
   contents: read
 
+# Un push nuevo a la misma PR vuelve inútil la ejecución anterior; los push a main nunca se cancelan.
+concurrency:
+  group: ci-backend-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  placeholder:
+  build-and-test:
+    name: Build and test (mvn verify)
     runs-on: ubuntu-latest
+    # Un paso colgado consume seis horas de runner si no se limita.
+    timeout-minutes: 30
     steps:
-      - name: Sin pasos todavía
-        run: echo "Marcador de posición de ci-backend; se implementa en el Sprint 0."
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Java 25 (ADR-0014). La caché de Maven la gestiona la propia acción.
+      - name: Set up JDK 25
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          java-version: "25"
+          distribution: temurin
+          cache: maven
+
+      # Las pruebas con Testcontainers (migraciones, Postgres 17 con pgvector — ADR-0028) usan el
+      # Docker que ya trae ubuntu-latest; no hace falta preparar nada más.
+      - name: Build and test
+        run: mvn -B -ntp verify
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: surefire-reports
+          path: "**/target/surefire-reports/*"
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: jacoco-report
+          path: "**/target/site/jacoco/jacoco.xml"
+          if-no-files-found: ignore
+          retention-days: 7

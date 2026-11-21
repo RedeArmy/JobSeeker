@@ -21,3 +21,16 @@ de IA híbrida (Ollama local + API de Claude de uso selectivo).
 - `app` — el único desplegable (los módulos de negocio son bibliotecas)
 
 Consulta `docs/` para la documentación de arquitectura, producto y dominio.
+
+## Cómo construir
+
+Requisitos: JDK 25 (Temurin) y Maven 3.9.
+
+```bash
+mvn verify                  # formato, análisis estático, pruebas, reglas de arquitectura y cobertura
+mvn spotless:apply          # corrige el formato si `verify` lo rechaza
+java --enable-native-access=ALL-UNNAMED -jar app/target/app-0.1.0-SNAPSHOT.jar
+```
+
+`mvn verify` es el mismo comando que ejecuta el CI. Las pruebas de integración con Testcontainers
+necesitan Docker.
