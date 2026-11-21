@@ -10,19 +10,38 @@
     <packaging>pom</packaging>
 
     <name>jobseeker-parent</name>
-    <description>POM padre del monolito modular JobSeeker. Solo gestiona versiones; aún sin dependencias de aplicación.</description>
+    <description>POM padre del monolito modular JobSeeker. Fija versiones y la configuración de calidad del build; las dependencias de aplicación las declara cada módulo.</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- ADR-0014: Java 25 (LTS), alineado con ../Clavaris y verificado en
-             architecture-review-2026-11/05-verificacion-riesgos-java-25.md. Las herramientas
-             de build deben usar versiones compatibles con Java 25 (JaCoCo >= 0.8.14, Spotless 3.x,
-             maven-pmd-plugin 3.28.0): las anteriores fallan con classfile versión 69. -->
+             architecture-review-2026-11/05-verificacion-riesgos-java-25.md. -->
         <java.version>25</java.version>
         <maven.compiler.release>25</maven.compiler.release>
         <!-- ADR-0014: Boot 3.4 salió del soporte OSS el 2025-12-31; 4.1.2 es la línea con la que
-             ../Clavaris ya compila, así que la resolución del BOM está probada en este entorno. -->
+             ../Clavaris ya compila. Boot 4.1 termina el 2027-07-31: planificar una actualización menor. -->
         <spring-boot.version>4.1.2</spring-boot.version>
+
+        <!-- Versiones fijadas y verificadas juntas en el spike R13 (10-spike-r13-sprint-0.md). Se
+             declaran aquí solo para que ningún módulo las repita; una biblioteca no entra al
+             classpath hasta que un módulo la declare como dependencia. -->
+        <testcontainers.version>2.0.5</testcontainers.version>
+        <archunit.version>1.5.1</archunit.version>
+        <springdoc.version>3.2.0</springdoc.version>
+        <bucket4j.version>8.22.0</bucket4j.version>
+        <openhtmltopdf.version>1.1.113</openhtmltopdf.version>
+
+        <!-- Herramientas de build compatibles con Java 25 (las anteriores fallan con classfile 69). -->
+        <maven-compiler-plugin.version>3.16.0</maven-compiler-plugin.version>
+        <maven-surefire-plugin.version>3.6.1</maven-surefire-plugin.version>
+        <jacoco.version>0.8.16</jacoco.version>
+        <spotless.version>3.11.0</spotless.version>
+        <google-java-format.version>1.36.1</google-java-format.version>
+        <pmd-plugin.version>3.28.0</pmd-plugin.version>
+        <pmd.version>7.29.0</pmd.version>
+
+        <!-- Vacío por defecto: JaCoCo lo rellena con su agente y Surefire lo concatena en su argLine. -->
+        <argLine></argLine>
     </properties>
 
     <dependencyManagement>
@@ -35,6 +54,33 @@
                 <version>${spring-boot.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.tngtech.archunit</groupId>
+                <artifactId>archunit-junit5</artifactId>
+                <version>${archunit.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+                <version>${springdoc.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.bucket4j</groupId>
+                <artifactId>bucket4j_jdk17-lettuce</artifactId>
+                <version>${bucket4j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.openhtmltopdf</groupId>
+                <artifactId>openhtmltopdf-pdfbox</artifactId>
+                <version>${openhtmltopdf.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -51,5 +97,118 @@
              @SpringBootApplication, la configuración transversal y el único Dockerfile. -->
         <module>app</module>
     </modules>
+
+    <build>
+        <!-- El padre importa el BOM en vez de heredar de spring-boot-starter-parent, así que ningún
+             plugin llega con versión ni configuración: se fijan aquí (hallazgo 1 del spike R13). -->
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>${maven-compiler-plugin.version}</version>
+                    <configuration>
+                        <release>${maven.compiler.release}</release>
+                        <parameters>true</parameters>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>${maven-surefire-plugin.version}</version>
+                    <configuration>
+                        <!-- La opción de acceso nativo evita el aviso de la JVM 24+ cuando Netty llama a
+                             System::loadLibrary (R10); EnableDynamicAgentLoading cubre el agente que
+                             carga ByteBuddy (Mockito). -->
+                        <argLine>@{argLine} --enable-native-access=ALL-UNNAMED -XX:+EnableDynamicAgentLoading</argLine>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                    <version>${spring-boot.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
+        <plugins>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Formato del código (NFR-MAINT-02): `mvn spotless:apply` lo corrige, `verify` lo exige. -->
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>${spotless.version}</version>
+                <configuration>
+                    <java>
+                        <googleJavaFormat>
+                            <version>${google-java-format.version}</version>
+                        </googleJavaFormat>
+                    </java>
+                </configuration>
+                <executions>
+                    <execution>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Análisis estático: una violación rompe el build. Una excepción lleva
+                 @SuppressWarnings("PMD.Regla") con un comentario que diga por qué. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-pmd-plugin</artifactId>
+                <version>${pmd-plugin.version}</version>
+                <configuration>
+                    <rulesets>
+                        <ruleset>category/java/errorprone.xml</ruleset>
+                    </rulesets>
+                    <printFailingErrors>true</printFailingErrors>
+                    <failOnViolation>true</failOnViolation>
+                </configuration>
+                <dependencies>
+                    <dependency>
+                        <groupId>net.sourceforge.pmd</groupId>
+                        <artifactId>pmd-core</artifactId>
+                        <version>${pmd.version}</version>
+                    </dependency>
+                    <dependency>
+                        <groupId>net.sourceforge.pmd</groupId>
+                        <artifactId>pmd-java</artifactId>
+                        <version>${pmd.version}</version>
+                    </dependency>
+                </dependencies>
+                <executions>
+                    <execution>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 
 </project>

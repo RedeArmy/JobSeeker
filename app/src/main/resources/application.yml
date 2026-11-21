@@ -1,0 +1,34 @@
+# Configuración común a todos los perfiles del único desplegable (ADR-0026).
+#
+# Por qué la configuración de perfil vive solo aquí: con un único classpath, dos módulos que
+# aporten `application-dev.yml` chocan por nombre y Spring solo carga uno, en silencio. Los
+# módulos de negocio aportan únicamente `application-<modulo>.yml` (nombre único), que se
+# importa explícitamente abajo; los perfiles dev y prod están en este módulo.
+spring:
+  application:
+    name: jobseeker
+  config:
+    import:
+      - optional:classpath:application-auth.yml
+      - optional:classpath:application-cv.yml
+      - optional:classpath:application-job.yml
+      - optional:classpath:application-matching.yml
+      - optional:classpath:application-ats.yml
+      - optional:classpath:application-tracker.yml
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Prometheus consulta el único /actuator/prometheus de `app` (ADR-0012).
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  structured:
+    format:
+      # ADR-0012 (enmendado): registro JSON con el soporte nativo de Spring Boot, sin PII (BR-DATA-01).
+      console: logstash

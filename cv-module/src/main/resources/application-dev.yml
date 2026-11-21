@@ -1,2 +1,0 @@
-# Marcador de posición — perfil dev: conexión a Postgres local en Docker.
-# Los valores de conexión salen de .env (ver .env.example: DB_DEV_*).

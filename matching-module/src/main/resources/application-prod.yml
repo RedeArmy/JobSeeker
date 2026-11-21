@@ -1,2 +1,0 @@
-# Marcador de posición — perfil prod: conexión a Supabase mediante variables de entorno.
-# Sin credenciales escritas en el código — ver .env.example: SUPABASE_DB_*.

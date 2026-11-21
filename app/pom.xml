@@ -14,12 +14,104 @@
     <packaging>jar</packaging>
 
     <name>app</name>
-    <description>POM de marcador de posición del único desplegable (ADR-0026). Aún sin dependencias.</description>
+    <description>El único desplegable (ADR-0026): @SpringBootApplication, la configuración transversal y las pruebas de arquitectura de los límites entre módulos (ADR-0015). No contiene lógica de negocio.</description>
 
-    <!--
-        Dependerá de todos los módulos de negocio y alojará: @SpringBootApplication, las tres
-        cadenas de filtros de seguridad (ADR-0020), los filtros de rate limit y traceId, el
-        sondeador del outbox (ADR-0016) y las pruebas de límites con ArchUnit (ADR-0015).
-    -->
+    <dependencies>
+        <!-- Los módulos de negocio son bibliotecas; este módulo las reúne en un solo proceso. -->
+        <dependency>
+            <groupId>com.usac.jobseeker</groupId>
+            <artifactId>common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.usac.jobseeker</groupId>
+            <artifactId>auth-module</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.usac.jobseeker</groupId>
+            <artifactId>cv-module</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.usac.jobseeker</groupId>
+            <artifactId>job-module</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.usac.jobseeker</groupId>
+            <artifactId>matching-module</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.usac.jobseeker</groupId>
+            <artifactId>ats-module</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.usac.jobseeker</groupId>
+            <artifactId>tracker-module</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc</artifactId>
+        </dependency>
+        <!-- ADR-0012: métricas y salud. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- ADR-0015: ArchUnit corre como una prueba más de `mvn verify`. -->
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Solo para las clases de ejemplo de las pruebas de arquitectura (@Entity, @Transactional):
+             el desplegable no usa JPA ni transacciones todavía. -->
+        <dependency>
+            <groupId>jakarta.persistence</groupId>
+            <artifactId>jakarta.persistence-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-tx</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <!-- Sin esta ejecución el jar sale sin manifiesto (hallazgo 2 del spike R13). -->
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>
