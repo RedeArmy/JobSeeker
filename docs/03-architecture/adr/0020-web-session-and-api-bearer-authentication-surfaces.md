@@ -122,7 +122,7 @@ Un filtro renueva el access token de la sesión al menos cada 10 min (configurab
 
 **Negativas / trade-offs aceptados**
 - Hay estado de sesión que operar (Redis); su caída cierra sesiones de la web (se acepta para el MVP; ver `02-hld` §9).
-- Más configuración de seguridad (dos cadenas, CSRF en HTMX, CSP estricta) que probar.
+- Más configuración de seguridad (tres cadenas, CSRF en HTMX, CSP estricta) que probar.
 - La CSP estricta limita el uso de scripts/estilos inline: toda la interactividad debe ser HTMX o archivos estáticos con hash/nonce.
 
 ## Acciones derivadas
