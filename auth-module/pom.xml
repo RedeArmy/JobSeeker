@@ -14,8 +14,38 @@
     <packaging>jar</packaging>
 
     <name>auth-module</name>
-    <description>POM de marcador de posición del módulo auth. Aún sin dependencias.</description>
+    <description>Módulo auth: espejo local de la cuenta de Clavaris, sus capacidades y el ciclo de eliminación. Ver docs/03-architecture/tdd/auth-module.md.</description>
 
-    <!-- Los starters de Spring Boot y las dependencias propias del módulo se añadirán más adelante. -->
+    <dependencies>
+        <dependency>
+            <groupId>com.usac.jobseeker</groupId>
+            <artifactId>common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- Transacciones en application (ADR-0015, ARCH-02); JDBC y configuración solo en infrastructure. -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-tx</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 
 </project>
