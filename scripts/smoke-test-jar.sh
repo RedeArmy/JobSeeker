@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Arranca el jar ejecutable de verdad contra un Postgres 17 con pgvector y comprueba salud y migraciones.
+# Arranca el jar ejecutable de verdad contra un Postgres 17 con pgvector y un Redis, y comprueba salud y migraciones.
 #
 # Por qué existe: las pruebas de `mvn verify` corren con su propio classpath de pruebas y no ven un
 # problema de empaquetado. Una dependencia con alcance `test` que debía llegar de forma transitiva
@@ -12,6 +12,8 @@ jar="${1:-$(ls app/target/app-*.jar | grep -v original | head -1)}"
 [ -f "$jar" ] || { echo "ERROR: no existe el jar ${jar}; ejecuta mvn package antes" >&2; exit 2; }
 
 contenedor="jobseeker-smoke-$$"
+contenedor_redis="${contenedor}-redis"
+puerto_redis=56499
 puerto_db=55499
 puerto_app=18099
 registro="$(mktemp)"
@@ -19,7 +21,7 @@ pid_app=""
 
 limpiar() {
   [ -z "$pid_app" ] || kill "$pid_app" 2>/dev/null || true
-  docker rm -f "$contenedor" >/dev/null 2>&1 || true
+  docker rm -f "$contenedor" "$contenedor_redis" >/dev/null 2>&1 || true
   rm -f "$registro"
 }
 trap limpiar EXIT
@@ -31,7 +33,14 @@ for _ in $(seq 1 30); do
   sleep 1
 done
 
-SPRING_PROFILES_ACTIVE=dev DB_DEV_HOST=127.0.0.1 DB_DEV_PORT="$puerto_db" DB_DEV_NAME=jobseeker \
+# Redis para las sesiones web (ADR-0020): sin él `/actuator/health` queda en DOWN.
+docker run -d --name "$contenedor_redis" -p "127.0.0.1:${puerto_redis}:6379" redis:7.4.12-alpine >/dev/null
+for _ in $(seq 1 30); do
+  docker exec "$contenedor_redis" redis-cli ping 2>/dev/null | grep -q PONG && break
+  sleep 1
+done
+
+SPRING_PROFILES_ACTIVE=dev REDIS_HOST=127.0.0.1 REDIS_PORT="$puerto_redis" DB_DEV_HOST=127.0.0.1 DB_DEV_PORT="$puerto_db" DB_DEV_NAME=jobseeker \
   DB_DEV_USER=jobseeker DB_DEV_PASSWORD=smoke SERVER_PORT="$puerto_app" \
   java --enable-native-access=ALL-UNNAMED -jar "$jar" >"$registro" 2>&1 &
 pid_app=$!

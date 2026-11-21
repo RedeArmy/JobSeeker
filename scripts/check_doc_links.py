@@ -11,6 +11,7 @@ Se omiten las rutas fuera del repositorio (`../Clavaris/...`), las que llevan co
 y las anclas (#...) y direcciones http(s).
 """
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -19,8 +20,19 @@ ENLACE = re.compile(r"\]\((?!https?:|#|mailto:)([^)\s#]+)(?:#[^)]*)?\)")
 REFERENCIA = re.compile(r"`([A-Za-z0-9_./-]+\.md)`")
 
 
-def existe(doc: Path, destino: str, nombres: set) -> bool:
-    if (doc.parent / destino).resolve().exists() or (RAIZ / destino).exists() or (RAIZ / "docs" / destino).exists():
+def versionados() -> set:
+    """Archivos que el repositorio versiona (o versionaría): los que el CI ve, no los que solo existen en
+    el disco del desarrollador por estar ignorados (un archivo local no puede ser el destino de una cita)."""
+    salida = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+        cwd=RAIZ, capture_output=True, check=True,
+    ).stdout.decode()
+    return {RAIZ / ruta for ruta in salida.split("\0") if ruta}
+
+
+def existe(doc: Path, destino: str, nombres: set, archivos: set) -> bool:
+    candidatos = [(doc.parent / destino).resolve(), (RAIZ / destino).resolve(), (RAIZ / "docs" / destino).resolve()]
+    if any(c in archivos for c in candidatos):
         return True
     # Una cita por nombre suelto (`data-model.md`) vale si ese archivo existe en docs/.
     if "/" not in destino:
@@ -33,6 +45,7 @@ def existe(doc: Path, destino: str, nombres: set) -> bool:
 def main():
     docs = sorted((RAIZ / "docs").rglob("*.md"))
     nombres = {d.name for d in docs}
+    archivos = versionados()
     rotos, total = [], 0
     for md in docs:
         texto = md.read_text(encoding="utf-8")
@@ -43,7 +56,7 @@ def main():
             if "*" in destino or "{" in destino:
                 continue
             total += 1
-            if not existe(md, destino, nombres):
+            if not existe(md, destino, nombres, archivos):
                 rotos.append(f"{md.relative_to(RAIZ)} -> {destino}")
     for linea in sorted(set(rotos)):
         print(f"ERROR: referencia rota: {linea}")

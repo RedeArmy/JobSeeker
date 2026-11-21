@@ -12,7 +12,7 @@
 
 ## 1. Qué cubre este documento
 
-El *Technical Design Document* del módulo `auth` y de la parte de seguridad que vive en `app`. Las decisiones ya están tomadas en el ADR-0020; aquí se fija **cómo se construye**: qué casos de uso existen, dónde vive cada pieza y en qué orden se entrega. Es el documento que `CLAUDE.md` exige antes de crear carpetas de casos de uso.
+El *Technical Design Document* del módulo `auth` y de la parte de seguridad que vive en `app`. Las decisiones ya están tomadas en el ADR-0020; aquí se fija **cómo se construye**: qué casos de uso existen, dónde vive cada pieza y en qué orden se entrega. Es el documento que las reglas del proyecto exigen antes de crear carpetas de casos de uso.
 
 JobSeeker es **cliente** de Clavaris: nunca emite tokens ni guarda credenciales. `auth` conserva solo el espejo local de la cuenta (`accounts`), sus capacidades y el ciclo de eliminación.
 
@@ -33,7 +33,7 @@ JobSeeker es **cliente** de Clavaris: nunca emite tokens ni guarda credenciales.
 | `provisionaccount` | Primer login: crea la cuenta local con la capacidad de candidato si no existe (BR-ACCT-09). Idempotente: un segundo login no cambia nada | `AccountProvisioningPort` |
 | `resolveactor` | Reconstruye el `Actor` desde la base local en cada petición; rechaza `PENDING_DELETION` y `ANONYMIZED` (ADR-0020, resolución de identidad) | `ActorLookupPort` |
 
-Los casos de uso de las demás funciones (`handleclavariswebhook`, el cierre de sesiones de una cuenta, la solicitud de la capacidad de reclutador) se nombran y se crean en el sub-paso que los implementa, no antes (`CLAUDE.md` §7.1).
+Los casos de uso de las demás funciones (`handleclavariswebhook`, el cierre de sesiones de una cuenta, la solicitud de la capacidad de reclutador) se nombran y se crean en el sub-paso que los implementa, no antes (reglas del proyecto, §7.1).
 
 ## 4. Decisiones de diseño
 
