@@ -33,4 +33,8 @@ java --enable-native-access=ALL-UNNAMED -jar app/target/app-0.1.0-SNAPSHOT.jar
 ```
 
 `mvn verify` es el mismo comando que ejecuta el CI. Las pruebas de integración con Testcontainers
-necesitan Docker.
+necesitan Docker, y arrancan un Postgres 17 con pgvector (la misma versión mayor que Supabase ofrece).
+
+Para ejecutar el jar hace falta una base de datos. Con el perfil `dev` los datos de conexión salen de
+`DB_DEV_*` (ver `.env.example`); el esquema lo crea Flyway al arrancar. `scripts/smoke-test-jar.sh`
+hace todo esto de forma desechable.

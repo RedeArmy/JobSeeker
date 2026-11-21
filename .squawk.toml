@@ -1,0 +1,23 @@
+# Configuración de squawk, el linter de seguridad de migraciones (ADR-0027). Corre en CI sobre todos
+# los archivos `db/migration`. Cada regla desactivada lleva su motivo; el resto sigue activa, y una
+# excepción puntual se marca en el propio SQL con `-- squawk-ignore <regla>` y un comentario que
+# diga por qué es segura.
+pg_version = "17"
+# Flyway ejecuta cada migración dentro de una transacción.
+assume_in_transaction = true
+excluded_rules = [
+  # Flyway aplica cada migración una sola vez y valida su suma de control: «if not exists» ocultaría
+  # un esquema que se desvió en vez de fallar.
+  "prefer-robust-stmts",
+  # Dentro de la transacción de Flyway no se puede usar CONCURRENTLY al crear una tabla y sus índices
+  # a la vez. La regla correcta (concurrente solo sobre tablas que ya existen) la comprueba
+  # MigrationConventionsTest, con la excepción de las tablas creadas en la misma migración.
+  "require-concurrent-index-creation",
+  # El tiempo de espera de bloqueos se fija una vez para toda conexión de Flyway
+  # (`spring.flyway.init-sqls`), no migración por migración.
+  "require-lock-timeout",
+  "require-statement-timeout",
+  # Las claves primarias son uuid; los `integer` de contadores (intentos, versión de evento) no
+  # corren riesgo de desbordamiento.
+  "prefer-bigint-over-int",
+]

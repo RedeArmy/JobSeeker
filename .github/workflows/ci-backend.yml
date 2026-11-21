@@ -40,6 +40,11 @@ jobs:
       - name: Build and test
         run: mvn -B -ntp verify
 
+      # Arranca el jar ejecutable contra Postgres 17 y comprueba salud y migraciones: las pruebas usan su
+      # propio classpath y no ven un problema de empaquetado.
+      - name: Smoke test the executable jar
+        run: bash scripts/smoke-test-jar.sh
+
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

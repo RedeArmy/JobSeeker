@@ -1,5 +1,5 @@
-# Comprobaciones del repositorio que no necesitan código Java: secretos, workflows, documentación
-# y configuración. Es la primera pieza del CI real (el build, ArchUnit y Sonar llegan en el Sprint 0
+# Comprobaciones del repositorio que no necesitan código Java: secretos, workflows, documentación,
+# configuración y SQL (seguridad e inmutabilidad de las migraciones). Es la primera pieza del CI real (el build, ArchUnit y Sonar llegan en el Sprint 0
 # junto con el esqueleto andante).
 name: repo-checks
 
@@ -55,12 +55,42 @@ jobs:
       - name: .env.example matches the configuration
         run: python3 scripts/check_env_drift.py
 
+  sql-lint:
+    name: Migration safety lint (squawk)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install squawk (pinned version and checksum)
+        run: bash scripts/fetch-ci-tool.sh squawk "$RUNNER_TEMP/bin"
+      # Analiza con el parser de Postgres cada migración: bloqueos, cambios que rompen a la aplicación
+      # en marcha y operaciones destructivas (ADR-0027). La configuración está en .squawk.toml.
+      - name: Lint every migration
+        run: git ls-files -z -- ':(glob)*/src/main/resources/db/migration/*.sql' | xargs -0 "$RUNNER_TEMP/bin/squawk"
+
+  migration-immutability:
+    name: Published migrations are immutable
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Historial completo: la comprobación compara con lo que ya llegó a la rama base.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Test the immutability script
+        run: bash scripts/test-check-migration-immutability.sh
+      - name: No published migration changed
+        env:
+          # En una PR se compara con la rama base; en un push, con el commit anterior.
+          BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+        run: bash scripts/check-migration-immutability.sh "$BASE"
+
   # Un solo nombre estable para exigir en la protección de rama (cuando el plan del repositorio la
   # permita) en vez de enumerar cada job; `if: always()` evita que un job omitido cuente como éxito.
   repo-checks-passed:
     name: repo-checks passed
     runs-on: ubuntu-latest
-    needs: [secrets-scan, workflow-lint, docs-and-config]
+    needs: [secrets-scan, workflow-lint, docs-and-config, sql-lint, migration-immutability]
     if: always()
     steps:
       - name: Fail if any required job did not succeed
