@@ -1,0 +1,68 @@
+{
+ "variante": "nomic-v2moe-asimetrico",
+ "candidatos": 20,
+ "segundos": 2237.2,
+ "pares_relevantes": 52,
+ "grupos": {
+  "Carlos Pérez": {
+   "grupo": "ladino",
+   "delta_coseno_medio_vs_sin_nombre_relevantes": -0.0392,
+   "coseno_medio_relevantes": 0.6673
+  },
+  "María López": {
+   "grupo": "ladino",
+   "delta_coseno_medio_vs_sin_nombre_relevantes": -0.0616,
+   "coseno_medio_relevantes": 0.6449
+  },
+  "Miguel Tzoc": {
+   "grupo": "maya",
+   "delta_coseno_medio_vs_sin_nombre_relevantes": -0.0554,
+   "coseno_medio_relevantes": 0.6511
+  },
+  "Rosa Xiloj": {
+   "grupo": "maya",
+   "delta_coseno_medio_vs_sin_nombre_relevantes": -0.06,
+   "coseno_medio_relevantes": 0.6466
+  },
+  "Michael Smith": {
+   "grupo": "anglo",
+   "delta_coseno_medio_vs_sin_nombre_relevantes": -0.0616,
+   "coseno_medio_relevantes": 0.645
+  },
+  "Emily Johnson": {
+   "grupo": "anglo",
+   "delta_coseno_medio_vs_sin_nombre_relevantes": -0.0623,
+   "coseno_medio_relevantes": 0.6442
+  }
+ },
+ "comparaciones_coseno": {
+  "ladino-maya": {
+   "delta": 0.0073,
+   "ic95": [
+    0.0046,
+    0.0097
+   ]
+  },
+  "anglo-maya": {
+   "delta": -0.0042,
+   "ic95": [
+    -0.0071,
+    -0.0013
+   ]
+  },
+  "anglo-ladino": {
+   "delta": -0.0115,
+   "ic95": [
+    -0.0144,
+    -0.0085
+   ]
+  }
+ },
+ "ndcg10_sin_nombre": 0.9041,
+ "ndcg10_por_grupo": {
+  "ladino": 0.9048,
+  "maya": 0.8964,
+  "anglo": 0.9084
+ },
+ "referencia_dif_coseno_rel3_vs_rel2": 0.0236
+}

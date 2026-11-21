@@ -1,0 +1,50 @@
+{
+ "variante": "bge-m3",
+ "modelo": "bge-m3",
+ "dim": 1024,
+ "textos": 80,
+ "tokens_prompt_total": 6490,
+ "tokens_medios": 81.1,
+ "segundos_pared": 1158.7,
+ "ms_por_texto": 14483.2,
+ "segundos_carga_modelo": 2.32,
+ "global": {
+  "ndcg10": 0.8874,
+  "p5": 0.9167,
+  "n_vacantes": 24
+ },
+ "vacante_es": {
+  "ndcg10": 0.8884,
+  "p5": 0.875,
+  "n_vacantes": 16
+ },
+ "vacante_en": {
+  "ndcg10": 0.8855,
+  "p5": 1.0,
+  "n_vacantes": 8
+ },
+ "coseno_por_relevancia": {
+  "0": {
+   "media": 0.5094,
+   "min": 0.3994,
+   "max": 0.6445
+  },
+  "1": {
+   "media": 0.589,
+   "min": 0.4538,
+   "max": 0.8261
+  },
+  "2": {
+   "media": 0.7212,
+   "min": 0.6186,
+   "max": 0.8427
+  },
+  "3": {
+   "media": 0.7364,
+   "min": 0.638,
+   "max": 0.8431
+  }
+ },
+ "coseno_relevantes_mismo_idioma": 0.7426,
+ "coseno_relevantes_idioma_cruzado": 0.713
+}

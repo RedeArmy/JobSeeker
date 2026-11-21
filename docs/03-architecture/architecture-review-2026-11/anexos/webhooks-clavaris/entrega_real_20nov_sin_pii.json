@@ -1,0 +1,421 @@
+{
+ "fecha": "2026-11-20",
+ "clavaris": "95a88f67 (origin/master)",
+ "ventana_configurada_s": 60,
+ "nota": "Cuerpos omitidos (contenían PII sintética); solo se conservan los nombres de los campos.",
+ "entregas": [
+  {
+   "t_relativo_a_rotacion_s": -36,
+   "dentro_de_ventana_del_secreto_anterior": null,
+   "evento": "account.created",
+   "event_id": "e486c540-3092-416b-9509-d8e87bdb8ff9",
+   "delivery_id": "f28553a9-cbf0-4396-b6f4-ecf92dc98a91",
+   "firmas_v1": 1,
+   "secretos_que_validan": [
+    "current"
+   ],
+   "tiempo_ok": true,
+   "duplicado": false,
+   "respuesta_del_receptor": 200,
+   "campos_del_cuerpo": [
+    "accountId",
+    "email",
+    "occurredAt",
+    "organizationId"
+   ]
+  },
+  {
+   "t_relativo_a_rotacion_s": -31,
+   "dentro_de_ventana_del_secreto_anterior": null,
+   "evento": "account.suspended",
+   "event_id": "5d2f2bfd-916e-420a-b0ab-d8b02fab35c0",
+   "delivery_id": "0d74239a-0503-4819-a7be-93dc8cd4eace",
+   "firmas_v1": 1,
+   "secretos_que_validan": [
+    "current"
+   ],
+   "tiempo_ok": true,
+   "duplicado": false,
+   "respuesta_del_receptor": 200,
+   "campos_del_cuerpo": [
+    "accountId",
+    "occurredAt",
+    "organizationId"
+   ]
+  },
+  {
+   "t_relativo_a_rotacion_s": -31,
+   "dentro_de_ventana_del_secreto_anterior": null,
+   "evento": "account.profile_updated",
+   "event_id": "60a0b428-a94e-4530-ac79-dbbd5ab65fb6",
+   "delivery_id": "4ee6e8bd-8d3a-46a3-85c2-f3c03a7f3e72",
+   "firmas_v1": 1,
+   "secretos_que_validan": [
+    "current"
+   ],
+   "tiempo_ok": true,
+   "duplicado": false,
+   "respuesta_del_receptor": 200,
+   "campos_del_cuerpo": [
+    "accountId",
+    "firstName",
+    "lastName",
+    "occurredAt",
+    "organizationId",
+    "phoneNumber",
+    "username"
+   ]
+  },
+  {
+   "t_relativo_a_rotacion_s": -25,
+   "dentro_de_ventana_del_secreto_anterior": null,
+   "evento": "account.reactivated",
+   "event_id": "fc75f0d1-e2e4-4888-8166-f09a64fdcf61",
+   "delivery_id": "c063ce4c-5d3a-4af3-a6f6-31c7cb7c8831",
+   "firmas_v1": 1,
+   "secretos_que_validan": [
+    "current"
+   ],
+   "tiempo_ok": true,
+   "duplicado": false,
+   "respuesta_del_receptor": 200,
+   "campos_del_cuerpo": [
+    "accountId",
+    "occurredAt",
+    "organizationId"
+   ]
+  },
+  {
+   "t_relativo_a_rotacion_s": 5,
+   "dentro_de_ventana_del_secreto_anterior": true,
+   "evento": "account.profile_updated",
+   "event_id": "15c8038c-2003-4bf5-b5e4-4a656d0c7e3b",
+   "delivery_id": "af3c256b-e8d9-49cd-9091-0dbb3144b4ee",
+   "firmas_v1": 2,
+   "secretos_que_validan": [
+    "current",
+    "previous"
+   ],
+   "tiempo_ok": true,
+   "duplicado": false,
+   "respuesta_del_receptor": 200,
+   "campos_del_cuerpo": [
+    "accountId",
+    "firstName",
+    "lastName",
+    "occurredAt",
+    "organizationId",
+    "phoneNumber",
+    "username"
+   ]
+  },
+  {
+   "t_relativo_a_rotacion_s": 41,
+   "dentro_de_ventana_del_secreto_anterior": true,
+   "evento": "account.profile_updated",
+   "event_id": "c5b27a63-0db1-4529-b551-2137a06bb584",
+   "delivery_id": "1ef4b756-e612-4897-a9dd-e0014f302a0c",
+   "firmas_v1": 2,
+   "secretos_que_validan": [
+    "current",
+    "previous"
+   ],
+   "tiempo_ok": true,
+   "duplicado": false,
+   "respuesta_del_receptor": 500,
+   "campos_del_cuerpo": [
+    "accountId",
+    "firstName",
+    "lastName",
+    "occurredAt",
+    "organizationId",
+    "phoneNumber",
+    "username"
+   ]
+  },
+  {
+   "t_relativo_a_rotacion_s": 71,
+   "dentro_de_ventana_del_secreto_anterior": false,
+   "evento": "account.profile_updated",
+   "event_id": "c5b27a63-0db1-4529-b551-2137a06bb584",
+   "delivery_id": "1ef4b756-e612-4897-a9dd-e0014f302a0c",
+   "firmas_v1": 1,
+   "secretos_que_validan": [
+    "current"
+   ],
+   "tiempo_ok": true,
+   "duplicado": true,
+   "respuesta_del_receptor": 200,
+   "campos_del_cuerpo": [
+    "accountId",
+    "firstName",
+    "lastName",
+    "occurredAt",
+    "organizationId",
+    "phoneNumber",
+    "username"
+   ]
+  },
+  {
+   "t_relativo_a_rotacion_s": 77,
+   "dentro_de_ventana_del_secreto_anterior": false,
+   "evento": "account.profile_updated",
+   "event_id": "c6090336-be82-4ccb-85cb-c9d26595e859",
+   "delivery_id": "14fec1d5-37e9-48b1-acd0-319b4d96f270",
+   "firmas_v1": 1,
+   "secretos_que_validan": [
+    "current"
+   ],
+   "tiempo_ok": true,
+   "duplicado": false,
+   "respuesta_del_receptor": 200,
+   "campos_del_cuerpo": [
+    "accountId",
+    "firstName",
+    "lastName",
+    "occurredAt",
+    "organizationId",
+    "phoneNumber",
+    "username"
+   ]
+  },
+  {
+   "t_relativo_a_rotacion_s": 132,
+   "dentro_de_ventana_del_secreto_anterior": false,
+   "evento": "refresh_token.reuse_detected",
+   "event_id": "a186cb4e-879f-4bb5-8a7b-9e1c4e4a105a",
+   "delivery_id": "a9be6d97-3bcc-4371-a96b-0965f267e311",
+   "firmas_v1": 1,
+   "secretos_que_validan": [
+    "current"
+   ],
+   "tiempo_ok": true,
+   "duplicado": false,
+   "respuesta_del_receptor": 200,
+   "campos_del_cuerpo": [
+    "accountId",
+    "occurredAt",
+    "organizationId"
+   ]
+  },
+  {
+   "t_relativo_a_rotacion_s": 132,
+   "dentro_de_ventana_del_secreto_anterior": false,
+   "evento": "account.created",
+   "event_id": "79f59405-dfe0-436c-ad9d-dba4a05e42af",
+   "delivery_id": "2ed05d18-6c8a-4ef9-b266-9327ff6b7a5e",
+   "firmas_v1": 1,
+   "secretos_que_validan": [
+    "current"
+   ],
+   "tiempo_ok": true,
+   "duplicado": false,
+   "respuesta_del_receptor": 200,
+   "campos_del_cuerpo": [
+    "accountId",
+    "email",
+    "occurredAt",
+    "organizationId"
+   ]
+  },
+  {
+   "t_relativo_a_rotacion_s": 132,
+   "dentro_de_ventana_del_secreto_anterior": false,
+   "evento": "account.created",
+   "event_id": "53be9a58-b6a5-4555-8832-620fe40eba87",
+   "delivery_id": "feed12fb-3ee6-4e32-a1c4-d94037494eb6",
+   "firmas_v1": 1,
+   "secretos_que_validan": [
+    "current"
+   ],
+   "tiempo_ok": true,
+   "duplicado": false,
+   "respuesta_del_receptor": 200,
+   "campos_del_cuerpo": [
+    "accountId",
+    "email",
+    "occurredAt",
+    "organizationId"
+   ]
+  },
+  {
+   "t_relativo_a_rotacion_s": 160,
+   "dentro_de_ventana_del_secreto_anterior": false,
+   "evento": "account.profile_updated",
+   "event_id": "dde0ce47-19b8-4b57-8987-aaa2e68649af",
+   "delivery_id": "08162f09-8838-46f0-8346-35de46f3e504",
+   "firmas_v1": 1,
+   "secretos_que_validan": [
+    "current"
+   ],
+   "tiempo_ok": true,
+   "duplicado": false,
+   "respuesta_del_receptor": 200,
+   "campos_del_cuerpo": [
+    "accountId",
+    "firstName",
+    "lastName",
+    "occurredAt",
+    "organizationId",
+    "phoneNumber",
+    "username"
+   ]
+  },
+  {
+   "t_relativo_a_rotacion_s": 160,
+   "dentro_de_ventana_del_secreto_anterior": false,
+   "evento": "account.email_changed",
+   "event_id": "d7318dca-33d5-4392-9a6b-43316ecc13b2",
+   "delivery_id": "06524e10-1a18-47e7-a3ec-90ef54ec7170",
+   "firmas_v1": 1,
+   "secretos_que_validan": [
+    "current"
+   ],
+   "tiempo_ok": true,
+   "duplicado": false,
+   "respuesta_del_receptor": 200,
+   "campos_del_cuerpo": [
+    "accountId",
+    "email",
+    "occurredAt",
+    "organizationId",
+    "previousEmail"
+   ]
+  },
+  {
+   "t_relativo_a_rotacion_s": 160,
+   "dentro_de_ventana_del_secreto_anterior": false,
+   "evento": "account.profile_updated",
+   "event_id": "1d7582fe-996a-428b-a9ae-668d27f19b0d",
+   "delivery_id": "d9294bfb-a3b2-467a-b4f5-483dc2d90fc5",
+   "firmas_v1": 1,
+   "secretos_que_validan": [
+    "current"
+   ],
+   "tiempo_ok": true,
+   "duplicado": false,
+   "respuesta_del_receptor": 200,
+   "campos_del_cuerpo": [
+    "accountId",
+    "firstName",
+    "lastName",
+    "occurredAt",
+    "organizationId",
+    "phoneNumber",
+    "username"
+   ]
+  },
+  {
+   "t_relativo_a_rotacion_s": 160,
+   "dentro_de_ventana_del_secreto_anterior": false,
+   "evento": "account.profile_updated",
+   "event_id": "2184ae59-7483-46d4-9f38-e353236f1fd2",
+   "delivery_id": "678f4248-e95e-4046-b72b-1c360ef55f4f",
+   "firmas_v1": 1,
+   "secretos_que_validan": [
+    "current"
+   ],
+   "tiempo_ok": true,
+   "duplicado": false,
+   "respuesta_del_receptor": 200,
+   "campos_del_cuerpo": [
+    "accountId",
+    "firstName",
+    "lastName",
+    "occurredAt",
+    "organizationId",
+    "phoneNumber",
+    "username"
+   ]
+  },
+  {
+   "t_relativo_a_rotacion_s": 160,
+   "dentro_de_ventana_del_secreto_anterior": false,
+   "evento": "account.profile_updated",
+   "event_id": "adf04c58-536d-4930-9f8b-edc67209f0c7",
+   "delivery_id": "283be6d3-dc9e-4436-88fb-f00edfef4e2c",
+   "firmas_v1": 1,
+   "secretos_que_validan": [
+    "current"
+   ],
+   "tiempo_ok": true,
+   "duplicado": false,
+   "respuesta_del_receptor": 200,
+   "campos_del_cuerpo": [
+    "accountId",
+    "firstName",
+    "lastName",
+    "occurredAt",
+    "organizationId",
+    "phoneNumber",
+    "username"
+   ]
+  },
+  {
+   "t_relativo_a_rotacion_s": 160,
+   "dentro_de_ventana_del_secreto_anterior": false,
+   "evento": "account.profile_updated",
+   "event_id": "c3903232-310b-40a1-bc90-fcbc7e9ecc24",
+   "delivery_id": "f873a27d-b16b-496e-bb47-bcaf6d244222",
+   "firmas_v1": 1,
+   "secretos_que_validan": [
+    "current"
+   ],
+   "tiempo_ok": true,
+   "duplicado": false,
+   "respuesta_del_receptor": 200,
+   "campos_del_cuerpo": [
+    "accountId",
+    "firstName",
+    "lastName",
+    "occurredAt",
+    "organizationId",
+    "phoneNumber",
+    "username"
+   ]
+  },
+  {
+   "t_relativo_a_rotacion_s": 160,
+   "dentro_de_ventana_del_secreto_anterior": false,
+   "evento": "account.deleted",
+   "event_id": "7e5e381d-9980-4e7d-aa03-7fc78169f0e3",
+   "delivery_id": "0fe30460-8a5e-4798-99d1-d391aab51de2",
+   "firmas_v1": 1,
+   "secretos_que_validan": [
+    "current"
+   ],
+   "tiempo_ok": true,
+   "duplicado": false,
+   "respuesta_del_receptor": 200,
+   "campos_del_cuerpo": [
+    "accountId",
+    "email",
+    "occurredAt",
+    "organizationId"
+   ]
+  },
+  {
+   "t_relativo_a_rotacion_s": 211,
+   "dentro_de_ventana_del_secreto_anterior": false,
+   "evento": "account.profile_updated",
+   "event_id": "c3903232-310b-40a1-bc90-fcbc7e9ecc24",
+   "delivery_id": "f873a27d-b16b-496e-bb47-bcaf6d244222",
+   "firmas_v1": 1,
+   "secretos_que_validan": [
+    "current"
+   ],
+   "tiempo_ok": true,
+   "duplicado": true,
+   "respuesta_del_receptor": 200,
+   "campos_del_cuerpo": [
+    "accountId",
+    "firstName",
+    "lastName",
+    "occurredAt",
+    "organizationId",
+    "phoneNumber",
+    "username"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,158 @@
+{
+  "nota": "Entrega real del 19-nov-2026 con el Clavaris de origin/master 4039127b, por un túnel temporal ya cerrado, con una Secret Key de organización. Sin identificadores ni correos. Los tipos de evento y las claves del payload son los observados.",
+  "eventos_recibidos": [
+    {
+      "evento": "account.created",
+      "claves_payload": [
+        "accountId",
+        "email",
+        "occurredAt",
+        "organizationId"
+      ],
+      "firmas_v1": 1,
+      "http_devuelto": 200
+    },
+    {
+      "evento": "account.suspended",
+      "claves_payload": [
+        "accountId",
+        "occurredAt",
+        "organizationId"
+      ],
+      "firmas_v1": 1,
+      "http_devuelto": 200
+    },
+    {
+      "evento": "account.reactivated",
+      "claves_payload": [
+        "accountId",
+        "occurredAt",
+        "organizationId"
+      ],
+      "firmas_v1": 1,
+      "http_devuelto": 200
+    },
+    {
+      "evento": "refresh_token.reuse_graced",
+      "claves_payload": [
+        "accountId",
+        "occurredAt",
+        "organizationId"
+      ],
+      "firmas_v1": 1,
+      "http_devuelto": 200
+    },
+    {
+      "evento": "account.created",
+      "claves_payload": [
+        "accountId",
+        "email",
+        "occurredAt",
+        "organizationId"
+      ],
+      "firmas_v1": 1,
+      "http_devuelto": 200
+    },
+    {
+      "evento": "refresh_token.reuse_detected",
+      "claves_payload": [
+        "accountId",
+        "occurredAt",
+        "organizationId"
+      ],
+      "firmas_v1": 1,
+      "http_devuelto": 200
+    },
+    {
+      "evento": "account.created",
+      "claves_payload": [
+        "accountId",
+        "email",
+        "occurredAt",
+        "organizationId"
+      ],
+      "firmas_v1": 1,
+      "http_devuelto": 200
+    },
+    {
+      "evento": "account.deleted",
+      "claves_payload": [
+        "accountId",
+        "email",
+        "occurredAt",
+        "organizationId"
+      ],
+      "firmas_v1": 1,
+      "http_devuelto": 200
+    },
+    {
+      "evento": "account.suspended",
+      "claves_payload": [
+        "accountId",
+        "occurredAt",
+        "organizationId"
+      ],
+      "firmas_v1": 1,
+      "http_devuelto": 200
+    },
+    {
+      "evento": "account.created",
+      "claves_payload": [
+        "accountId",
+        "email",
+        "occurredAt",
+        "organizationId"
+      ],
+      "firmas_v1": 1,
+      "http_devuelto": 500
+    },
+    {
+      "evento": "account.created",
+      "claves_payload": [
+        "accountId",
+        "email",
+        "occurredAt",
+        "organizationId"
+      ],
+      "firmas_v1": 1,
+      "http_devuelto": 200
+    },
+    {
+      "evento": "account.created",
+      "claves_payload": [
+        "accountId",
+        "email",
+        "occurredAt",
+        "organizationId"
+      ],
+      "firmas_v1": 2,
+      "http_devuelto": 200
+    },
+    {
+      "evento": "account.created",
+      "claves_payload": [
+        "accountId",
+        "email",
+        "occurredAt",
+        "organizationId"
+      ],
+      "firmas_v1": 2,
+      "http_devuelto": 200
+    },
+    {
+      "evento": "account.created",
+      "claves_payload": [
+        "accountId",
+        "email",
+        "occurredAt",
+        "organizationId"
+      ],
+      "firmas_v1": 2,
+      "http_devuelto": 200
+    }
+  ],
+  "resumen": {
+    "peticiones_con_firma_valida": 16,
+    "rechazadas_por_firma": 3
+  }
+}

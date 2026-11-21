@@ -1,0 +1,599 @@
+[
+ {
+  "ts": "10:41:23",
+  "evento": null,
+  "event_id": "",
+  "delivery_id": null,
+  "trace": null,
+  "n_firmas_v1": 0,
+  "firma_valida": false,
+  "tiempo_ok": false,
+  "duplicado": false,
+  "decision_http": 401,
+  "cabeceras": [
+   "Accept",
+   "Accept-Encoding",
+   "Cdn-Loop",
+   "Cf-Connecting-Ip",
+   "Cf-Ew-Via",
+   "Cf-Ipcountry",
+   "Cf-Ray",
+   "Cf-Visitor",
+   "Cf-Warp-Tag-Id",
+   "Cf-Worker",
+   "Connection",
+   "Content-Length",
+   "Content-Type",
+   "Host",
+   "User-Agent",
+   "X-Forwarded-For",
+   "X-Forwarded-Proto"
+  ],
+  "payload": {
+   "x": 1
+  }
+ },
+ {
+  "ts": "10:42:04",
+  "evento": "account.created",
+  "event_id": "059ef792-82e4-4233-a749-a6d0d0ae6b2a",
+  "delivery_id": "892194c3-9f85-4321-b8d9-7a6fa53350f3",
+  "trace": "6afb3256e107066789fd68b12c0d1f64",
+  "n_firmas_v1": 1,
+  "firma_valida": true,
+  "tiempo_ok": true,
+  "duplicado": false,
+  "decision_http": 200,
+  "cabeceras": [
+   "Accept-Encoding",
+   "Cdn-Loop",
+   "Cf-Connecting-Ip",
+   "Cf-Ew-Via",
+   "Cf-Ipcountry",
+   "Cf-Ray",
+   "Cf-Visitor",
+   "Cf-Warp-Tag-Id",
+   "Cf-Worker",
+   "Clavaris-Delivery-Id",
+   "Clavaris-Event-Id",
+   "Clavaris-Event-Type",
+   "Clavaris-Signature",
+   "Clavaris-Trace-Id",
+   "Connection",
+   "Content-Length",
+   "Content-Type",
+   "Host",
+   "User-Agent",
+   "X-Forwarded-For",
+   "X-Forwarded-Proto"
+  ],
+  "payload": {
+   "accountId": {
+    "value": "7ffff261-00dc-4500-817c-421f9d9cf633"
+   },
+   "organizationId": {
+    "value": "c2ccbd48-1f71-43fb-82a0-41185a9bd7a3"
+   },
+   "email": "[correo omitido]",
+   "occurredAt": "2026-11-16T16:41:58.563727818Z"
+  }
+ },
+ {
+  "ts": "10:42:14",
+  "evento": "account.suspended",
+  "event_id": "7cb363c6-e8a3-4094-a304-c215aac26349",
+  "delivery_id": "ab7f103a-495a-4445-8493-ef4721e6bb5a",
+  "trace": "6afb32639b5a371ca481451444dba841",
+  "n_firmas_v1": 1,
+  "firma_valida": true,
+  "tiempo_ok": true,
+  "duplicado": false,
+  "decision_http": 200,
+  "cabeceras": [
+   "Accept-Encoding",
+   "Cdn-Loop",
+   "Cf-Connecting-Ip",
+   "Cf-Ew-Via",
+   "Cf-Ipcountry",
+   "Cf-Ray",
+   "Cf-Visitor",
+   "Cf-Warp-Tag-Id",
+   "Cf-Worker",
+   "Clavaris-Delivery-Id",
+   "Clavaris-Event-Id",
+   "Clavaris-Event-Type",
+   "Clavaris-Signature",
+   "Clavaris-Trace-Id",
+   "Connection",
+   "Content-Length",
+   "Content-Type",
+   "Host",
+   "User-Agent",
+   "X-Forwarded-For",
+   "X-Forwarded-Proto"
+  ],
+  "payload": {
+   "accountId": {
+    "value": "7ffff261-00dc-4500-817c-421f9d9cf633"
+   },
+   "organizationId": {
+    "value": "c2ccbd48-1f71-43fb-82a0-41185a9bd7a3"
+   },
+   "occurredAt": "2026-11-16T16:42:11.518825575Z"
+  }
+ },
+ {
+  "ts": "10:42:25",
+  "evento": "account.reactivated",
+  "event_id": "91a9aa48-5704-44bd-b4c4-65bd263003f0",
+  "delivery_id": "ad9a8f75-4dff-4aa7-9931-2f683d6dee4b",
+  "trace": "6afb326fc9c0bbe0bd57a561b50454f5",
+  "n_firmas_v1": 1,
+  "firma_valida": true,
+  "tiempo_ok": true,
+  "duplicado": false,
+  "decision_http": 200,
+  "cabeceras": [
+   "Accept-Encoding",
+   "Cdn-Loop",
+   "Cf-Connecting-Ip",
+   "Cf-Ew-Via",
+   "Cf-Ipcountry",
+   "Cf-Ray",
+   "Cf-Visitor",
+   "Cf-Warp-Tag-Id",
+   "Cf-Worker",
+   "Clavaris-Delivery-Id",
+   "Clavaris-Event-Id",
+   "Clavaris-Event-Type",
+   "Clavaris-Signature",
+   "Clavaris-Trace-Id",
+   "Connection",
+   "Content-Length",
+   "Content-Type",
+   "Host",
+   "User-Agent",
+   "X-Forwarded-For",
+   "X-Forwarded-Proto"
+  ],
+  "payload": {
+   "accountId": {
+    "value": "7ffff261-00dc-4500-817c-421f9d9cf633"
+   },
+   "organizationId": {
+    "value": "c2ccbd48-1f71-43fb-82a0-41185a9bd7a3"
+   },
+   "occurredAt": "2026-11-16T16:42:23.795843124Z"
+  }
+ },
+ {
+  "ts": "10:42:40",
+  "evento": "account.deleted",
+  "event_id": "8e6f560f-3e97-436a-aa70-62d5b72c155f",
+  "delivery_id": "ac912058-63c6-442c-af7b-9f57c72a3011",
+  "trace": "6afb327b5dc480113e1e07119b71ede6",
+  "n_firmas_v1": 1,
+  "firma_valida": true,
+  "tiempo_ok": true,
+  "duplicado": false,
+  "decision_http": 200,
+  "cabeceras": [
+   "Accept-Encoding",
+   "Cdn-Loop",
+   "Cf-Connecting-Ip",
+   "Cf-Ew-Via",
+   "Cf-Ipcountry",
+   "Cf-Ray",
+   "Cf-Visitor",
+   "Cf-Warp-Tag-Id",
+   "Cf-Worker",
+   "Clavaris-Delivery-Id",
+   "Clavaris-Event-Id",
+   "Clavaris-Event-Type",
+   "Clavaris-Signature",
+   "Clavaris-Trace-Id",
+   "Connection",
+   "Content-Length",
+   "Content-Type",
+   "Host",
+   "User-Agent",
+   "X-Forwarded-For",
+   "X-Forwarded-Proto"
+  ],
+  "payload": {
+   "accountId": {
+    "value": "7ffff261-00dc-4500-817c-421f9d9cf633"
+   },
+   "organizationId": {
+    "value": "c2ccbd48-1f71-43fb-82a0-41185a9bd7a3"
+   },
+   "email": "[correo omitido]",
+   "occurredAt": "2026-11-16T16:42:35.990975615Z"
+  }
+ },
+ {
+  "ts": "10:43:46",
+  "evento": "account.created",
+  "event_id": "35cf517f-8cf8-4c8b-a828-890370205837",
+  "delivery_id": "3abd44bf-06c7-4965-8be7-bb48f44f6bf3",
+  "trace": "6afb32bc66d680bd5dc1365ac403da85",
+  "n_firmas_v1": 1,
+  "firma_valida": true,
+  "tiempo_ok": true,
+  "duplicado": false,
+  "decision_http": 500,
+  "cabeceras": [
+   "Accept-Encoding",
+   "Cdn-Loop",
+   "Cf-Connecting-Ip",
+   "Cf-Ew-Via",
+   "Cf-Ipcountry",
+   "Cf-Ray",
+   "Cf-Visitor",
+   "Cf-Warp-Tag-Id",
+   "Cf-Worker",
+   "Clavaris-Delivery-Id",
+   "Clavaris-Event-Id",
+   "Clavaris-Event-Type",
+   "Clavaris-Signature",
+   "Clavaris-Trace-Id",
+   "Connection",
+   "Content-Length",
+   "Content-Type",
+   "Host",
+   "User-Agent",
+   "X-Forwarded-For",
+   "X-Forwarded-Proto"
+  ],
+  "payload": {
+   "accountId": {
+    "value": "c592261e-4769-4b9a-8117-d56d7793f115"
+   },
+   "organizationId": {
+    "value": "c2ccbd48-1f71-43fb-82a0-41185a9bd7a3"
+   },
+   "email": "[correo omitido]",
+   "occurredAt": "2026-11-16T16:43:41.363921622Z"
+  }
+ },
+ {
+  "ts": "10:44:21",
+  "evento": "account.created",
+  "event_id": "35cf517f-8cf8-4c8b-a828-890370205837",
+  "delivery_id": "3abd44bf-06c7-4965-8be7-bb48f44f6bf3",
+  "trace": "6afb32bc66d680bd5dc1365ac403da85",
+  "n_firmas_v1": 1,
+  "firma_valida": true,
+  "tiempo_ok": true,
+  "duplicado": true,
+  "decision_http": 500,
+  "cabeceras": [
+   "Accept-Encoding",
+   "Cdn-Loop",
+   "Cf-Connecting-Ip",
+   "Cf-Ew-Via",
+   "Cf-Ipcountry",
+   "Cf-Ray",
+   "Cf-Visitor",
+   "Cf-Warp-Tag-Id",
+   "Cf-Worker",
+   "Clavaris-Delivery-Id",
+   "Clavaris-Event-Id",
+   "Clavaris-Event-Type",
+   "Clavaris-Signature",
+   "Clavaris-Trace-Id",
+   "Connection",
+   "Content-Length",
+   "Content-Type",
+   "Host",
+   "User-Agent",
+   "X-Forwarded-For",
+   "X-Forwarded-Proto"
+  ],
+  "payload": {
+   "accountId": {
+    "value": "c592261e-4769-4b9a-8117-d56d7793f115"
+   },
+   "organizationId": {
+    "value": "c2ccbd48-1f71-43fb-82a0-41185a9bd7a3"
+   },
+   "email": "[correo omitido]",
+   "occurredAt": "2026-11-16T16:43:41.363921622Z"
+  }
+ },
+ {
+  "ts": "10:45:22",
+  "evento": "account.created",
+  "event_id": "35cf517f-8cf8-4c8b-a828-890370205837",
+  "delivery_id": "3abd44bf-06c7-4965-8be7-bb48f44f6bf3",
+  "trace": "6afb32bc66d680bd5dc1365ac403da85",
+  "n_firmas_v1": 1,
+  "firma_valida": true,
+  "tiempo_ok": true,
+  "duplicado": true,
+  "decision_http": 200,
+  "cabeceras": [
+   "Accept-Encoding",
+   "Cdn-Loop",
+   "Cf-Connecting-Ip",
+   "Cf-Ew-Via",
+   "Cf-Ipcountry",
+   "Cf-Ray",
+   "Cf-Visitor",
+   "Cf-Warp-Tag-Id",
+   "Cf-Worker",
+   "Clavaris-Delivery-Id",
+   "Clavaris-Event-Id",
+   "Clavaris-Event-Type",
+   "Clavaris-Signature",
+   "Clavaris-Trace-Id",
+   "Connection",
+   "Content-Length",
+   "Content-Type",
+   "Host",
+   "User-Agent",
+   "X-Forwarded-For",
+   "X-Forwarded-Proto"
+  ],
+  "payload": {
+   "accountId": {
+    "value": "c592261e-4769-4b9a-8117-d56d7793f115"
+   },
+   "organizationId": {
+    "value": "c2ccbd48-1f71-43fb-82a0-41185a9bd7a3"
+   },
+   "email": "[correo omitido]",
+   "occurredAt": "2026-11-16T16:43:41.363921622Z"
+  }
+ },
+ {
+  "ts": "10:45:47",
+  "evento": "account.created",
+  "event_id": "35cf517f-8cf8-4c8b-a828-890370205837",
+  "delivery_id": "3abd44bf-06c7-4965-8be7-bb48f44f6bf3",
+  "trace": "6afb32bc66d680bd5dc1365ac403da85",
+  "n_firmas_v1": 1,
+  "firma_valida": true,
+  "tiempo_ok": true,
+  "duplicado": true,
+  "decision_http": 200,
+  "cabeceras": [
+   "Accept-Encoding",
+   "Cdn-Loop",
+   "Cf-Connecting-Ip",
+   "Cf-Ew-Via",
+   "Cf-Ipcountry",
+   "Cf-Ray",
+   "Cf-Visitor",
+   "Cf-Warp-Tag-Id",
+   "Cf-Worker",
+   "Clavaris-Delivery-Id",
+   "Clavaris-Event-Id",
+   "Clavaris-Event-Type",
+   "Clavaris-Signature",
+   "Clavaris-Trace-Id",
+   "Connection",
+   "Content-Length",
+   "Content-Type",
+   "Host",
+   "User-Agent",
+   "X-Forwarded-For",
+   "X-Forwarded-Proto"
+  ],
+  "payload": {
+   "accountId": {
+    "value": "c592261e-4769-4b9a-8117-d56d7793f115"
+   },
+   "organizationId": {
+    "value": "c2ccbd48-1f71-43fb-82a0-41185a9bd7a3"
+   },
+   "email": "[correo omitido]",
+   "occurredAt": "2026-11-16T16:43:41.363921622Z"
+  }
+ },
+ {
+  "ts": "10:46:23",
+  "evento": "account.suspended",
+  "event_id": "389248e1-786c-47d1-a519-2132f4d6f1cc",
+  "delivery_id": "05d35c47-cbae-49b0-ab7e-6aaeba75a52a",
+  "trace": "6afb335c1cb652cd45343b0cbf4ce674",
+  "n_firmas_v1": 2,
+  "firma_valida": true,
+  "tiempo_ok": true,
+  "duplicado": false,
+  "decision_http": 200,
+  "cabeceras": [
+   "Accept-Encoding",
+   "Cdn-Loop",
+   "Cf-Connecting-Ip",
+   "Cf-Ew-Via",
+   "Cf-Ipcountry",
+   "Cf-Ray",
+   "Cf-Visitor",
+   "Cf-Warp-Tag-Id",
+   "Cf-Worker",
+   "Clavaris-Delivery-Id",
+   "Clavaris-Event-Id",
+   "Clavaris-Event-Type",
+   "Clavaris-Signature",
+   "Clavaris-Trace-Id",
+   "Connection",
+   "Content-Length",
+   "Content-Type",
+   "Host",
+   "User-Agent",
+   "X-Forwarded-For",
+   "X-Forwarded-Proto"
+  ],
+  "payload": {
+   "accountId": {
+    "value": "c592261e-4769-4b9a-8117-d56d7793f115"
+   },
+   "organizationId": {
+    "value": "c2ccbd48-1f71-43fb-82a0-41185a9bd7a3"
+   },
+   "occurredAt": "2026-11-16T16:46:20.379036967Z"
+  }
+ },
+ {
+  "ts": "10:46:38",
+  "evento": "account.reactivated",
+  "event_id": "79d932b1-7219-4d4d-a2e0-ed250b4137cc",
+  "delivery_id": "7765a5c4-db49-4489-b1e5-de42d2bbb29c",
+  "trace": "6afb336a52e9d81e53a4d82a75da735a",
+  "n_firmas_v1": 2,
+  "firma_valida": true,
+  "tiempo_ok": true,
+  "duplicado": false,
+  "decision_http": 200,
+  "cabeceras": [
+   "Accept-Encoding",
+   "Cdn-Loop",
+   "Cf-Connecting-Ip",
+   "Cf-Ew-Via",
+   "Cf-Ipcountry",
+   "Cf-Ray",
+   "Cf-Visitor",
+   "Cf-Warp-Tag-Id",
+   "Cf-Worker",
+   "Clavaris-Delivery-Id",
+   "Clavaris-Event-Id",
+   "Clavaris-Event-Type",
+   "Clavaris-Signature",
+   "Clavaris-Trace-Id",
+   "Connection",
+   "Content-Length",
+   "Content-Type",
+   "Host",
+   "User-Agent",
+   "X-Forwarded-For",
+   "X-Forwarded-Proto"
+  ],
+  "payload": {
+   "accountId": {
+    "value": "c592261e-4769-4b9a-8117-d56d7793f115"
+   },
+   "organizationId": {
+    "value": "c2ccbd48-1f71-43fb-82a0-41185a9bd7a3"
+   },
+   "occurredAt": "2026-11-16T16:46:34.457173175Z"
+  }
+ },
+ {
+  "ts": "10:46:59",
+  "evento": "account.suspended",
+  "event_id": "test-1794847619-63",
+  "delivery_id": null,
+  "trace": null,
+  "n_firmas_v1": 1,
+  "firma_valida": true,
+  "tiempo_ok": true,
+  "duplicado": false,
+  "decision_http": 200,
+  "cabeceras": [
+   "Accept-Encoding",
+   "Cdn-Loop",
+   "Cf-Connecting-Ip",
+   "Cf-Ew-Via",
+   "Cf-Ipcountry",
+   "Cf-Ray",
+   "Cf-Visitor",
+   "Cf-Warp-Tag-Id",
+   "Cf-Worker",
+   "Clavaris-Event-Id",
+   "Clavaris-Event-Type",
+   "Clavaris-Signature",
+   "Connection",
+   "Content-Length",
+   "Content-Type",
+   "Host",
+   "User-Agent",
+   "X-Forwarded-For",
+   "X-Forwarded-Proto"
+  ],
+  "payload": {
+   "accountId": {
+    "value": "x"
+   },
+   "occurredAt": "2026-11-16T00:00:00Z"
+  }
+ },
+ {
+  "ts": "10:46:59",
+  "evento": "account.suspended",
+  "event_id": "test-1794847019-63",
+  "delivery_id": null,
+  "trace": null,
+  "n_firmas_v1": 1,
+  "firma_valida": true,
+  "tiempo_ok": false,
+  "duplicado": false,
+  "decision_http": 401,
+  "cabeceras": [
+   "Accept-Encoding",
+   "Cdn-Loop",
+   "Cf-Connecting-Ip",
+   "Cf-Ew-Via",
+   "Cf-Ipcountry",
+   "Cf-Ray",
+   "Cf-Visitor",
+   "Cf-Warp-Tag-Id",
+   "Cf-Worker",
+   "Clavaris-Event-Id",
+   "Clavaris-Event-Type",
+   "Clavaris-Signature",
+   "Connection",
+   "Content-Length",
+   "Content-Type",
+   "Host",
+   "User-Agent",
+   "X-Forwarded-For",
+   "X-Forwarded-Proto"
+  ],
+  "payload": {
+   "accountId": {
+    "value": "x"
+   },
+   "occurredAt": "2026-11-16T00:00:00Z"
+  }
+ },
+ {
+  "ts": "10:47:00",
+  "evento": "account.suspended",
+  "event_id": "test-1794847619-63",
+  "delivery_id": null,
+  "trace": null,
+  "n_firmas_v1": 1,
+  "firma_valida": false,
+  "tiempo_ok": true,
+  "duplicado": true,
+  "decision_http": 401,
+  "cabeceras": [
+   "Accept-Encoding",
+   "Cdn-Loop",
+   "Cf-Connecting-Ip",
+   "Cf-Ew-Via",
+   "Cf-Ipcountry",
+   "Cf-Ray",
+   "Cf-Visitor",
+   "Cf-Warp-Tag-Id",
+   "Cf-Worker",
+   "Clavaris-Event-Id",
+   "Clavaris-Event-Type",
+   "Clavaris-Signature",
+   "Connection",
+   "Content-Length",
+   "Content-Type",
+   "Host",
+   "User-Agent",
+   "X-Forwarded-For",
+   "X-Forwarded-Proto"
+  ],
+  "payload": {
+   "accountId": {
+    "value": "y"
+   },
+   "occurredAt": "2026-11-16T00:00:00Z"
+  }
+ }
+]

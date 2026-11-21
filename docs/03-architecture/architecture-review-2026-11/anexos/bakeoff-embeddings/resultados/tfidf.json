@@ -1,0 +1,42 @@
+{
+ "variante": "tfidf",
+ "global": {
+  "ndcg10": 0.8475,
+  "p5": 0.85,
+  "n_vacantes": 24
+ },
+ "vacante_es": {
+  "ndcg10": 0.847,
+  "p5": 0.85,
+  "n_vacantes": 16
+ },
+ "vacante_en": {
+  "ndcg10": 0.8486,
+  "p5": 0.85,
+  "n_vacantes": 8
+ },
+ "coseno_por_relevancia": {
+  "0": {
+   "media": 0.0863,
+   "min": 0.0,
+   "max": 0.3559
+  },
+  "1": {
+   "media": 0.1258,
+   "min": 0.0,
+   "max": 0.7925
+  },
+  "2": {
+   "media": 0.4819,
+   "min": 0.0665,
+   "max": 0.8729
+  },
+  "3": {
+   "media": 0.5316,
+   "min": 0.1204,
+   "max": 0.8654
+  }
+ },
+ "coseno_relevantes_mismo_idioma": 0.737,
+ "coseno_relevantes_idioma_cruzado": 0.2297
+}

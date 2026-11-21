@@ -1,0 +1,50 @@
+{
+ "variante": "embeddinggemma",
+ "modelo": "embeddinggemma",
+ "dim": 768,
+ "textos": 80,
+ "tokens_prompt_total": 6210,
+ "tokens_medios": 77.6,
+ "segundos_pared": 450.9,
+ "ms_por_texto": 5636.8,
+ "segundos_carga_modelo": 2.53,
+ "global": {
+  "ndcg10": 0.9,
+  "p5": 0.9167,
+  "n_vacantes": 24
+ },
+ "vacante_es": {
+  "ndcg10": 0.8893,
+  "p5": 0.875,
+  "n_vacantes": 16
+ },
+ "vacante_en": {
+  "ndcg10": 0.9216,
+  "p5": 1.0,
+  "n_vacantes": 8
+ },
+ "coseno_por_relevancia": {
+  "0": {
+   "media": 0.276,
+   "min": 0.1526,
+   "max": 0.498
+  },
+  "1": {
+   "media": 0.376,
+   "min": 0.2375,
+   "max": 0.6634
+  },
+  "2": {
+   "media": 0.5699,
+   "min": 0.493,
+   "max": 0.6888
+  },
+  "3": {
+   "media": 0.582,
+   "min": 0.5092,
+   "max": 0.6952
+  }
+ },
+ "coseno_relevantes_mismo_idioma": 0.6025,
+ "coseno_relevantes_idioma_cruzado": 0.5444
+}

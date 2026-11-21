@@ -1,0 +1,42 @@
+{
+ "nomic-embed-text": {
+  "tokens": 100,
+  "primera_s(frio)": 19.3,
+  "carga_modelo_s": 15.7,
+  "caliente_s_mediana": 3.84,
+  "ms_por_token": 38.4,
+  "dim": 768
+ },
+ "nomic-embed-text-v2-moe": {
+  "tokens": 75,
+  "primera_s(frio)": 18.3,
+  "carga_modelo_s": 2.8,
+  "caliente_s_mediana": 2.88,
+  "ms_por_token": 38.4,
+  "dim": 768
+ },
+ "qwen3-embedding:0.6b": {
+  "tokens": 74,
+  "primera_s(frio)": 32.0,
+  "carga_modelo_s": 28.9,
+  "caliente_s_mediana": 3.09,
+  "ms_por_token": 41.8,
+  "dim": 1024
+ },
+ "embeddinggemma": {
+  "tokens": 64,
+  "primera_s(frio)": 5.7,
+  "carga_modelo_s": 1.7,
+  "caliente_s_mediana": 4.08,
+  "ms_por_token": 63.8,
+  "dim": 768
+ },
+ "bge-m3": {
+  "tokens": 75,
+  "primera_s(frio)": 50.4,
+  "carga_modelo_s": 42.6,
+  "caliente_s_mediana": 7.27,
+  "ms_por_token": 96.9,
+  "dim": 1024
+ }
+}

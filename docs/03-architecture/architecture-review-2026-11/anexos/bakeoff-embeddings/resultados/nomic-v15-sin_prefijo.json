@@ -1,0 +1,50 @@
+{
+ "variante": "nomic-v15-sin_prefijo",
+ "modelo": "nomic-embed-text",
+ "dim": 768,
+ "textos": 80,
+ "tokens_prompt_total": 8064,
+ "tokens_medios": 100.8,
+ "segundos_pared": 1691.4,
+ "ms_por_texto": 21142.7,
+ "segundos_carga_modelo": 1.1,
+ "global": {
+  "ndcg10": 0.7789,
+  "p5": 0.8167,
+  "n_vacantes": 24
+ },
+ "vacante_es": {
+  "ndcg10": 0.7538,
+  "p5": 0.8375,
+  "n_vacantes": 16
+ },
+ "vacante_en": {
+  "ndcg10": 0.8291,
+  "p5": 0.775,
+  "n_vacantes": 8
+ },
+ "coseno_por_relevancia": {
+  "0": {
+   "media": 0.5663,
+   "min": 0.3732,
+   "max": 0.784
+  },
+  "1": {
+   "media": 0.6418,
+   "min": 0.4462,
+   "max": 0.9025
+  },
+  "2": {
+   "media": 0.7594,
+   "min": 0.5518,
+   "max": 0.9149
+  },
+  "3": {
+   "media": 0.7699,
+   "min": 0.5889,
+   "max": 0.9287
+  }
+ },
+ "coseno_relevantes_mismo_idioma": 0.8492,
+ "coseno_relevantes_idioma_cruzado": 0.6623
+}

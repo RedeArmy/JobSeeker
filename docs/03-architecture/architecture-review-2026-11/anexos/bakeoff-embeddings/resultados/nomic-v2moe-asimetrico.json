@@ -1,0 +1,50 @@
+{
+ "variante": "nomic-v2moe-asimetrico",
+ "modelo": "nomic-embed-text-v2-moe",
+ "dim": 768,
+ "textos": 80,
+ "tokens_prompt_total": 6834,
+ "tokens_medios": 85.4,
+ "segundos_pared": 1052.2,
+ "ms_por_texto": 13152.9,
+ "segundos_carga_modelo": 3.77,
+ "global": {
+  "ndcg10": 0.9,
+  "p5": 0.9083,
+  "n_vacantes": 24
+ },
+ "vacante_es": {
+  "ndcg10": 0.8996,
+  "p5": 0.8625,
+  "n_vacantes": 16
+ },
+ "vacante_en": {
+  "ndcg10": 0.9007,
+  "p5": 1.0,
+  "n_vacantes": 8
+ },
+ "coseno_por_relevancia": {
+  "0": {
+   "media": 0.3917,
+   "min": 0.228,
+   "max": 0.5772
+  },
+  "1": {
+   "media": 0.5022,
+   "min": 0.3306,
+   "max": 0.8036
+  },
+  "2": {
+   "media": 0.6865,
+   "min": 0.5569,
+   "max": 0.8355
+  },
+  "3": {
+   "media": 0.7101,
+   "min": 0.5852,
+   "max": 0.8471
+  }
+ },
+ "coseno_relevantes_mismo_idioma": 0.7335,
+ "coseno_relevantes_idioma_cruzado": 0.657
+}
