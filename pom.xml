@@ -40,6 +40,16 @@
         <pmd-plugin.version>3.28.0</pmd-plugin.version>
         <pmd.version>7.29.0</pmd.version>
 
+        <!-- SonarCloud: se ejecuta desde el CI (job «SonarCloud analysis»); el token llega como secreto. -->
+        <sonar-maven-plugin.version>5.8.0.7211</sonar-maven-plugin.version>
+        <sonar.host.url>https://sonarcloud.io</sonar.host.url>
+        <sonar.organization>redearmy</sonar.organization>
+        <sonar.projectKey>RedeArmy_JobSeeker</sonar.projectKey>
+        <!-- HTMX es código de terceros incluido tal cual (huella fijada en VendoredAssetsTest): analizarlo
+             solo generaría hallazgos que no podemos corregir. -->
+        <sonar.exclusions>**/static/js/htmx.min.js</sonar.exclusions>
+        <sonar.cpd.exclusions>**/static/js/htmx.min.js</sonar.cpd.exclusions>
+
         <!-- Vacío por defecto: JaCoCo lo rellena con su agente y Surefire lo concatena en su argLine. -->
         <argLine></argLine>
     </properties>
@@ -127,6 +137,13 @@
                     <groupId>org.springframework.boot</groupId>
                     <artifactId>spring-boot-maven-plugin</artifactId>
                     <version>${spring-boot.version}</version>
+                </plugin>
+                <!-- Escáner de Sonar como plugin de Maven y no como acción de GitHub: así no hay que ampliar
+                     las acciones permitidas del repositorio (solo las de GitHub). -->
+                <plugin>
+                    <groupId>org.sonarsource.scanner.maven</groupId>
+                    <artifactId>sonar-maven-plugin</artifactId>
+                    <version>${sonar-maven-plugin.version}</version>
                 </plugin>
             </plugins>
         </pluginManagement>
