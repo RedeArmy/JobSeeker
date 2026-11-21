@@ -26,8 +26,8 @@ updates:
       interval: "weekly"
     labels:
       - "dependencies"
-    # ADR-0014 fija Java 25 (LTS): no se proponen JDK mayores en la imagen de ejecución. Para la imagen
-    # de Maven el JDK va dentro de la etiqueta y no se puede filtrar por versión: esas PRs se revisan a mano.
+    # ADR-0014 fija Java 25 (LTS) para la ejecución: no se proponen JDK mayores en esa imagen. La imagen
+    # de Maven (solo compilación) sí sigue la etiqueta más nueva: el Dockerfile exige bytecode de Java 25.
     ignore:
       - dependency-name: "eclipse-temurin"
         versions: [">=26"]

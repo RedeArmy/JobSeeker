@@ -7,8 +7,9 @@
 # sin que cambie este archivo. Dependabot propone el digest nuevo (ecosistema `docker`).
 
 # ---- etapa de compilación ----
-# Temurin 25 (LTS, ADR-0014), la misma que usa el CI y la imagen de ejecución. Dependabot propuso una vez
-# cambiar a Temurin 26 y a una etiqueta flotante (`3.9-…`): se rechazó a propósito, no es LTS.
+# Esta etapa compila con el JDK que traiga la imagen de Maven (hoy Temurin 26, no LTS: decisión del
+# 21-nov-2026, ADR-0014). Es seguro porque el compilador usa `--release 25` y el comprobador de abajo
+# exige bytecode de Java 25; la imagen de ejecución y el CI siguen en Java 25 LTS.
 FROM maven:3.9-eclipse-temurin-26-noble@sha256:b2c1ad85954592f9928e84327c65201f308ad9b5d8ed7d5b823717c97bf23fbb AS build
 WORKDIR /src
 COPY . .
@@ -16,6 +17,8 @@ COPY . .
 # La caché de Maven evita descargar las dependencias en cada construcción.
 RUN --mount=type=cache,target=/root/.m2 \
     mvn -B -ntp -q -pl app -am -DskipTests -Dspotless.skip=true -Dpmd.skip=true -Djacoco.skip=true package \
+ && (javap -v -cp app/target/classes com.usac.jobseeker.app.JobSeekerApplication | grep -q 'major version: 69' \
+     || { echo 'ERROR: el bytecode no es de Java 25 (ADR-0014)' >&2; exit 1; }) \
  && cp app/target/app-*-SNAPSHOT.jar /tmp/app.jar \
  && java -Djarmode=tools -jar /tmp/app.jar extract --layers --launcher --destination /layers
 
