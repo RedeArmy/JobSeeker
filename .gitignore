@@ -18,11 +18,11 @@ target/
 .classpath
 .project
 
-# ---- OS ----
+# ---- Sistema operativo ----
 .DS_Store
 Thumbs.db
 
-# ---- Logs ----
+# ---- Registros (logs) ----
 *.log
 
 # ---- Docker ----

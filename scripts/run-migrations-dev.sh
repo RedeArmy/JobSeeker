@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-# Placeholder — will run Flyway migrations against local Docker Postgres (dev profile).
+# Marcador de posición — ejecutará las migraciones Flyway contra el Postgres local en Docker (perfil dev).

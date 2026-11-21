@@ -1,27 +1,56 @@
-# Local development stack — placeholder only, no real service definitions yet.
+# Stack de desarrollo local — solo marcador de posición, aún sin servicios reales.
 #
-# Supabase is NOT defined here: it is a cloud-managed Postgres used in
-# production only. This file covers local dev services:
+# Supabase NO se define aquí para producción: allí Postgres y el almacenamiento de
+# archivos son gestionados en la nube (ADR-0026). Este archivo cubre sus equivalentes locales.
+#
+# Hay UN solo servicio de aplicación. Los módulos de negocio son bibliotecas Maven; el
+# módulo `app` es el único desplegable (ADR-0001, ADR-0026), por lo que hay un Dockerfile,
+# un spec OpenAPI y un endpoint /actuator/prometheus.
 #
 # services:
+#   app:
+#     # se construye desde app/Dockerfile; depends_on postgres, redis, ollama, clamav, mailpit, minio
+#     # variables: ver .env.example (configuración OIDC de Clavaris, almacenamiento, correo, BD, Redis)
+#
 #   postgres:
-#     # image: pgvector/pgvector:pg16 (or equivalent pgvector-enabled Postgres 16 image)
-#     # env: POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB (see .env.example)
-#     # volumes: local named volume + infra/docker/postgres init scripts
+#     # imagen: pgvector/pgvector:pg16 (o equivalente de Postgres 16 con pgvector)
+#     # variables: POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB (ver .env.example)
+#     # volúmenes: volumen local con nombre + scripts de inicio de infra/docker/postgres
 #
 #   redis:
-#     # base Redis image, local dev cache/session store
+#     # imagen base de Redis: sesiones web (ADR-0020), caché de scores y buckets de rate limit
+#     # de Bucket4j (ADR-0011) — espacios de claves independientes en una sola instancia
+#     # volúmenes/configuración: infra/docker/redis
 #
 #   ollama:
-#     # local LLM runtime; model pull handled via infra/docker/ollama scripts
+#     # entorno de embeddings (la generación de texto no está en la ruta crítica); límites de
+#     # CPU/RAM para que no deje sin recursos a `app`; descarga de modelos con los scripts de infra/docker/ollama
 #
-#   auth-module:
-#   cv-module:
-#   job-module:
-#   matching-module:
-#   ats-module:
-#   tracker-module:
-#     # one service per business module, built from each module's Dockerfile
+#   clamav:
+#     # escaneo de malware de los CV y de las respuestas FILE_UPLOAD subidos (ADR-0026)
+#
+#   mailpit:
+#     # receptor SMTP local con interfaz web para los correos de notificación; en staging y
+#     # producción se reemplaza por un proveedor transaccional
+#
+#   minio:
+#     # reemplazo local, compatible con S3, de Supabase Storage
+#
+#   prometheus:
+#     # consulta el único endpoint /actuator/prometheus de `app` — ADR-0012
+#     # configuración: infra/docker/prometheus (destinos de scrape, retención)
+#
+#   grafana:
+#     # dashboards provisionados como código, con Prometheus como fuente de datos — ADR-0012
+#     # configuración: infra/docker/grafana (dashboards/, datasources/)
+#
+#   alertmanager:
+#     # enruta las alertas de Prometheus hacia un canal de notificación — ADR-0012
+#     # configuración: infra/docker/alertmanager
+#
+#   clavaris (opcional, para pruebas de login de extremo a extremo):
+#     # el proveedor de identidad vive en ../Clavaris con su propio stack de compose;
+#     # referenciarlo aquí solo si hace falta una red compartida para probar OIDC en local
 
 version: "3.9"
 

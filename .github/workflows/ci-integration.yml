@@ -1,6 +1,6 @@
-# Placeholder — integration CI (docker-compose stack + Flyway migrations + cross-module tests).
+# Marcador de posición — CI de integración (stack docker-compose + migraciones Flyway + pruebas entre módulos).
 # name: ci-integration
 # on: [pull_request]
 # jobs:
 #   integration:
-#     # spin up postgres/redis/ollama via docker-compose, run migrations, run integration tests
+#     # levantar postgres/redis/ollama con docker-compose, ejecutar migraciones y pruebas de integración

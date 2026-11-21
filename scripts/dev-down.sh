@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-# Placeholder — will stop the local docker-compose stack.
+# Marcador de posición — detendrá el stack local de docker-compose.

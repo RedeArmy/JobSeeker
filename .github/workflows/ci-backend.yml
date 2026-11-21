@@ -1,6 +1,6 @@
-# Placeholder — backend CI (build + unit tests per module).
+# Marcador de posición — CI del backend (compilación + pruebas unitarias por módulo).
 # name: ci-backend
 # on: [pull_request, push]
 # jobs:
 #   build:
-#     # checkout, set up Java 21, mvn -pl <module> verify
+#     # checkout, preparar Java 25 (temurin), mvn -pl <módulo> verify

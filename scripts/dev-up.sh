@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-# Placeholder — will start the local docker-compose stack (postgres, redis, ollama, modules).
+# Marcador de posición — levantará el stack local de docker-compose (postgres, redis, ollama y la aplicación).

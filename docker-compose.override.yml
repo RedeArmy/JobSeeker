@@ -1,8 +1,8 @@
-# Local developer overrides for docker-compose.yml — placeholder.
+# Ajustes locales de cada desarrollador sobre docker-compose.yml — marcador de posición.
 #
-# Intended for machine-specific tweaks (port remapping, bind mounts,
-# extra env vars) that should not be committed as part of the base
-# stack definition. Left empty until the base services exist.
+# Pensado para cambios específicos de la máquina (reasignar puertos, bind mounts,
+# variables de entorno extra) que no deben versionarse como parte de la definición
+# base del stack. Se deja vacío hasta que existan los servicios base.
 
 version: "3.9"
 

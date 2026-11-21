@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-# Placeholder — will run Flyway migrations against Supabase (prod profile, env-var driven credentials).
+# Marcador de posición — ejecutará las migraciones Flyway contra Supabase (perfil prod, credenciales por variables de entorno).

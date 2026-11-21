@@ -1,15 +1,15 @@
 # JobSeeker
 
-ATS + CRM system with a CV-job compatibility matching engine.
+Sistema ATS + CRM con un motor de compatibilidad CV–vacante.
 
-Modular monolith built with Java 21 and Spring Boot 3.4, server-side
-rendered frontend (Thymeleaf + HTMX), PostgreSQL 16 with pgvector,
-Redis, and a hybrid AI layer (local Ollama + selective Claude API).
+Monolito modular construido con Java 25 y Spring Boot 4.1 (ADR-0014, aprobado), frontend
+renderizado en el servidor (Thymeleaf + HTMX), PostgreSQL 16 con pgvector, Redis y una capa
+de IA híbrida (Ollama local + API de Claude de uso selectivo).
 
-> Project skeleton — documentation, module details, and setup
-> instructions will be added as the system is built out.
+> Esqueleto del proyecto — la documentación, el detalle de los módulos y las instrucciones
+> de instalación se irán añadiendo a medida que se construya el sistema.
 
-## Modules
+## Módulos
 
 - `auth-module`
 - `cv-module`
@@ -18,5 +18,6 @@ Redis, and a hybrid AI layer (local Ollama + selective Claude API).
 - `ats-module`
 - `tracker-module`
 - `common`
+- `app` — el único desplegable (los módulos de negocio son bibliotecas)
 
-See `docs/` for architecture, product, and domain documentation.
+Consulta `docs/` para la documentación de arquitectura, producto y dominio.
