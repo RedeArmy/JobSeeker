@@ -87,7 +87,20 @@ Aparte, `scripts/smoke-test-jar.sh` arranca el jar ejecutable contra Postgres 17
 
 Cada capa tiene su prueba negativa: se comprobó que una migración con una columna inexistente rompe el build, que una operación peligrosa falla en squawk y que cada infracción de convención y de inmutabilidad se detecta.
 
-## 10. Preguntas abiertas
+## 10. Validación de la infraestructura local
+
+El stack de desarrollo (`docker-compose.yml`, `infra/docker/`) y la imagen de la aplicación se validan en CI con la misma idea: la herramienta oficial de cada pieza y una prueba de que de verdad funciona.
+
+| Qué | Cómo | Dónde corre |
+|---|---|---|
+| Configuración (Compose, Prometheus, Alertmanager, dashboards de Grafana) | `scripts/check-infra-config.sh`: `docker compose config`, `promtool check config/rules`, `amtool check-config` y JSON válido de los dashboards, con las imágenes fijadas por digest que usa Compose | `repo-checks` |
+| Reglas de alerta | `promtool test rules` (`infra/docker/prometheus/tests`): una regla sin prueba no se sabe si dispara | `repo-checks` |
+| Stack completo con la aplicación en contenedor | `scripts/dev-up.sh --app` y `scripts/smoke-test-stack.sh`: sana según Docker, viva en Prometheus, migraciones aplicadas, dashboard aprovisionado, correo en Mailpit, Redis con clave, sin root | `ci-backend` |
+| Vulnerabilidades de la imagen | Trivy: una corregible de severidad ALTA o CRÍTICA rompe el build (las que aún no tienen corrección no cuentan) | `ci-backend` |
+
+La prueba de humo tiene su propia prueba negativa: con la aplicación parada debe fallar. La primera versión pasaba (daba por bueno un resultado vacío y confiaba en una métrica retrasada de Prometheus), y se corrigió al comprobarlo.
+
+## 11. Preguntas abiertas
 
 - ¿Las pruebas de integración de `infrastructure/adapter/out/ai/` corren contra una instancia real de Ollama en CI, o se valida el contrato con un stub/mock de la API HTTP de Ollama para no depender de un modelo local pesado en el pipeline? Aplica igual al adaptador de sugerencia de vínculo de `job-module` (BR-APPQ-04).
 - ¿Qué herramienta de pruebas de carga se adopta para validar los NFR de rendimiento (sección 7)?
