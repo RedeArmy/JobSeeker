@@ -29,7 +29,7 @@
         <archunit.version>1.5.1</archunit.version>
         <springdoc.version>3.2.0</springdoc.version>
         <bucket4j.version>8.22.0</bucket4j.version>
-        <openhtmltopdf.version>1.1.113</openhtmltopdf.version>
+        <openhtmltopdf.version>1.1.114</openhtmltopdf.version>
 
         <!-- Herramientas de build compatibles con Java 25 (las anteriores fallan con classfile 69). -->
         <maven-compiler-plugin.version>3.16.0</maven-compiler-plugin.version>
