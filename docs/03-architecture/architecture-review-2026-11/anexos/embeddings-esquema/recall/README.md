@@ -32,3 +32,12 @@ Los 104 vectores son reales; **los corpus de 10.000 no**. «real_aumentado» son
 ## No verificado
 
 Un corpus real de miles de perfiles distintos (se medirá con el protocolo de 300 pares del ADR-0018 o con datos reales de la cohorte), el recall con filtros más selectivos, y el reordenamiento de `relaxed_order`.
+
+## Repetición en PostgreSQL 17.12 (20-nov-2026, ADR-0028)
+
+Se repitió el mismo `recall.py`, con los mismos 104 vectores reales y la misma semilla, sobre `pgvector/pgvector:pg17` (PostgreSQL 17.12, pgvector 0.8.7). Resultado completo en `recall_result_pg17.json`.
+
+- **Corpus «real aumentado» (los dos niveles de ruido): las 16 cifras coinciden exactamente con las de PostgreSQL 16, a tres decimales.** Se mantiene el hallazgo que importa: con el filtro de país, sin `hnsw.iterative_scan` el recall@20 es 0,38 con `ef_search`=40 (0,90–0,93 con 100) y con `relaxed_order` sube a 0,996–1,000.
+- **Corpus uniforme aleatorio (el caso patológico, sin estructura):** diferencias de −0,017 a +0,054 sin dirección clara. Se atribuyen al azar de la construcción del índice y no cambian la conclusión (este corpus no es representativo).
+- **No se repitió** la medición de tiempos del DDL de cambio de modelo (`../README.md`), solo el recall.
+

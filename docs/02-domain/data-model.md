@@ -607,7 +607,7 @@ Restricción de unicidad `(application_id, application_question_id)` — una res
 
 ### 5.1 Embeddings versionados y cambio de modelo (ADR-0018)
 
-DDL exacto y procedimiento ejecutable en `architecture-review-2026-11/anexos/embeddings-esquema/`. **Medido el 18-nov-2026** en PostgreSQL 16.16 + pgvector 0.8.7 (imagen `pgvector/pgvector:pg16`), con 10.000 candidatos de 1024 dimensiones y 2.000 vacantes. El Postgres gestionado de Supabase **no** se ha probado (versión de pgvector y `hnsw.iterative_scan` pendientes de comprobar, `07-spike-bibliotecas-java-25.md`).
+DDL exacto y procedimiento ejecutable en `architecture-review-2026-11/anexos/embeddings-esquema/`. **Medido el 18-nov-2026** en PostgreSQL 16.16 + pgvector 0.8.7 (imagen `pgvector/pgvector:pg16`), con 10.000 candidatos de 1024 dimensiones y 2.000 vacantes. El experimento de recall se repitió el 20-nov-2026 en PostgreSQL 17.12 (la versión de producción, ADR-0028) con el mismo resultado. El Postgres gestionado de Supabase **no** se ha probado (versión de pgvector y `hnsw.iterative_scan` pendientes de comprobar, `07-spike-bibliotecas-java-25.md`).
 
 | Consulta | Plan | Mediana | p95 |
 |---|---|---|---|

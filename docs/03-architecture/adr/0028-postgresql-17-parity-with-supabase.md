@@ -39,14 +39,14 @@ El problema de desarrollar en una versión mayor distinta de la de producción e
 
 - **Positivas:** una sola versión mayor de punta a punta, lo medido localmente vale para producción y el desarrollo no necesita una cuenta ni un proyecto de Supabase.
 - **Negativas / trade-offs aceptados:** no se usan las novedades de la 18 hasta que Supabase la ofrezca; el supuesto de que Supabase ofrece la 17 y no la 18 se apoya en fuentes secundarias hasta confirmarlo en el panel.
-- **Lo medido sobre 16 se está repitiendo sobre 17:** el *spike* R13 (8 pruebas) ya pasó sin cambios sobre PostgreSQL 17.12 con pgvector 0.8.7; el experimento de recall de HNSW (`anexos/embeddings-esquema/recall`) está en ejecución sobre 17 y su resultado se añadirá al anexo cuando termine. Las mediciones anteriores se conservan como historial de lo observado en 16.16.
+- **Lo medido sobre 16 se repitió sobre 17:** el *spike* R13 (8 pruebas) pasó sin cambios sobre PostgreSQL 17.12 con pgvector 0.8.7, y el recall de HNSW (`anexos/embeddings-esquema/recall`) dio **las mismas 16 cifras a tres decimales** en los corpus representativos, con el mismo hallazgo (sin `iterative_scan`, 0,38 con filtro; con `relaxed_order`, ≥ 0,996). No se repitieron los tiempos del DDL de cambio de modelo. Las mediciones anteriores se conservan como historial de lo observado en 16.16.
 
 ## Acciones derivadas
 
 - [x] Sustituir «PostgreSQL 16» por 17 en README, `system-design-document.md`, ADR-0002 (nota de enmienda), ADR-0026, ADR-0027, el HLD y el comentario de `docker-compose.yml`.
 - [x] Cambiar la imagen de la prueba de integración del anexo `spike-r13` a `pgvector/pgvector:pg17`.
 - [ ] Sprint 0: fijar `pgvector/pgvector:pg17` por *digest* en el compose real y en el CI.
-- [ ] Añadir al anexo de recall el resultado sobre PostgreSQL 17 y compararlo con el de 16.
+- [x] Hecho el 20-nov-2026: el resultado del recall sobre PostgreSQL 17 está en el anexo y coincide con el de 16.
 - [ ] Antes de producción: confirmar en un proyecto de Supabase la versión de Postgres y de pgvector (`10-spike-r13-sprint-0.md` §6).
 
 ## Preguntas abiertas

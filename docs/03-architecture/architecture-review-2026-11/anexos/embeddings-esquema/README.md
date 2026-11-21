@@ -1,6 +1,6 @@
 # Esquema de embeddings versionados (ADR-0018)
 
-Probado el **18-nov-2026** en un contenedor aislado `pgvector/pgvector:pg16` (PostgreSQL 16.16, pgvector 0.8.7), con 10.000 candidatos de 1024 dimensiones y 2.000 vacantes de datos aleatorios. El contenedor se eliminó al terminar.
+Probado el **18-nov-2026** en un contenedor aislado `pgvector/pgvector:pg16` (PostgreSQL 16.16, pgvector 0.8.7), con 10.000 candidatos de 1024 dimensiones y 2.000 vacantes de datos aleatorios. El contenedor se eliminó al terminar. El recall se repitió el 20-nov-2026 sobre PostgreSQL 17.12 con el mismo resultado (`recall/README.md`, ADR-0028); los tiempos de DDL de este anexo no se repitieron.
 
 - `01-esquema.sql`: tablas, restricción todo-o-nada del bloque `embedding*` e índices HNSW parciales.
 - `02-cambio-de-modelo.sql`: procedimiento de seis pasos con los tiempos medidos (1024 → 768 dimensiones).
