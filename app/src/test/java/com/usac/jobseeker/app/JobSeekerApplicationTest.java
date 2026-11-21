@@ -9,11 +9,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 
-/** El desplegable arranca y expone salud y métricas (ADR-0012), sin base de datos todavía. */
+/**
+ * El desplegable arranca contra Postgres 17, migra el esquema y expone salud y métricas (ADR-0012).
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
+@Import(PostgresTestConfiguration.class)
 class JobSeekerApplicationTest {
 
   @Autowired private MockMvc mvc;

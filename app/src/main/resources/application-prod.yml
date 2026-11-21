@@ -1,3 +1,13 @@
-# Marcador de posición — perfil prod: conexión a Supabase mediante variables de entorno.
-# Sin credenciales escritas en el código — ver .env.example: SUPABASE_DB_*. Se completa junto con
-# el perfil dev, al declarar la primera dependencia de datos.
+# Perfil prod: Supabase (ADR-0026). Sin credenciales escritas en el código: todo sale de variables de
+# entorno (ver .env.example). NO verificado contra un proyecto real de Supabase (10-spike-r13 §6).
+spring:
+  datasource:
+    # Pooler en modo transacción (puerto 6543): sin sentencias preparadas del lado del servidor.
+    url: jdbc:postgresql://${SUPABASE_DB_HOST}:${SUPABASE_DB_PORT}/${SUPABASE_DB_NAME}?prepareThreshold=0
+    username: ${SUPABASE_DB_USER}
+    password: ${SUPABASE_DB_PASSWORD}
+  flyway:
+    # Flyway usa la conexión directa (5432): sus bloqueos de sesión no funcionan a través del pooler.
+    url: jdbc:postgresql://${SUPABASE_DB_DIRECT_HOST}:${SUPABASE_DB_DIRECT_PORT}/${SUPABASE_DB_NAME}
+    user: ${SUPABASE_DB_USER}
+    password: ${SUPABASE_DB_PASSWORD}

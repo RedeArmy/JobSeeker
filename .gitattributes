@@ -1,2 +1,5 @@
 # Detectar automáticamente los archivos de texto y normalizar los saltos de línea a LF
 * text=auto
+# Una migración editada por fin de línea cambiaría su suma de control en Flyway: LF siempre.
+*.sql text eol=lf
+*.sh text eol=lf

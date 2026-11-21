@@ -1,3 +1,6 @@
-# Marcador de posición — perfil dev: conexión a Postgres 17 local en Docker (ADR-0028).
-# Los valores de conexión salen de .env (ver .env.example: DB_DEV_*). Se completa en el paso de
-# migraciones del Sprint 0, cuando la aplicación declare su primera dependencia de datos.
+# Perfil dev: Postgres 17 local en Docker (ADR-0028). Los valores salen de .env (ver .env.example).
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_DEV_HOST}:${DB_DEV_PORT}/${DB_DEV_NAME}
+    username: ${DB_DEV_USER}
+    password: ${DB_DEV_PASSWORD}

@@ -16,6 +16,16 @@ spring:
       - optional:classpath:application-ats.yml
       - optional:classpath:application-tracker.yml
 
+  flyway:
+    postgresql:
+      # ADR-0027 decisión 8: con el bloqueo transaccional por defecto, CREATE INDEX CONCURRENTLY
+      # espera a la propia transacción de Flyway y no termina nunca.
+      transactional-lock: false
+    # ADR-0027: una migración que espere más de 10 s un bloqueo falla en vez de dejar sin servicio
+    # las escrituras de producción. Se fija una vez para toda conexión de Flyway.
+    init-sqls:
+      - SET lock_timeout = '10s'
+
 management:
   endpoints:
     web:
