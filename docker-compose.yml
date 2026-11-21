@@ -52,6 +52,4 @@
 #     # el proveedor de identidad vive en ../Clavaris con su propio stack de compose;
 #     # referenciarlo aquí solo si hace falta una red compartida para probar OIDC en local
 
-version: "3.9"
-
 services: {}

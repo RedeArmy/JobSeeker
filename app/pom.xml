@@ -17,7 +17,7 @@
     <description>POM de marcador de posición del único desplegable (ADR-0026). Aún sin dependencias.</description>
 
     <!--
-        Dependerá de todos los módulos de negocio y alojará: @SpringBootApplication, las dos
+        Dependerá de todos los módulos de negocio y alojará: @SpringBootApplication, las tres
         cadenas de filtros de seguridad (ADR-0020), los filtros de rate limit y traceId, el
         sondeador del outbox (ADR-0016) y las pruebas de límites con ArchUnit (ADR-0015).
     -->

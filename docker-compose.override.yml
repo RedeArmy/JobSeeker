@@ -4,6 +4,4 @@
 # variables de entorno extra) que no deben versionarse como parte de la definición
 # base del stack. Se deja vacío hasta que existan los servicios base.
 
-version: "3.9"
-
 services: {}
