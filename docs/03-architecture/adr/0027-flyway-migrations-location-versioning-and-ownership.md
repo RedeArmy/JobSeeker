@@ -3,9 +3,9 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | 🟡 Propuesto — pendiente de aprobación del responsable del proyecto |
-| **Versión** | 1.0 |
-| **Fecha** | Noviembre 2026 |
+| **Estado** | ✅ Aprobado — 20-nov-2026, por el responsable del proyecto |
+| **Versión** | 1.1 — aprobado el 20-nov-2026 |
+| **Fecha** | Noviembre 2026 · aprobado el 20-nov-2026 |
 | **Documento relacionado** | `data-model.md` §2 y §5.1, ADR-0001, ADR-0002, ADR-0015, ADR-0018, ADR-0026, `09-verificacion-supabase-hibernate-despliegue.md` §3 |
 
 ---
@@ -70,7 +70,7 @@ Además, tres afirmaciones del modelo de datos no se sostienen:
 - [x] Corregir `data-model.md` §2 (versionado, *forward-only* y ubicación de pgvector) y las menciones a `undo` en `roadmap-and-release-plan.md`, `integration-design.md` y `03-lld.md`.
 - [ ] Sprint 0: `V1__enable_extensions.sql` en `app` y la prueba que construye el esquema desde cero.
 - [ ] Sprint 0: los scripts de CI de las decisiones 7 y 8 y las pruebas de las decisiones 2, 4 y 5.
-- [ ] Al aprobarlo: marcar este ADR como ✅ y añadirlo a la lista de ADRs del proyecto.
+- [x] Hecho el 20-nov-2026: aprobado por el responsable del proyecto y añadido a la lista de ADRs aprobados.
 
 ## Preguntas abiertas
 
