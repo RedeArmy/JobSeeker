@@ -93,7 +93,7 @@ Un filtro renueva el access token de la sesión al menos cada 10 min (configurab
 
 ### Resolución de identidad y capacidades (común a ambas)
 
-1. En el **primer login** se hace *upsert* de `accounts` por `sub` de Clavaris (aprovisionamiento perezoso; sin webhook obligatorio).
+1. En el **primer login** se hace *upsert* de `accounts` por `sub` de Clavaris (aprovisionamiento perezoso; sin webhook obligatorio). La cuenta nace con la capacidad de **candidato**; la de reclutador se solicita después y exige verificación (BR-ACCT-09, decidido el 20-nov-2026).
 2. En **cada petición** se reconstruye un `Actor(accountId, capabilities, organizationId?)` **desde la base de datos local** (`is_candidate_enabled`, `is_recruiter_enabled`, estado de eliminación), con una caché corta por sesión invalidada al cambiar capacidades. **Nunca** se leen capacidades de negocio de claims del token (coherente con `security-architecture.md` §2 y BR-ACCT-04).
 3. Una cuenta en `PENDING_DELETION` o `ANONYMIZED` es rechazada por el *filtro de actor* salvo para cancelar el borrado (BR-DATA-04).
 4. Cambiar de vista candidato ↔ reclutador es navegación; cada caso de uso exige explícitamente su capacidad.
