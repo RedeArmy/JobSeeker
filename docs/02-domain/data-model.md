@@ -17,9 +17,9 @@ Traducir el modelo de dominio (`domain-model.md`) a un modelo de datos relaciona
 ## 2. Estrategia de migración
 
 - **Flyway** es la única fuente de verdad del esquema, aplicado de forma idéntica en Docker local y en Supabase (producción).
-- Cada cambio de esquema es una migración versionada (`V{n}__descripcion.sql`), nunca una edición manual de tabla existente.
-- Estrategia de rollback: migraciones `undo` o despliegue de versión anterior de la aplicación (ver `roadmap-and-release-plan.md` §5).
-- Extensión requerida en PostgreSQL: `pgvector` (ADR-0002), habilitada en la primera migración del esquema de `matching`.
+- Cada cambio de esquema es una migración versionada por marca de tiempo (`V<yyyyMMddHHmmss>__<modulo>_<descripcion>.sql`), nunca una edición manual de tabla existente. Cada módulo guarda las suyas en su `db/migration` y es dueño solo de las tablas de su contexto; una sola instancia de Flyway en `app` las aplica (ADR-0027, propuesto).
+- Estrategia de rollback: **solo hacia adelante** — despliegue de la versión anterior de la aplicación y, si el esquema ya cambió, una migración que lo corrige; los cambios incompatibles van en fases expandir/contraer (ADR-0027). No hay migraciones `undo` (Flyway Community no las ejecuta; ver `roadmap-and-release-plan.md` §5).
+- Extensión requerida en PostgreSQL: `pgvector` (ADR-0002), habilitada en `V1__enable_extensions.sql` del módulo `app`, antes que cualquier tabla: `candidate_profiles` y `job_postings` ya llevan columnas `embedding` (§5.1), así que no puede esperar al esquema de `matching`.
 
 ## 3. Diagrama entidad-relación
 

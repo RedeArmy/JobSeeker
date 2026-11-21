@@ -114,7 +114,7 @@ flowchart LR
 - **Ambientes:** desarrollo local → staging (Docker Compose reproducible) → producción real, con usuarios reales desde el cierre de la Ola 1 — no una "cohorte de validación" acotada a una ventana académica, sino el inicio de operación continua.
 - **Feature flags:** funcionalidad en progreso (p. ej. elegibilidad mientras se construye en Ola 2) se oculta tras flags y se habilita gradualmente, nunca se desarrolla en ramas largas.
 - **Despliegue gradual:** cada bloque de cada ola se valida en staging antes de habilitarse a usuarios reales; dentro de una ola, los bloques se lanzan según van quedando listos, no todos juntos al cierre de la ola.
-- **Rollback:** cada release debe ser reversible vía migración Flyway `undo` o despliegue de versión anterior; sin cambios de esquema irreversibles sin plan de reversión documentado — esto se vuelve más estricto, no menos, una vez que hay datos reales de usuarios en producción desde el cierre de la Ola 1.
+- **Rollback:** cada release debe ser reversible desplegando la versión anterior de la aplicación (las migraciones son solo hacia adelante, sin `undo`: ADR-0027); sin cambios de esquema irreversibles sin plan de reversión documentado — esto se vuelve más estricto, no menos, una vez que hay datos reales de usuarios en producción desde el cierre de la Ola 1.
 
 ## 9. Criterios de salida por ola
 

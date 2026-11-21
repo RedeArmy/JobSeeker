@@ -77,7 +77,7 @@ sequenceDiagram
 | Migraciones | Flyway aplica las mismas migraciones versionadas usadas en Docker local; nunca se modifica el esquema manualmente en Supabase (`data-model.md` §2) |
 | Flujo de promoción | 1) Migración desarrollada y probada en Docker local → 2) Aplicada en staging (Docker Compose reproducible, `roadmap-and-release-plan.md` §5) → 3) Aplicada en Supabase como parte del pipeline de despliegue, nunca manualmente vía consola de Supabase |
 | Conexión | Vía cadena de conexión gestionada como secreto (ver `security-architecture.md`, gestión de secretos), nunca hardcodeada en el repositorio |
-| Rollback | Migración `undo` de Flyway o despliegue de la versión anterior de la aplicación, sin cambios de esquema irreversibles sin plan documentado (`roadmap-and-release-plan.md` §5) |
+| Rollback | Despliegue de la versión anterior de la aplicación y, si el esquema ya cambió, una migración que lo corrige (solo hacia adelante, sin `undo`; ADR-0027), sin cambios de esquema irreversibles sin plan documentado (`roadmap-and-release-plan.md` §5) |
 
 ```mermaid
 flowchart LR

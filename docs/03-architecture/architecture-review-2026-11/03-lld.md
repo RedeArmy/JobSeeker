@@ -478,7 +478,7 @@ public record Actor(AccountId id, Set<Capability> capabilities, Optional<Organiz
 | Resiliencia | Testcontainers + Toxiproxy (Ollama/Redis/Clavaris lentos o caídos) | Degradación no controlada (NFR-AVAIL-02) |
 | Accesibilidad | axe en Playwright | Incumplimiento WCAG |
 | Seguridad | Dependabot/OWASP Dependency-Check, SAST (CodeQL), escaneo de imagen (Trivy), SBOM CycloneDX, ZAP baseline contra staging | Cadena de suministro / OWASP Top 10 |
-| Migraciones | Aplicar **todas** las migraciones desde cero + *undo* probado en CI | Esquema irreproducible entre local y Supabase |
+| Migraciones | Aplicar **todas** las migraciones desde cero, inmutabilidad de las ya publicadas y orden de dependencias entre contextos, en CI (ADR-0027; sin `undo`) | Esquema irreproducible entre local y Supabase |
 
 ---
 
