@@ -7,8 +7,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * Postgres 17 con pgvector para las pruebas (ADR-0028): la misma versión mayor que Supabase ofrece
- * en producción, para que lo que pasa aquí valga allí. Un solo contenedor por ejecución de pruebas.
+ * Postgres 17 con pgvector (ADR-0028): la misma versión mayor que Supabase ofrece en producción.
  */
 @TestConfiguration(proxyBeanMethods = false)
 public class PostgresTestConfiguration {

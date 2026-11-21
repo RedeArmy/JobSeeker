@@ -11,3 +11,10 @@ spring:
     url: jdbc:postgresql://${SUPABASE_DB_DIRECT_HOST}:${SUPABASE_DB_DIRECT_PORT}/${SUPABASE_DB_NAME}
     user: ${SUPABASE_DB_USER}
     password: ${SUPABASE_DB_PASSWORD}
+
+jobseeker:
+  auth:
+    session:
+      # El prefijo `__Host-` exige HTTPS, Path=/ y ningún Domain (ADR-0020).
+      cookie-name: __Host-SESSION
+      secure-cookie: true

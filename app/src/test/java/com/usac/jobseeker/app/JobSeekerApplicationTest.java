@@ -17,7 +17,7 @@ import org.springframework.test.web.servlet.MockMvc;
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import(PostgresTestConfiguration.class)
+@Import(InfrastructureTestConfiguration.class)
 class JobSeekerApplicationTest {
 
   @Autowired private MockMvc mvc;

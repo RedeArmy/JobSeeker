@@ -7,6 +7,11 @@
 spring:
   application:
     name: jobseeker
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
   config:
     import:
       - optional:classpath:application-auth.yml
@@ -25,6 +30,18 @@ spring:
     # las escrituras de producción. Se fija una vez para toda conexión de Flyway.
     init-sqls:
       - SET lock_timeout = '10s'
+
+jobseeker:
+  auth:
+    clavaris:
+      # Cliente OIDC de Clavaris (ADR-0020). Sin valores por defecto: si faltan, el login responde
+      # «no configurado» pero la aplicación arranca (el registro se resuelve de forma perezosa).
+      issuer-uri: ${CLAVARIS_ISSUER_URI:}
+      client-id: ${CLAVARIS_CLIENT_ID:}
+      client-secret: ${CLAVARIS_CLIENT_SECRET:}
+    session:
+      idle-timeout: ${SESSION_IDLE_TIMEOUT_MINUTES:30}m
+      absolute-timeout: ${SESSION_ABSOLUTE_TIMEOUT_HOURS:8}h
 
 management:
   endpoints:

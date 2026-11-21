@@ -67,6 +67,25 @@
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
+        <!-- Seguridad (ADR-0020): cliente OIDC de Clavaris para la web, servidor de recursos para la API. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security-oauth2-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-thymeleaf</artifactId>
+        </dependency>
+        <!-- Sesión web del lado del servidor sobre Redis (ADR-0020). En Boot 4 `spring.session.*` no
+             configura nada: se declara @EnableRedisIndexedHttpSession (DistributedSessionConfiguration). -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.session</groupId>
+            <artifactId>spring-session-data-redis</artifactId>
+        </dependency>
         <!-- Datos: Flyway es la única fuente de verdad del esquema (data-model.md §2, ADR-0027). JPA
              entra con el primer módulo que persista entidades. -->
         <dependency>
@@ -95,6 +114,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
         <!-- Postgres 17 con pgvector, el mismo que Supabase ofrece (ADR-0028), para probar las migraciones. -->

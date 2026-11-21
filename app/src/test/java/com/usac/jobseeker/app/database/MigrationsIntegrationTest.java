@@ -3,7 +3,7 @@ package com.usac.jobseeker.app.database;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.usac.jobseeker.app.PostgresTestConfiguration;
+import com.usac.jobseeker.app.InfrastructureTestConfiguration;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -24,7 +24,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * SQL: lo ejecuta el mismo motor que producción.
  */
 @SpringBootTest
-@Import(PostgresTestConfiguration.class)
+@Import(InfrastructureTestConfiguration.class)
 class MigrationsIntegrationTest {
 
   @Autowired private JdbcTemplate jdbc;
