@@ -1,0 +1,21 @@
+# Actualizaciones automáticas de dependencias. Solo los ecosistemas que ya tienen archivos reales:
+# `docker` y `docker-compose` se añaden cuando el Dockerfile y los servicios dejen de ser
+# marcadores de posición (Sprint 0).
+version: 2
+updates:
+  # Las acciones van fijadas por SHA (ver Settings > Actions); Dependabot propone el SHA nuevo y
+  # deja la versión en el comentario, así que fijar no congela las correcciones de seguridad.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+
+  - package-ecosystem: "maven"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"

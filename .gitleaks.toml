@@ -1,0 +1,9 @@
+# Configuración de gitleaks (escaneo de secretos). Extiende las reglas por defecto de la herramienta.
+#
+# Por qué no hay lista de excepciones todavía: el escaneo del historial completo (13 commits) no
+# encontró nada. Si aparece un falso positivo, se añade aquí una excepción acotada (regla + archivo
+# o expresión) con un comentario que diga por qué es seguro — nunca una excepción de carpeta entera.
+title = "JobSeeker"
+
+[extend]
+useDefault = true

@@ -68,4 +68,4 @@ Sin un segundo desarrollador que revise, el proceso de PR se mantiene igualmente
 
 ## 7. Preguntas abiertas
 
-- ¿Se requiere una plantilla de PR (`.github/PULL_REQUEST_TEMPLATE.md`) que incluya explícitamente el checklist de `definition-of-done.md`, para que el self-review de la sección 5 sea verificable en el historial del repositorio?
+- ~~¿Se requiere una plantilla de PR que incluya el checklist de `definition-of-done.md`?~~ **Resuelta en noviembre de 2026:** sí; existe en `.github/PULL_REQUEST_TEMPLATE.md`, con los 16 criterios, para que el self-review de la sección 5 quede visible en el historial.
