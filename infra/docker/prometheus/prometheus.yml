@@ -1,0 +1,27 @@
+# Prometheus de desarrollo (ADR-0012): consulta el único /actuator/prometheus del desplegable.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alert-rules.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  # La aplicación corre en el anfitrión (IDE o `java -jar`) o en un contenedor (perfil `app` de
+  # docker-compose); se declaran los dos destinos y `up` dice cuál está vivo.
+  - job_name: jobseeker
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:8080"]
+        labels: { where: host }
+      - targets: ["app:8080"]
+        labels: { where: container }
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

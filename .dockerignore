@@ -1,18 +1,11 @@
+# Contexto de construcción mínimo: lo que no entra al contexto no puede filtrarse a una capa.
 .git
-.gitignore
 .github
-
-**/target/
-**/*.class
-
 .idea
-*.iml
-.vscode
-
-docs/
-scripts/
-*.md
-
+.claude
+**/target
+docs
 .env
 .env.*
 !.env.example
+*.log

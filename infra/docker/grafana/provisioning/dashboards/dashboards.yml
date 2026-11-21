@@ -1,0 +1,11 @@
+# Los dashboards viven en infra/docker/grafana/dashboards (ADR-0012): se versionan, se revisan en el
+# PR y no se editan a mano en la interfaz.
+apiVersion: 1
+providers:
+  - name: jobseeker
+    folder: JobSeeker
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards

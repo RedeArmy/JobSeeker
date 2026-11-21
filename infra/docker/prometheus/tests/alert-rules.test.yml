@@ -1,0 +1,33 @@
+# Pruebas de las reglas de alerta (promtool test rules): una regla sin prueba no se sabe si dispara.
+rule_files:
+  - ../alert-rules.yml
+evaluation_interval: 15s
+tests:
+  - interval: 15s
+    input_series:
+      - series: 'up{job="jobseeker", where="host"}'
+        values: "0+0x20"
+      - series: 'up{job="jobseeker", where="container"}'
+        values: "0+0x20"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: JobSeekerDown
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: JobSeekerDown
+        exp_alerts:
+          - exp_labels: { severity: critical }
+            exp_annotations:
+              summary: "JobSeeker no responde"
+              description: "Ningún destino de /actuator/prometheus respondió en los últimos 2 minutos."
+  - interval: 15s
+    # Un destino vivo basta: no debe alertar.
+    input_series:
+      - series: 'up{job="jobseeker", where="host"}'
+        values: "1+0x20"
+      - series: 'up{job="jobseeker", where="container"}'
+        values: "0+0x20"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: JobSeekerDown
+        exp_alerts: []

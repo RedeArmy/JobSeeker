@@ -1,55 +1,192 @@
-# Stack de desarrollo local — solo marcador de posición, aún sin servicios reales.
+# Stack de desarrollo local (ADR-0012, ADR-0026, ADR-0028). Se arranca con `scripts/dev-up.sh`.
 #
-# Supabase NO se define aquí para producción: allí Postgres y el almacenamiento de
-# archivos son gestionados en la nube (ADR-0026). Este archivo cubre sus equivalentes locales.
+# Supabase NO se define aquí: en producción Postgres y el almacenamiento de archivos son gestionados
+# en la nube (ADR-0026) y el desarrollo no depende de ellos. Este archivo cubre sus equivalentes locales.
 #
-# Hay UN solo servicio de aplicación. Los módulos de negocio son bibliotecas Maven; el
-# módulo `app` es el único desplegable (ADR-0001, ADR-0026), por lo que hay un Dockerfile,
-# un spec OpenAPI y un endpoint /actuator/prometheus.
+# Perfiles de Compose:
+#   (ninguno)  Postgres, Redis, Mailpit, Prometheus, Alertmanager y Grafana: lo necesario para trabajar.
+#   ai         Ollama, aparte porque su imagen es pesada y los modelos tardan en bajar.
+#   app        La aplicación en un contenedor, construida desde app/Dockerfile. Por defecto la
+#              aplicación corre en el anfitrión (IDE o `java -jar`) con `.env` cargado.
 #
-# services:
-#   app:
-#     # se construye desde app/Dockerfile; depends_on postgres, redis, ollama, clamav, mailpit, minio
-#     # variables: ver .env.example (configuración OIDC de Clavaris, almacenamiento, correo, BD, Redis)
+# Todas las imágenes van fijadas por digest (una etiqueta se puede mover) y todos los puertos se
+# publican solo en 127.0.0.1: nada del stack es accesible desde la red. Los valores salen de `.env`
+# (ver .env.example); `scripts/dev-up.sh` lo genera la primera vez.
 #
-#   postgres:
-#     # imagen: pgvector/pgvector:pg17 (Postgres 17, la versión que ofrece Supabase — ADR-0028)
-#     # variables: POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB (ver .env.example)
-#     # volúmenes: volumen local con nombre + scripts de inicio de infra/docker/postgres
-#
-#   redis:
-#     # imagen base de Redis: sesiones web (ADR-0020), caché de scores y buckets de rate limit
-#     # de Bucket4j (ADR-0011) — espacios de claves independientes en una sola instancia
-#     # volúmenes/configuración: infra/docker/redis
-#
-#   ollama:
-#     # entorno de embeddings (la generación de texto no está en la ruta crítica); límites de
-#     # CPU/RAM para que no deje sin recursos a `app`; descarga de modelos con los scripts de infra/docker/ollama
-#
-#   clamav:
-#     # escaneo de malware de los CV y de las respuestas FILE_UPLOAD subidos (ADR-0026)
-#
-#   mailpit:
-#     # receptor SMTP local con interfaz web para los correos de notificación; en staging y
-#     # producción se reemplaza por un proveedor transaccional
-#
-#   minio:
-#     # reemplazo local, compatible con S3, de Supabase Storage
-#
-#   prometheus:
-#     # consulta el único endpoint /actuator/prometheus de `app` — ADR-0012
-#     # configuración: infra/docker/prometheus (destinos de scrape, retención)
-#
-#   grafana:
-#     # dashboards provisionados como código, con Prometheus como fuente de datos — ADR-0012
-#     # configuración: infra/docker/grafana (dashboards/, datasources/)
-#
-#   alertmanager:
-#     # enruta las alertas de Prometheus hacia un canal de notificación — ADR-0012
-#     # configuración: infra/docker/alertmanager
-#
-#   clavaris (opcional, para pruebas de login de extremo a extremo):
-#     # el proveedor de identidad vive en ../Clavaris con su propio stack de compose;
-#     # referenciarlo aquí solo si hace falta una red compartida para probar OIDC en local
+# Aún no incluidos, porque sus ADR no están escritos: ClamAV y MinIO (ADR-0021, almacenamiento de
+# archivos). Clavaris, el proveedor de identidad, vive en ../Clavaris con su propio compose.
+name: jobseeker
 
-services: {}
+services:
+  postgres:
+    # Postgres 17 con pgvector: la versión mayor que Supabase ofrece (ADR-0028).
+    image: pgvector/pgvector:0.8.7-pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
+    environment:
+      POSTGRES_DB: ${DB_DEV_NAME:?defínelo en .env (ver .env.example)}
+      POSTGRES_USER: ${DB_DEV_USER:?defínelo en .env (ver .env.example)}
+      POSTGRES_PASSWORD: ${DB_DEV_PASSWORD:?defínelo en .env (ver .env.example)}
+    ports:
+      - "127.0.0.1:${DB_DEV_PORT:?defínelo en .env (ver .env.example)}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    # Sesiones web (ADR-0020), caché de scores y buckets de rate limit (ADR-0011) en espacios de
+    # claves independientes de una sola instancia. AOF activo: perder las sesiones cierra la web.
+    image: redis:7.4.12-alpine@sha256:7f7d30b7fdd09467bac58198a1f166dd69789d348d4fe859cccb20e0cf287fbe
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?defínelo en .env (ver .env.example)}
+    # La contraseña llega por entorno y no en la línea de comandos, que se vería en `ps`.
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --appendonly yes"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:?defínelo en .env (ver .env.example)}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mailpit:
+    # Receptor SMTP local con interfaz web para los correos de notificación; en staging y
+    # producción se reemplaza por un proveedor transaccional (ADR-0026).
+    image: axllent/mailpit:v1.34.0@sha256:23a2ef85bc50853ab3093645d1d64679afd8887e89da5e48a88940c172591a4e
+    ports:
+      - "127.0.0.1:${MAIL_PORT:?defínelo en .env (ver .env.example)}:1025"
+      - "127.0.0.1:8025:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  prometheus:
+    # Consulta el único /actuator/prometheus de la aplicación (ADR-0012).
+    image: prom/prometheus:v3.16.0@sha256:e04987641b57704f408e31f6373ba4138ecf27cb4a165d24aabb6c38fddd0f06
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      # Retención acotada: no pretende ser un almacén de largo plazo (ADR-0012).
+      - --storage.tsdb.retention.time=7d
+    # La aplicación suele correr en el anfitrión; `host-gateway` permite alcanzarla desde el contenedor.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./infra/docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/docker/prometheus/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      alertmanager:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  alertmanager:
+    image: prom/alertmanager:v0.35.0@sha256:e638797febd034838eca8b98cdbd46f951e9bf7f178777aa8669167406a9946c
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - ./infra/docker/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9093/-/healthy"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  grafana:
+    # Dashboards y fuente de datos aprovisionados como código (ADR-0012), nada manual.
+    image: grafana/grafana:12.4.15@sha256:2894082f6cf7081aefdc1389265c04000812309208c190d75e8c65f7a30e4b7e
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?defínelo en .env (ver .env.example)}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./infra/docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/api/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  ollama:
+    # Embeddings locales (ADR-0004, ADR-0018); la generación de texto no está en la ruta crítica.
+    # Los modelos se bajan con `scripts/dev-up.sh --ai`.
+    profiles: ["ai"]
+    image: ollama/ollama:0.40.17@sha256:ccc42bcd3d5fcf7ab0d532b300382154e1a4da56fc666bdb313b78ebdd912754
+    ports:
+      - "127.0.0.1:${OLLAMA_PORT:?defínelo en .env (ver .env.example)}:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    # Límites para que no deje sin recursos a la aplicación; se ajustan en docker-compose.override.yml.
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 4g
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  app:
+    # La aplicación en un contenedor (perfil `app`), construida desde app/Dockerfile. Dentro de la
+    # red de Compose habla con los demás servicios por su nombre.
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    image: jobseeker-app:dev
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      DB_DEV_HOST: postgres
+      DB_DEV_PORT: "5432"
+      DB_DEV_NAME: ${DB_DEV_NAME:?defínelo en .env (ver .env.example)}
+      DB_DEV_USER: ${DB_DEV_USER:?defínelo en .env (ver .env.example)}
+      DB_DEV_PASSWORD: ${DB_DEV_PASSWORD:?defínelo en .env (ver .env.example)}
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # La imagen no trae curl ni wget a propósito (menos superficie de ataque): bash basta.
+      test:
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/8080 &&
+          printf 'GET /actuator/health/readiness HTTP/1.0\r\n\r\n' >&3 &&
+          grep -q '"status":"UP"' <&3
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+volumes:
+  postgres-data:
+  redis-data:
+  prometheus-data:
+  grafana-data:
+  ollama-data:

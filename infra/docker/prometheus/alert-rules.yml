@@ -1,0 +1,14 @@
+# Reglas de alerta (ADR-0012). Las métricas de negocio (retraso del outbox, rechazos de elegibilidad)
+# se añaden junto con los casos de uso que las emiten; hoy solo existe la de disponibilidad.
+groups:
+  - name: availability
+    rules:
+      # Con dos destinos declarados (anfitrión y contenedor), alerta solo si NINGUNO está vivo.
+      - alert: JobSeekerDown
+        expr: sum(up{job="jobseeker"}) == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "JobSeeker no responde"
+          description: "Ningún destino de /actuator/prometheus respondió en los últimos 2 minutos."

@@ -1,0 +1,12 @@
+# Alertmanager de desarrollo (ADR-0012). El canal real de notificación (correo, webhook) y el
+# responsable de guardia dependen del ADR-0026, aún en revisión: hasta entonces las alertas se
+# agrupan y se ven en la interfaz, sin enviarse a ningún sitio.
+route:
+  receiver: sin-notificacion
+  group_by: [alertname]
+  group_wait: 10s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: sin-notificacion
