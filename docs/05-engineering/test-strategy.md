@@ -72,7 +72,22 @@ El alcance de `job-module` (máquina de estados, temporizador, elegibilidad) y e
 - **Detección híbrida de preguntas de postulación (BR-APPQ-04):** el adaptador de sugerencia por embeddings se prueba de integración con un stub de contrato (mismo criterio que Ollama, sección 8 original ahora numerada 9), pero el caso de uso que decide si aplicar la sugerencia se prueba unitariamente con el puerto mockeado, verificando que la sugerencia nunca se autoaplica sin confirmación del reclutador (BR-APPQ-04).
 - **Autorización multi-rol (BR-ACCT-04):** matriz de pruebas de autorización que cubra, para cada caso de uso sensible a capacidad, una cuenta con solo `CANDIDATE`, solo `RECRUITER`, y ambas — verificando explícitamente que tener la capacidad no evaluada por ese caso de uso no altera el resultado (p. ej. una cuenta con `RECRUITER` además de `CANDIDATE` no debe recibir trato distinto al postular).
 
-## 9. Preguntas abiertas
+## 9. Validación del SQL (ADR-0027)
+
+Ningún cambio de esquema llega a `main` sin pasar por cuatro capas, porque un error de SQL se paga en producción (datos corruptos o escrituras bloqueadas). Cada capa detecta algo distinto:
+
+| Capa | Qué detecta | Dónde corre |
+|---|---|---|
+| Ejecutar todas las migraciones desde cero en Postgres 17 con pgvector (`MigrationsIntegrationTest`) | Errores de sintaxis y de semántica reales; el esquema resultante (claves primarias, zonas horarias) y su comportamiento (restricciones, `SKIP LOCKED`) | `ci-backend` (`mvn verify`, Testcontainers) |
+| Convenciones del ADR-0027 (`MigrationRules`, con pruebas negativas) | Nombre, módulo dueño, propiedad de las tablas, orden de claves foráneas, índices sin bloqueo | `ci-backend` |
+| Inmutabilidad (`scripts/check-migration-immutability.sh`, con sus pruebas) | Que alguien edite, renombre o borre una migración ya publicada | `repo-checks`, comparando con la rama base |
+| Linter de seguridad (squawk, `.squawk.toml`) | Bloqueos, cambios que rompen a la aplicación en marcha y operaciones destructivas | `repo-checks` |
+
+Aparte, `scripts/smoke-test-jar.sh` arranca el jar ejecutable contra Postgres 17 y comprueba la salud y las migraciones: las pruebas usan su propio classpath y no ven un problema de empaquetado (una dependencia con alcance `test` dejó fuera del jar a `spring-tx` y el jar no arrancaba con todas las pruebas en verde).
+
+Cada capa tiene su prueba negativa: se comprobó que una migración con una columna inexistente rompe el build, que una operación peligrosa falla en squawk y que cada infracción de convención y de inmutabilidad se detecta.
+
+## 10. Preguntas abiertas
 
 - ¿Las pruebas de integración de `infrastructure/adapter/out/ai/` corren contra una instancia real de Ollama en CI, o se valida el contrato con un stub/mock de la API HTTP de Ollama para no depender de un modelo local pesado en el pipeline? Aplica igual al adaptador de sugerencia de vínculo de `job-module` (BR-APPQ-04).
 - ¿Qué herramienta de pruebas de carga se adopta para validar los NFR de rendimiento (sección 7)?

@@ -312,7 +312,7 @@ erDiagram
 | id | uuid | PK | Identificador de cuenta — **es** el `sub` del token emitido por Clavaris, no un id generado localmente; JobSeeker nunca asigna su propio identificador de cuenta |
 | is_candidate_enabled | boolean | NOT NULL DEFAULT false | Capacidad de candidato habilitada (BR-ACCT-01) — flag de negocio propio de JobSeeker, no un concepto de Clavaris |
 | is_recruiter_enabled | boolean | NOT NULL DEFAULT false | Capacidad de reclutador habilitada (BR-ACCT-01); condición para publicar vacantes (BR-JOB-01) |
-| deletion_status | varchar | NOT NULL DEFAULT 'ACTIVE', CHECK IN ('ACTIVE','PENDING_DELETION','ANONYMIZED') | Ciclo de vida de eliminación de cuenta (`domain-model.md` §4.2, ADR-0013) |
+| deletion_status | text | NOT NULL DEFAULT 'ACTIVE', CHECK IN ('ACTIVE','PENDING_DELETION','ANONYMIZED') | Ciclo de vida de eliminación de cuenta (`domain-model.md` §4.2, ADR-0013) |
 | deletion_requested_at | timestamptz | NULL | Momento de la solicitud de eliminación (BR-DATA-04) |
 | scheduled_anonymization_at | timestamptz | NULL | `deletion_requested_at + accountDeletionGracePeriodDays`; el batch de anonimización recorre por esta columna vencida, mismo patrón que `job_postings.closed_at` (BR-JOB-06) |
 | anonymized_at | timestamptz | NULL | Momento en que se ejecutó la anonimización (BR-DATA-05) — su presencia marca el estado terminal, análogo a `job_postings.deleted_at` |
@@ -578,6 +578,17 @@ Restricción de unicidad `(application_id, application_question_id)` — una res
 `application_follow_up_items` fusiona pregunta y respuesta en una sola fila (a diferencia de `application_questions`/`application_answers`, separadas) porque cada ítem es de un solo uso, para una sola postulación — no se reutiliza contra otros candidatos.
 
 > **`refresh_tokens` ya no vive en este esquema.** La emisión, rotación y revocación de tokens es responsabilidad exclusiva de Clavaris (repositorio separado, proyecto `Clavaris`) — JobSeeker nunca emite ni almacena sus propios tokens. Lo que antes era ADR-0009 (JWT HS256 propio de JobSeeker) quedó retirado de este repositorio; el diseño equivalente (RS256, rotación de un solo uso, `refresh_tokens` con detección de reutilización) ahora vive como ADR-0002 de Clavaris.
+
+### 4.18 `outbox_events`, `processed_events`, `idempotency_keys` y `audit_log` (módulo `app`)
+
+Infraestructura transversal, sin claves foráneas (ADR-0027): el historial de auditoría y la deduplicación deben sobrevivir a la anonimización de una cuenta. Ninguna guarda PII (BR-DATA-01). Migraciones en `app/src/main/resources/db/migration`.
+
+| Tabla | Para qué | Columnas y restricciones clave |
+|---|---|---|
+| `outbox_events` | Bandeja de salida transaccional (ADR-0016) | `id` (PK), `aggregate_type`, `aggregate_id`, `aggregate_version`, `event_type`, `event_version`, `payload` (jsonb), `trace_id`, `status` ∈ {`PENDING`, `PROCESSED`, `FAILED`}, `attempts`, `created_at`, `available_at`, `processed_at`. `processed_at` está presente si y solo si `status = 'PROCESSED'`. Índice parcial de pendientes por `available_at` |
+| `processed_events` | Deduplicación de consumidores idempotentes y de los webhooks de Clavaris (ADR-0016 decisiones 3 y 11) | PK `(consumer, event_id)`, `processed_at`; se conserva al menos 30 días |
+| `idempotency_keys` | Idempotencia de los `POST` que crean recursos | PK `(account_id, key)`, `request_hash` (SHA-256 hexadecimal, `char(64)`), `response` (jsonb), `created_at` |
+| `audit_log` | Auditoría de acciones relevantes | `id` (PK), `at`, `actor_account_id`, `organization_id`, `action`, `target_type`, `target_id`, `trace_id`, `details` (jsonb, sin PII) |
 
 ## 5. Índices y consideraciones de rendimiento
 

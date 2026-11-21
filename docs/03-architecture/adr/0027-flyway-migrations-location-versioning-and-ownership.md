@@ -40,14 +40,19 @@ Además, tres afirmaciones del modelo de datos no se sostienen:
    | `job` | `job_postings`, `eligibility_rules`, `candidate_invitations`, `job_posting_scheduled_transitions`, `application_questions` |
    | `matching` | `compatibility_scores` |
    | `ats` | `applications`, `application_answers`, `application_follow_up_requests`, `application_follow_up_items` |
+   | `app` | `outbox_events`, `processed_events`, `idempotency_keys`, `audit_log` (infraestructura transversal; ADR-0016) |
 
-   `tracker` no es dueño de tablas: opera sobre `applications`. Los nombres salen de `data-model.md` §4; si el modelo cambia, este cuadro se actualiza en el mismo cambio.
+   `tracker` no es dueño de tablas: opera sobre `applications`. Las tablas de `app` son de infraestructura y **no participan en claves foráneas** (ni como origen ni como destino): el historial de auditoría y la deduplicación deben sobrevivir a la anonimización de una cuenta. Los nombres salen de `data-model.md` §4; si el modelo cambia, este cuadro se actualiza en el mismo cambio.
 5. **Orden de dependencias entre contextos:** `auth` → `cv` → `job` → `matching` → `ats`. Una clave foránea solo puede apuntar «hacia la izquierda» de esa cadena, y la marca de tiempo de la migración que la crea debe ser posterior a la de la tabla referenciada. Una prueba que construye el esquema desde una base vacía lo comprueba.
 6. **Hacia adelante solamente (*forward-only*).** No hay migraciones `undo`. El retroceso es desplegar la versión anterior de la aplicación y, si el esquema ya cambió, una migración nueva que lo corrige. Los cambios incompatibles se hacen en fases *expandir/contraer* (añadir, doble escritura, migrar, retirar), como ya describe `data-model.md` §5.1 para el cambio de modelo de embeddings.
 7. **Inmutabilidad.** Una migración que ya llegó a `main` no se edita ni se renombra. CI compara cada rama con `origin/main` y falla si cambió o desapareció un archivo ya publicado (script equivalente al de Clavaris, con historial completo en el *checkout*).
 8. **Índices sin bloqueo.** `CREATE INDEX` sobre una tabla con datos usa `CONCURRENTLY`, y por eso `spring.flyway.postgresql.transactional-lock=false` (con el bloqueo transaccional por defecto, `CONCURRENTLY` espera a la propia transacción de Flyway). CI rechaza un `CREATE INDEX` sin `CONCURRENTLY` fuera de una tabla creada en la misma migración.
 9. **Conexión:** Flyway usa la conexión directa o en modo sesión (puerto 5432 de Supabase), nunca el *pooler* transaccional (6543), porque necesita bloqueos de sesión (`09-…` §3). La aplicación sí usa el 6543.
 10. **Comprobaciones obligatorias en CI**, que se añaden con el primer módulo que migre: el esquema se construye desde cero sobre una imagen de Postgres 17 con pgvector (ADR-0028); el esquema de nombres (decisión 2); la propiedad por contexto (el prefijo del archivo coincide con la carpeta del módulo y el DDL solo nombra tablas de ese contexto); el orden de dependencias (decisión 5); la inmutabilidad (decisión 7) y los índices sin bloqueo (decisión 8).
+11. **Linter de seguridad de migraciones: squawk** (versión y suma de control fijadas en `scripts/fetch-ci-tool.sh`). Analiza cada migración con el parser de Postgres y avisa de bloqueos, cambios que rompen a la aplicación en marcha y operaciones destructivas (`DROP TABLE`, `DROP COLUMN`, columnas `NOT NULL` sin valor por defecto). Corre en CI sobre todas las migraciones reales y su configuración es `.squawk.toml`; una excepción puntual se marca en el SQL con `-- squawk-ignore <regla>` y un comentario que diga por qué es segura. Cinco reglas están desactivadas, cada una con su motivo en el archivo (p. ej. `require-concurrent-index-creation`, porque exige `CONCURRENTLY` también sobre tablas recién creadas, imposible dentro de la transacción de Flyway; la regla correcta es la de la decisión 8).
+12. **Tiempo de espera de bloqueos.** Toda conexión de Flyway fija `lock_timeout = 10 s` (`spring.flyway.init-sqls`): una migración que espere más de eso un bloqueo falla en vez de dejar sin servicio las escrituras de producción.
+
+> **Enmendado el 20-nov-2026, al implementarlo:** se añadió la fila `app` a la tabla de propiedad (decisión 4) y las decisiones 11 y 12. Las comprobaciones de las decisiones 2, 4, 5 y 8 son `MigrationRules`/`MigrationConventionsTest`; la 7, `scripts/check-migration-immutability.sh` (con sus pruebas); la 10, `MigrationsIntegrationTest`; todas corren en CI (`ci-backend` y `repo-checks`). Los archivos de ejemplo bajo `docs/` no cuentan como migraciones.
 
 ## Alternativas consideradas
 
@@ -68,8 +73,8 @@ Además, tres afirmaciones del modelo de datos no se sostienen:
 ## Acciones derivadas
 
 - [x] Corregir `data-model.md` §2 (versionado, *forward-only* y ubicación de pgvector) y las menciones a `undo` en `roadmap-and-release-plan.md`, `integration-design.md` y `03-lld.md`.
-- [ ] Sprint 0: `V1__enable_extensions.sql` en `app` y la prueba que construye el esquema desde cero.
-- [ ] Sprint 0: los scripts de CI de las decisiones 7 y 8 y las pruebas de las decisiones 2, 4 y 5.
+- [x] Hecho el 20-nov-2026: `V1__enable_extensions.sql` en `app`, las tablas iniciales y `MigrationsIntegrationTest`, que construye el esquema desde cero sobre Postgres 17 con pgvector.
+- [x] Hecho el 20-nov-2026: las comprobaciones de las decisiones 2, 4, 5 y 8 (`MigrationRules`, con pruebas negativas), el script de la decisión 7 y el linter de la decisión 11, todo en CI.
 - [x] Hecho el 20-nov-2026: aprobado por el responsable del proyecto y añadido a la lista de ADRs aprobados.
 
 ## Preguntas abiertas
