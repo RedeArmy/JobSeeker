@@ -76,9 +76,9 @@ class ClavarisRegistrationTest {
         .containsEntry("client_id", "client-de-prueba")
         .containsKey("state")
         .containsKey("nonce")
-        // Hasta el sub-paso 4.3 no se pide el refresh token: no hay dónde guardarlo cifrado.
+        // Sub-paso 4.3: el refresh token se pide porque ya hay dónde guardarlo cifrado.
         .hasEntrySatisfying(
-            "scope", scope -> assertThat(scope).contains("openid").doesNotContain("offline_access"))
+            "scope", scope -> assertThat(scope).contains("openid", "offline_access"))
         .hasEntrySatisfying(
             "redirect_uri", uri -> assertThat(uri).endsWith("/login/oauth2/code/clavaris"));
   }
