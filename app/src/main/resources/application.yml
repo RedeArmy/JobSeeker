@@ -42,6 +42,17 @@ jobseeker:
     session:
       idle-timeout: ${SESSION_IDLE_TIMEOUT_MINUTES:30}m
       absolute-timeout: ${SESSION_ABSOLUTE_TIMEOUT_HOURS:8}h
+    # Cifrado en reposo del refresh token (ADR-0020, regla 3). Sin clave y con Clavaris configurado la
+    # aplicación no arranca: nadie podría iniciar sesión.
+    encryption:
+      active-kid: ${TOKEN_ENCRYPTION_ACTIVE_KID:}
+      keys: ${TOKEN_ENCRYPTION_KEYS:}
+    # Prueba de vida de la sesión (ADR-0020, reglas 1-8 y 12): se calibra con la latencia real.
+    liveness:
+      renewal-interval: ${LIVENESS_RENEWAL_INTERVAL_MINUTES:10}m
+      clavaris-unavailable-margin: ${LIVENESS_CLAVARIS_UNAVAILABLE_MARGIN_HOURS:2}h
+      fail-open-enabled: ${LIVENESS_FAIL_OPEN_ENABLED:true}
+      retry-once-within-grace: ${LIVENESS_RETRY_ONCE_WITHIN_GRACE:false}
 
 management:
   endpoints:

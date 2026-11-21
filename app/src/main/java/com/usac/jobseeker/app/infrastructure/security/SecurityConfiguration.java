@@ -1,5 +1,10 @@
 package com.usac.jobseeker.app.infrastructure.security;
 
+import com.usac.jobseeker.app.infrastructure.security.liveness.LivenessCoordinator;
+import com.usac.jobseeker.app.infrastructure.security.liveness.LivenessFilter;
+import com.usac.jobseeker.app.infrastructure.security.liveness.LivenessStore;
+import com.usac.jobseeker.app.infrastructure.security.liveness.RefreshTokenClient;
+import com.usac.jobseeker.app.infrastructure.security.liveness.RevokingLogoutHandler;
 import com.usac.jobseeker.auth.application.usecase.provisionaccount.ProvisionAccountUseCase;
 import com.usac.jobseeker.auth.application.usecase.resolveactor.ResolveActorUseCase;
 import jakarta.servlet.http.HttpServletRequest;
@@ -15,10 +20,12 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.client.oidc.web.logout.OidcClientInitiatedLogoutSuccessHandler;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestCustomizers;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestRedirectFilter;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
@@ -103,13 +110,23 @@ class SecurityConfiguration {
       ResolveActorUseCase resolveActor,
       SessionProperties session,
       ClavarisProperties clavaris,
-      Clock clock) {
+      Clock clock,
+      OAuth2AuthorizedClientRepository authorizedClients,
+      LivenessCoordinator liveness,
+      LivenessStore livenessStore,
+      RefreshTokenClient refreshTokens) {
     // PKCE (S256) explícito: no se depende de un valor por defecto de la biblioteca (ADR-0020,
     // regla 10).
     DefaultOAuth2AuthorizationRequestResolver authorizationRequests =
         new DefaultOAuth2AuthorizationRequestResolver(clients, "/oauth2/authorization");
     authorizationRequests.setAuthorizationRequestCustomizer(
         OAuth2AuthorizationRequestCustomizers.withPkce());
+
+    // Cierre: primero se revoca el refresh token (necesita la sesión viva) y luego se redirige al
+    // fin de sesión de Clavaris; sin ese endpoint, o con Clavaris sin resolver, vuelve a `/`.
+    OidcClientInitiatedLogoutSuccessHandler logoutSuccess =
+        new OidcClientInitiatedLogoutSuccessHandler(clients);
+    logoutSuccess.setDefaultTargetUrl("/");
 
     http.authorizeHttpRequests(
             a ->
@@ -129,8 +146,15 @@ class SecurityConfiguration {
                 login
                     .authorizationEndpoint(
                         e -> e.authorizationRequestResolver(authorizationRequests))
+                    // El refresh token va cifrado a Redis, no en claro en la sesión (regla 3).
+                    .authorizedClientRepository(authorizedClients)
                     .successHandler(new AccountProvisioningSuccessHandler(provisionAccount)))
-        .logout(logout -> logout.logoutUrl("/app/logout").logoutSuccessUrl("/"))
+        .logout(
+            logout ->
+                logout
+                    .logoutUrl("/app/logout")
+                    .addLogoutHandler(new RevokingLogoutHandler(livenessStore, refreshTokens))
+                    .logoutSuccessHandler(logoutSuccess))
         .csrf(Customizer.withDefaults())
         .headers(WebHeaders::apply)
         .exceptionHandling(
@@ -143,6 +167,10 @@ class SecurityConfiguration {
         .addFilterBefore(
             new IdentityProviderAvailabilityFilter(clients, clavaris.retryAfterFailure()),
             OAuth2AuthorizationRequestRedirectFilter.class)
+        // Antes del filtro anónimo: si la sesión ya no la respalda Clavaris se limpia el contexto y
+        // la petición sigue como anónima, hacia el login.
+        .addFilterBefore(
+            new LivenessFilter(liveness, livenessStore), AnonymousAuthenticationFilter.class)
         .addFilterAfter(
             new ActorFilter(resolveActor, provisionAccount), AnonymousAuthenticationFilter.class);
     return http.build();
