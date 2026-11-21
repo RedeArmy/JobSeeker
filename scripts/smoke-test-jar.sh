@@ -34,7 +34,7 @@ for _ in $(seq 1 30); do
 done
 
 # Redis para las sesiones web (ADR-0020): sin él `/actuator/health` queda en DOWN.
-docker run -d --name "$contenedor_redis" -p "127.0.0.1:${puerto_redis}:6379" redis:7.4.12-alpine >/dev/null
+docker run -d --name "$contenedor_redis" -p "127.0.0.1:${puerto_redis}:6379" redis:8.10.3-alpine >/dev/null
 for _ in $(seq 1 30); do
   docker exec "$contenedor_redis" redis-cli ping 2>/dev/null | grep -q PONG && break
   sleep 1

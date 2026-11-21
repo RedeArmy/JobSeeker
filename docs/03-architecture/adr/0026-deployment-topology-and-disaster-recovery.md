@@ -35,7 +35,7 @@ Además, el `docker-compose.yml` y las reglas del proyecto asumían un servicio 
 |---|---|---|
 | Proxy inverso + TLS | Caddy (contenedor, mismo host) | Certificados automáticos, HSTS, límites de tamaño de cuerpo |
 | `jobseeker-app` | Contenedor JVM, mismo host | Un proceso; diseñado sin estado local (*stateless*) para poder duplicar (ver §6) |
-| Redis 7 | Contenedor, mismo host | Arranca con `--notify-keyspace-events Egx` (la aplicación ya no configura el servidor, ADR-0020 regla 9). Sin persistencia obligatoria; `maxmemory` + `volatile-lru`: **todas** las claves (sesiones, caché y buckets) tienen TTL y por tanto son expulsables, así que bajo presión de memoria se cerrarían sesiones; se dimensiona con margen y se alerta por memoria (ADR-0012). Sesión (ADR-0020), caché y buckets (ADR-0011) |
+| Redis 8 | Contenedor, mismo host | Arranca con `--notify-keyspace-events Egx` (la aplicación ya no configura el servidor, ADR-0020 regla 9). Sin persistencia obligatoria; `maxmemory` + `volatile-lru`: **todas** las claves (sesiones, caché y buckets) tienen TTL y por tanto son expulsables, así que bajo presión de memoria se cerrarían sesiones; se dimensiona con margen y se alerta por memoria (ADR-0012). Sesión (ADR-0020), caché y buckets (ADR-0011) |
 | Ollama | Contenedor, mismo host, con límites de CPU/RAM (cgroups) | **Solo embeddings** en la ruta crítica; sin generación de texto por defecto |
 | ClamAV | Contenedor, mismo host | Escaneo de archivos subidos |
 | Prometheus, Grafana, Alertmanager | Contenedores, mismo host, **solo en red interna** | Acceso por túnel/VPN o autenticación; retención 15 d |

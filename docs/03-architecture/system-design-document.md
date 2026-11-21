@@ -52,7 +52,7 @@ flowchart TB
 
     subgraph Data["Datos e infraestructura"]
         PG[("PostgreSQL 17\n+ pgvector — ADR-0002, ADR-0028")]
-        Redis[("Redis 7\ncache de scores +\nrate limiting — ADR-0011")]
+        Redis[("Redis 8\ncache de scores +\nrate limiting — ADR-0011")]
         Ollama["Ollama\n(embeddings ADR-0018, llama3.2)"]
         Supabase[("Supabase\n(Postgres gestionado, prod)")]
     end
@@ -93,7 +93,7 @@ PostgreSQL 17 con extensión `pgvector` para embeddings semánticos (ADR-0002), 
 
 ### 4.3 Caching
 
-Redis 7 cachea scores de compatibilidad ya calculados (`score:{cv_hash}:{job_hash}`), evitando recomputar contra Ollama en cada consulta (NFR-PERF-01). El detalle de invalidación vive en `integration-design.md`.
+Redis 8 cachea scores de compatibilidad ya calculados (`score:{cv_hash}:{job_hash}`), evitando recomputar contra Ollama en cada consulta (NFR-PERF-01). El detalle de invalidación vive en `integration-design.md`.
 
 ### 4.4 IA / NLP
 
