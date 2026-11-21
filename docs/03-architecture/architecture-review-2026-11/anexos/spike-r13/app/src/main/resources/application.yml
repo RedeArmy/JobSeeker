@@ -1,0 +1,17 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    postgresql:
+      transactional-lock: false
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+logging:
+  structured:
+    format:
+      console: logstash
