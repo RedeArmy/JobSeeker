@@ -1,8 +1,18 @@
 # Marcador de posición — despliegue a staging (construir imagen, ejecutar Flyway contra el Supabase de staging, desplegar).
-# name: cd-staging
-# on:
-#   push:
-#     branches: [main]
-# jobs:
-#   deploy:
-#     # construir y publicar la imagen, ejecutar migraciones con perfil prod contra Supabase, desplegar a staging
+# Es válido pero inerte: solo se ejecuta a mano (workflow_dispatch) para no generar
+# ejecuciones fallidas vacías en cada push. El CI real (Java 25, mvn verify, ArchUnit,
+# gitleaks, acciones fijadas por SHA) se define en el Sprint 0.
+name: cd-staging
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sin pasos todavía
+        run: echo "Marcador de posición de cd-staging; se implementa en el Sprint 0."

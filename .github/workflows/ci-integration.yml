@@ -1,6 +1,18 @@
 # Marcador de posición — CI de integración (stack docker-compose + migraciones Flyway + pruebas entre módulos).
-# name: ci-integration
-# on: [pull_request]
-# jobs:
-#   integration:
-#     # levantar postgres/redis/ollama con docker-compose, ejecutar migraciones y pruebas de integración
+# Es válido pero inerte: solo se ejecuta a mano (workflow_dispatch) para no generar
+# ejecuciones fallidas vacías en cada push. El CI real (Java 25, mvn verify, ArchUnit,
+# gitleaks, acciones fijadas por SHA) se define en el Sprint 0.
+name: ci-integration
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sin pasos todavía
+        run: echo "Marcador de posición de ci-integration; se implementa en el Sprint 0."

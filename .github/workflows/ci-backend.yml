@@ -1,6 +1,18 @@
 # Marcador de posición — CI del backend (compilación + pruebas unitarias por módulo).
-# name: ci-backend
-# on: [pull_request, push]
-# jobs:
-#   build:
-#     # checkout, preparar Java 25 (temurin), mvn -pl <módulo> verify
+# Es válido pero inerte: solo se ejecuta a mano (workflow_dispatch) para no generar
+# ejecuciones fallidas vacías en cada push. El CI real (Java 25, mvn verify, ArchUnit,
+# gitleaks, acciones fijadas por SHA) se define en el Sprint 0.
+name: ci-backend
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sin pasos todavía
+        run: echo "Marcador de posición de ci-backend; se implementa en el Sprint 0."
