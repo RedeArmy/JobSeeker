@@ -1,6 +1,4 @@
-# Actualizaciones automáticas de dependencias. Solo los ecosistemas que ya tienen archivos reales:
-# `docker` y `docker-compose` se añaden cuando el Dockerfile y los servicios dejen de ser
-# marcadores de posición (Sprint 0).
+# Actualizaciones automáticas de dependencias.
 version: 2
 updates:
   # Las acciones van fijadas por SHA (ver Settings > Actions); Dependabot propone el SHA nuevo y
@@ -19,3 +17,25 @@ updates:
     open-pull-requests-limit: 10
     labels:
       - "dependencies"
+
+  # Imágenes base del Dockerfile, fijadas por digest: sin esto el digest nunca se mueve y un cambio
+  # de la imagen base llega sin revisión, o nunca.
+  - package-ecosystem: "docker"
+    directory: "/app"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+
+  # Imágenes del stack local (docker-compose.yml), también fijadas por digest.
+  - package-ecosystem: "docker-compose"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+    # ADR-0028: la versión mayor de PostgreSQL va en el sufijo de la etiqueta de pgvector (`-pg17`).
+    # Dependabot conserva el sufijo al proponer una actualización, así que no debería proponer
+    # `-pg18`; si alguna vez lo hiciera, esa PR se rechaza: el cambio de versión mayor es una
+    # decisión planificada con su propio ADR y debe coincidir con la que ofrece Supabase. Lo que no se
+    # ha verificado todavía es ese comportamiento de Dependabot; se confirma en su primera ejecución.

@@ -1,5 +1,5 @@
 # Comprobaciones del repositorio que no necesitan código Java: secretos, workflows, documentación,
-# configuración y SQL (seguridad e inmutabilidad de las migraciones). Es la primera pieza del CI real (el build, ArchUnit y Sonar llegan en el Sprint 0
+# configuración, SQL (seguridad e inmutabilidad de las migraciones) y la configuración del stack local. Es la primera pieza del CI real (el build, ArchUnit y Sonar llegan en el Sprint 0
 # junto con el esqueleto andante).
 name: repo-checks
 
@@ -85,12 +85,23 @@ jobs:
           BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
         run: bash scripts/check-migration-immutability.sh "$BASE"
 
+  infra-config:
+    name: Local stack configuration (compose, Prometheus, Alertmanager, Grafana)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Valida con las herramientas oficiales de cada pieza, con las mismas imágenes (por digest) que
+      # usa docker-compose.yml: Compose, promtool (configuración, reglas y sus pruebas) y amtool.
+      - name: Validate the stack configuration
+        run: bash scripts/check-infra-config.sh
+
   # Un solo nombre estable para exigir en la protección de rama (cuando el plan del repositorio la
   # permita) en vez de enumerar cada job; `if: always()` evita que un job omitido cuente como éxito.
   repo-checks-passed:
     name: repo-checks passed
     runs-on: ubuntu-latest
-    needs: [secrets-scan, workflow-lint, docs-and-config, sql-lint, migration-immutability]
+    needs: [secrets-scan, workflow-lint, docs-and-config, sql-lint, migration-immutability, infra-config]
     if: always()
     steps:
       - name: Fail if any required job did not succeed

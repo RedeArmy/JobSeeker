@@ -6,12 +6,12 @@
 # repositorio y se revisan en el PR (ADR-0012 / criterio de acciones permitidas). Si el checksum no
 # coincide, el script falla y no se instala nada.
 #
-# Uso: bash scripts/fetch-ci-tool.sh <gitleaks|actionlint|squawk> <directorio-destino>
+# Uso: bash scripts/fetch-ci-tool.sh <gitleaks|actionlint|squawk|trivy> <directorio-destino>
 # Para subir de versión: cambiar VERSION y SHA256 con los valores de `*_checksums.txt` del release.
 set -euo pipefail
 
-herramienta="${1:?uso: fetch-ci-tool.sh <gitleaks|actionlint|squawk> <directorio-destino>}"
-destino="${2:?uso: fetch-ci-tool.sh <gitleaks|actionlint|squawk> <directorio-destino>}"
+herramienta="${1:?uso: fetch-ci-tool.sh <gitleaks|actionlint|squawk|trivy> <directorio-destino>}"
+destino="${2:?uso: fetch-ci-tool.sh <gitleaks|actionlint|squawk|trivy> <directorio-destino>}"
 
 case "$herramienta" in
   gitleaks)
@@ -34,6 +34,13 @@ case "$herramienta" in
     ARCHIVO="squawk-linux-x64"
     URL="https://github.com/sbdchd/squawk/releases/download/v${VERSION}/${ARCHIVO}"
     SHA256="9ae3747ca5eafa48b4d5c535fc64b61e0735a763164193644aa6436cc97c4274"
+    ;;
+  trivy)
+    # Escáner de vulnerabilidades de la imagen (ADR-0014, 05-verificacion-riesgos-java-25.md).
+    VERSION="0.76.2"
+    ARCHIVO="trivy_${VERSION}_Linux-64bit.tar.gz"
+    URL="https://github.com/aquasecurity/trivy/releases/download/v${VERSION}/${ARCHIVO}"
+    SHA256="bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf"
     ;;
   *)
     echo "herramienta desconocida: $herramienta" >&2

@@ -62,3 +62,47 @@ jobs:
           path: "**/target/site/jacoco/jacoco.xml"
           if-no-files-found: ignore
           retention-days: 7
+
+  # El stack local completo con la aplicación en contenedor: valida a la vez el Dockerfile, el
+  # docker-compose.yml, Prometheus, Grafana y el arranque real. Lo que las pruebas de Maven no ven.
+  stack-and-image:
+    name: Local stack and container image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Genera .env con valores aleatorios, construye la imagen de la aplicación y espera a que todo
+      # esté sano (los healthchecks de docker-compose.yml).
+      - name: Start the stack with the app container
+        run: bash scripts/dev-up.sh --app
+
+      - name: Smoke test the stack
+        run: bash scripts/smoke-test-stack.sh
+
+      - name: Show the logs if something failed
+        if: failure()
+        run: docker compose --profile app ps -a && docker compose --profile app logs --tail=150
+
+      # Escaneo de vulnerabilidades de la imagen: una corregible de severidad ALTA o CRÍTICA rompe el
+      # build. Las que aún no tienen corrección (--ignore-unfixed) no se pueden resolver actualizando.
+      - name: Install Trivy (pinned version and checksum)
+        run: bash scripts/fetch-ci-tool.sh trivy "$RUNNER_TEMP/bin"
+
+      - name: Scan the image for fixable HIGH and CRITICAL vulnerabilities
+        run: |
+          status=0
+          "$RUNNER_TEMP/bin/trivy" image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
+            --exit-code 1 --format table --output trivy-report.txt jobseeker-app:dev || status=$?
+          cat trivy-report.txt
+          exit "$status"
+
+      - name: Upload the image scan report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: trivy-report
+          path: trivy-report.txt
+          if-no-files-found: ignore
+          retention-days: 7
+
