@@ -101,7 +101,7 @@ flowchart LR
 |---|---|
 | Exposición de métricas | Cada módulo expone sus métricas (técnicas y de negocio) vía Micrometer, agregadas por Actuator en `/actuator/prometheus` de la aplicación — un único endpoint de scrape para todo el monolito, no uno por módulo |
 | Scrape | Prometheus, corriendo como servicio en `docker-compose`, hace polling periódico de `/actuator/prometheus` (intervalo a definir, ver Preguntas abiertas) |
-| Visualización | Grafana consulta Prometheus como datasource; dashboards provisionados como código (JSON versionado en `infra/observability/`), no configurados manualmente en la UI de Grafana |
+| Visualización | Grafana consulta Prometheus como datasource; dashboards provisionados como código (JSON versionado en `infra/docker/grafana/`), no configurados manualmente en la UI de Grafana |
 | Alertas | Reglas de Prometheus evaluadas localmente, notificadas vía Alertmanager al canal configurado (ver Preguntas abiertas) |
 | Correlación con logs | `traceId` presente tanto en las métricas (como label, donde aplique) como en los logs estructurados (NFR-OBS-01), permitiendo pasar de una alerta de métrica a los logs de la request específica que la disparó |
 
