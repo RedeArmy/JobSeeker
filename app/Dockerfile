@@ -7,7 +7,9 @@
 # sin que cambie este archivo. Dependabot propone el digest nuevo (ecosistema `docker`).
 
 # ---- etapa de compilación ----
-FROM maven:3.9-eclipse-temurin-26-noble@sha256:b2c1ad85954592f9928e84327c65201f308ad9b5d8ed7d5b823717c97bf23fbb AS build
+# Temurin 25 (LTS, ADR-0014), la misma que usa el CI y la imagen de ejecución. Dependabot propuso una vez
+# cambiar a Temurin 26 y a una etiqueta flotante (`3.9-…`): se rechazó a propósito, no es LTS.
+FROM maven:3.9.16-eclipse-temurin-25-noble@sha256:93b8a14ea2f412782e4e842651273b4d903e35cc496284f178fbbe2d67d00976 AS build
 WORKDIR /src
 COPY . .
 # La calidad (formato, PMD, pruebas) ya la valida el CI con `mvn verify`; aquí solo se empaqueta.

@@ -35,7 +35,7 @@ updates:
     labels:
       - "dependencies"
     # ADR-0028: la versión mayor de PostgreSQL va en el sufijo de la etiqueta de pgvector (`-pg17`).
-    # Dependabot conserva el sufijo al proponer una actualización, así que no debería proponer
-    # `-pg18`; si alguna vez lo hiciera, esa PR se rechaza: el cambio de versión mayor es una
-    # decisión planificada con su propio ADR y debe coincidir con la que ofrece Supabase. Lo que no se
-    # ha verificado todavía es ese comportamiento de Dependabot; se confirma en su primera ejecución.
+    # Dependabot NO garantiza conservar los componentes de una etiqueta: con la imagen de Maven cambió
+    # el JDK de la etiqueta (25 → 26) y la volvió flotante. Toda PR que cambie `-pg17`, el JDK de una
+    # etiqueta o su forma se revisa a mano y se rechaza si contradice un ADR. Las PRs de Dependabot no
+    # se fusionan sin revisar (no hay protección de rama mientras el repositorio sea privado).
