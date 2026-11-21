@@ -47,5 +47,5 @@ bash scripts/dev-down.sh        # detiene el stack y conserva los datos (--volum
 La primera vez genera `.env` con contraseñas aleatorias y puertos libres (no se versiona). Todo se
 publica solo en `127.0.0.1`. Con la aplicación en el anfitrión, carga ese `.env` y ejecútala:
 `set -a; . ./.env; set +a`, y luego `java --enable-native-access=ALL-UNNAMED -jar app/target/app-*-SNAPSHOT.jar`.
-El esquema lo crea Flyway al arrancar. `scripts/smoke-test-jar.sh` comprueba el jar con una base
+El esquema lo crea Flyway al arrancar. Para iniciar sesión hace falta un Clavaris (el de `../Clavaris`) y las variables `CLAVARIS_ISSUER_URI`, `CLAVARIS_CLIENT_ID` y `CLAVARIS_CLIENT_SECRET`; sin ellas la aplicación arranca igual y el login responde 503. `scripts/smoke-test-jar.sh` comprueba el jar con una base
 desechable.

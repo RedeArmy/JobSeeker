@@ -50,6 +50,22 @@ redis_exige_clave() {
   ! docker compose exec -T redis redis-cli ping 2>&1 | grep -q PONG &&
     docker compose exec -T redis sh -c 'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli ping' | grep -q PONG
 }
+web_redirige_al_login() {
+  local cabeceras
+  cabeceras="$(curl -sI http://localhost:8080/app/home)"
+  grep -qi '^HTTP/[0-9.]* 302' <<<"$cabeceras" && grep -qi '^location:.*/oauth2/authorization/clavaris' <<<"$cabeceras"
+}
+cabeceras_de_seguridad() {
+  local cabeceras
+  cabeceras="$(curl -sI http://localhost:8080/app/home)"
+  grep -qi "^content-security-policy:.*default-src 'self'" <<<"$cabeceras" &&
+    grep -qi '^x-content-type-options: nosniff' <<<"$cabeceras" &&
+    grep -qi '^x-frame-options: DENY' <<<"$cabeceras" &&
+    grep -qi '^x-trace-id:' <<<"$cabeceras"
+}
+api_cerrada_sin_credencial() {
+  [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/v1/cualquiera)" = "401" ]
+}
 # Un resultado vacío (el contenedor no responde) NO cuenta como «no es root»: debe ser un UID numérico.
 no_es_root() {
   local uid
@@ -68,5 +84,8 @@ esperar "la fuente de datos de Grafana conecta con Prometheus" datasource_sano
 esperar "un correo enviado por SMTP llega a Mailpit" correo_llega
 esperar "Redis rechaza el acceso sin clave y lo acepta con ella" redis_exige_clave
 esperar "la aplicación corre sin privilegios de root" no_es_root
+esperar "la web sin sesión redirige al login de Clavaris" web_redirige_al_login
+esperar "la web envía las cabeceras de seguridad y el identificador de traza" cabeceras_de_seguridad
+esperar "la API rechaza sin credencial (cadena cerrada)" api_cerrada_sin_credencial
 
 [ "$fallos" -eq 0 ] && echo "Stack OK." || { echo "$fallos comprobación(es) fallaron." >&2; exit 1; }

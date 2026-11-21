@@ -164,10 +164,22 @@ services:
       DB_DEV_NAME: ${DB_DEV_NAME:?defínelo en .env (ver .env.example)}
       DB_DEV_USER: ${DB_DEV_USER:?defínelo en .env (ver .env.example)}
       DB_DEV_PASSWORD: ${DB_DEV_PASSWORD:?defínelo en .env (ver .env.example)}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?defínelo en .env (ver .env.example)}
+      # Clavaris (ADR-0020). Sin ellos la aplicación arranca igual y el login responde «no configurado».
+      # Desde un contenedor, el Clavaris del anfitrión se alcanza como host.docker.internal.
+      CLAVARIS_ISSUER_URI: ${CLAVARIS_ISSUER_URI:-}
+      CLAVARIS_CLIENT_ID: ${CLAVARIS_CLIENT_ID:-}
+      CLAVARIS_CLIENT_SECRET: ${CLAVARIS_CLIENT_SECRET:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       # La imagen no trae curl ni wget a propósito (menos superficie de ataque): bash basta.
