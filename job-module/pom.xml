@@ -14,8 +14,8 @@
     <packaging>jar</packaging>
 
     <name>job-module</name>
-    <description>Placeholder POM for the job module. No dependencies yet.</description>
+    <description>POM de marcador de posición del módulo job. Aún sin dependencias.</description>
 
-    <!-- Spring Boot starters and module-specific dependencies will be added later. -->
+    <!-- Los starters de Spring Boot y las dependencias propias del módulo se añadirán más adelante. -->
 
 </project>

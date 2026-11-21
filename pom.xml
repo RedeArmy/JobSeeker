@@ -10,12 +10,34 @@
     <packaging>pom</packaging>
 
     <name>jobseeker-parent</name>
-    <description>Parent POM for the JobSeeker modular monolith. Placeholder — no dependencies or plugin management yet.</description>
+    <description>POM padre del monolito modular JobSeeker. Solo gestiona versiones; aún sin dependencias de aplicación.</description>
 
-    <!--
-        Spring Boot parent/BOM, Java version, and shared dependencyManagement
-        will be added here once the module skeletons are validated.
-    -->
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- ADR-0014: Java 25 (LTS), alineado con ../Clavaris y verificado en
+             architecture-review-2026-11/05-verificacion-riesgos-java-25.md. Las herramientas
+             de build deben usar versiones compatibles con Java 25 (JaCoCo >= 0.8.14, Spotless 3.x,
+             maven-pmd-plugin 3.28.0): las anteriores fallan con classfile versión 69. -->
+        <java.version>25</java.version>
+        <maven.compiler.release>25</maven.compiler.release>
+        <!-- ADR-0014: Boot 3.4 salió del soporte OSS el 2025-12-31; 4.1.2 es la línea con la que
+             ../Clavaris ya compila, así que la resolución del BOM está probada en este entorno. -->
+        <spring-boot.version>4.1.2</spring-boot.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Única fuente de versiones de bibliotecas (ADR-0014). Se importa, no se usa como <parent>,
+                 para que este POM conserve la lista de módulos y la configuración del build. -->
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <modules>
         <module>common</module>
@@ -25,6 +47,9 @@
         <module>matching-module</module>
         <module>ats-module</module>
         <module>tracker-module</module>
+        <!-- ADR-0026: el único desplegable. Los módulos de negocio son bibliotecas; `app` aloja
+             @SpringBootApplication, la configuración transversal y el único Dockerfile. -->
+        <module>app</module>
     </modules>
 
 </project>

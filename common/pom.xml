@@ -14,6 +14,6 @@
     <packaging>jar</packaging>
 
     <name>common</name>
-    <description>Shared kernel: base exceptions, utilities, and common types used across business modules. Library only — no Dockerfile. No dependencies yet.</description>
+    <description>Núcleo compartido: excepciones base, utilidades y tipos comunes usados por los módulos de negocio. Solo biblioteca, sin Dockerfile. Aún sin dependencias.</description>
 
 </project>

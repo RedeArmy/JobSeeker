@@ -14,8 +14,8 @@
     <packaging>jar</packaging>
 
     <name>matching-module</name>
-    <description>Placeholder POM for the matching module. No dependencies yet.</description>
+    <description>POM de marcador de posición del módulo matching. Aún sin dependencias.</description>
 
-    <!-- Spring Boot starters and module-specific dependencies will be added later. -->
+    <!-- Los starters de Spring Boot y las dependencias propias del módulo se añadirán más adelante. -->
 
 </project>

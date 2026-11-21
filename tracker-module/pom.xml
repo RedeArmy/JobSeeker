@@ -14,8 +14,8 @@
     <packaging>jar</packaging>
 
     <name>tracker-module</name>
-    <description>Placeholder POM for the tracker module. No dependencies yet.</description>
+    <description>POM de marcador de posición del módulo tracker. Aún sin dependencias.</description>
 
-    <!-- Spring Boot starters and module-specific dependencies will be added later. -->
+    <!-- Los starters de Spring Boot y las dependencias propias del módulo se añadirán más adelante. -->
 
 </project>
