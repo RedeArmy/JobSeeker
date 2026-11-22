@@ -41,7 +41,7 @@
         <pmd.version>7.29.0</pmd.version>
 
         <!-- SonarCloud: se ejecuta desde el CI (job «SonarCloud analysis»); el token llega como secreto. -->
-        <sonar-maven-plugin.version>5.8.0.7211</sonar-maven-plugin.version>
+        <sonar-maven-plugin.version>5.9.0.7382</sonar-maven-plugin.version>
         <sonar.host.url>https://sonarcloud.io</sonar.host.url>
         <sonar.organization>redearmy</sonar.organization>
         <sonar.projectKey>RedeArmy_JobSeeker</sonar.projectKey>
