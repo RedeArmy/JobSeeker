@@ -12,9 +12,11 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import org.junit.jupiter.api.BeforeEach;
@@ -243,6 +245,15 @@ class LivenessCoordinatorIntegrationTest {
     volatile long latencyMillis;
     volatile Function<String, Result> next;
 
+    // Simula la latencia de Clavaris esperando un cierre que nunca llega: caduca por tiempo.
+    private static void pause(long millis) {
+      try {
+        new CountDownLatch(1).await(millis, TimeUnit.MILLISECONDS);
+      } catch (InterruptedException _) {
+        Thread.currentThread().interrupt();
+      }
+    }
+
     String issue() {
       valid = "refresh-token-secreto-" + issued.incrementAndGet();
       return valid;
@@ -252,11 +263,7 @@ class LivenessCoordinatorIntegrationTest {
     public synchronized Result refresh(String refreshToken) {
       calls.incrementAndGet();
       if (latencyMillis > 0) {
-        try {
-          Thread.sleep(latencyMillis);
-        } catch (InterruptedException interrupted) {
-          Thread.currentThread().interrupt();
-        }
+        pause(latencyMillis);
       }
       if (next != null) {
         return next.apply(refreshToken);

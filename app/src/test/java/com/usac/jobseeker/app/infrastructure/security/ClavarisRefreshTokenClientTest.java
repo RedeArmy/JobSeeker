@@ -64,8 +64,10 @@ class ClavarisRefreshTokenClientTest {
     String request = issuer.tokenRequests.getFirst();
     String basic =
         Base64.getEncoder().encodeToString("client-de-prueba:secreto-de-prueba".getBytes());
-    assertThat(request).startsWith("Basic " + basic + "|");
-    assertThat(request).contains("grant_type=refresh_token").contains("refresh_token=rt-viejo");
+    assertThat(request)
+        .startsWith("Basic " + basic + "|")
+        .contains("grant_type=refresh_token")
+        .contains("refresh_token=rt-viejo");
   }
 
   @Test

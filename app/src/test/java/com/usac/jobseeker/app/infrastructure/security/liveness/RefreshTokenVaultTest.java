@@ -82,13 +82,13 @@ class RefreshTokenVaultTest {
 
   @Test
   void aLoginWithoutARefreshTokenIsRejected() {
+    // Los argumentos se crean fuera de la lambda: dentro debe haber una sola llamada que pueda
+    // fallar.
+    OAuth2AuthorizedClient withoutRefreshToken = clientWith(null);
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    MockHttpServletResponse response = new MockHttpServletResponse();
     assertThatThrownBy(
-            () ->
-                vault.saveAuthorizedClient(
-                    clientWith(null),
-                    null,
-                    new MockHttpServletRequest(),
-                    new MockHttpServletResponse()))
+            () -> vault.saveAuthorizedClient(withoutRefreshToken, null, request, response))
         .isInstanceOf(OAuth2AuthenticationException.class)
         .extracting(e -> ((OAuth2AuthenticationException) e).getError().getErrorCode())
         .isEqualTo("refresh_token_missing");
@@ -103,13 +103,10 @@ class RefreshTokenVaultTest {
             RefreshTokenCipher.from(new EncryptionProperties(null, null)),
             Clock.systemUTC());
 
-    assertThatThrownBy(
-            () ->
-                withoutKey.saveAuthorizedClient(
-                    clientWith("t"),
-                    null,
-                    new MockHttpServletRequest(),
-                    new MockHttpServletResponse()))
+    OAuth2AuthorizedClient client = clientWith("t");
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    assertThatThrownBy(() -> withoutKey.saveAuthorizedClient(client, null, request, response))
         .extracting(e -> ((OAuth2AuthenticationException) e).getError().getErrorCode())
         .isEqualTo("encryption_not_configured");
     verify(store, never()).begin(anyString(), any());

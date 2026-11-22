@@ -29,16 +29,20 @@ class LivenessPropertiesTest {
 
   @Test
   void theRenewalIntervalCannotExceedFifteenMinutes() {
-    assertThatThrownBy(() -> with(Duration.ofMinutes(16), Duration.ofSeconds(30)))
-        .hasMessageContaining("15 minutos");
-    assertThatThrownBy(() -> with(Duration.ZERO, Duration.ofSeconds(30)))
+    // Las duraciones se crean fuera de la lambda: dentro debe haber una sola llamada que pueda
+    // fallar.
+    Duration tooLong = Duration.ofMinutes(16);
+    Duration lockTtl = Duration.ofSeconds(30);
+    assertThatThrownBy(() -> with(tooLong, lockTtl)).hasMessageContaining("15 minutos");
+    assertThatThrownBy(() -> with(Duration.ZERO, lockTtl))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
   @Test
   void theLockMustOutliveTwoRenewalAttempts() {
     // 2 * (2 s + 5 s) = 14 s: un cerrojo de 14 s expiraría con el dueño aún renovando (regla 7).
-    assertThatThrownBy(() -> with(Duration.ofMinutes(10), Duration.ofSeconds(14)))
-        .hasMessageContaining("lock-ttl");
+    Duration interval = Duration.ofMinutes(10);
+    Duration tooShort = Duration.ofSeconds(14);
+    assertThatThrownBy(() -> with(interval, tooShort)).hasMessageContaining("lock-ttl");
   }
 }
