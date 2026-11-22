@@ -48,6 +48,12 @@
         <!-- HTMX es código de terceros incluido tal cual (huella fijada en VendoredAssetsTest): analizarlo
              solo generaría hallazgos que no podemos corregir. -->
         <sonar.exclusions>**/static/js/htmx.min.js</sonar.exclusions>
+        <!-- La regla S1135 busca la palabra «todo» sin distinguir mayúsculas y en un código comentado en
+             español marca como pendiente cualquier «todo» (rechaza todo, escanea todo…). Se desactiva y
+             la reemplaza scripts/check-todo-markers.sh, que sí exige dueño y razón (coding-standards.md §5). -->
+        <sonar.issue.ignore.multicriteria>todoEnEspanol</sonar.issue.ignore.multicriteria>
+        <sonar.issue.ignore.multicriteria.todoEnEspanol.ruleKey>java:S1135</sonar.issue.ignore.multicriteria.todoEnEspanol.ruleKey>
+        <sonar.issue.ignore.multicriteria.todoEnEspanol.resourceKey>**/*.java</sonar.issue.ignore.multicriteria.todoEnEspanol.resourceKey>
         <sonar.cpd.exclusions>**/static/js/htmx.min.js</sonar.cpd.exclusions>
 
         <!-- Vacío por defecto: JaCoCo lo rellena con su agente y Surefire lo concatena en su argLine. -->

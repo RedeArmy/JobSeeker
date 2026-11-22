@@ -57,6 +57,9 @@ jobs:
       # Los checks requeridos del ruleset de `main` existen como jobs y la protección no se debilita.
       - name: Main ruleset matches the workflows
         run: python3 scripts/check_ruleset.py
+      # Un marcador de trabajo pendiente lleva dueño y razón (coding-standards.md §5).
+      - name: Work markers have an owner and a reason
+        run: bash scripts/check-todo-markers.sh
       # El repositorio no menciona herramientas de asistencia de código ni sus archivos locales.
       - name: No tooling references in tracked files
         run: bash scripts/check-no-tooling-references.sh
