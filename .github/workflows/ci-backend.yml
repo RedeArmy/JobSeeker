@@ -65,6 +65,33 @@ jobs:
 
   # El stack local completo con la aplicación en contenedor: valida a la vez el Dockerfile, el
   # docker-compose.yml, Prometheus, Grafana y el arranque real. Lo que las pruebas de Maven no ven.
+  # Análisis estático y cobertura en SonarCloud. Espera a la puerta de calidad: si no se cumple, el job
+  # falla y la PR no se puede fusionar (ruleset de `main`). Va en paralelo al build: repite las pruebas
+  # a cambio de no pasar artefactos entre jobs.
+  sonar-analysis:
+    name: SonarCloud analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Sonar atribuye el código nuevo con el historial de git; un clon superficial lo falsea.
+          fetch-depth: 0
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          java-version: "25"
+          distribution: temurin
+          cache: maven
+
+      - name: Analyze and wait for the quality gate
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: >-
+          mvn -B -ntp verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
+          -Dsonar.qualitygate.wait=true
+
   stack-and-image:
     name: Local stack and container image
     runs-on: ubuntu-latest

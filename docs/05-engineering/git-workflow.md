@@ -59,6 +59,12 @@ Sin un segundo desarrollador que revise, el proceso de PR se mantiene igualmente
 4. Fusión solo si CI pasa en verde y el checklist de DoD se cumple — no se fusiona con pruebas en rojo "para arreglar después".
 5. Squash merge a `main`, manteniendo el mensaje de commit final alineado a la convención de la sección 3.
 
+### 5.1 Protección de `main` como código
+
+La protección de `main` es un *ruleset* de GitHub versionado en `.github/rulesets/main.json`: PR obligatoria con squash, historia lineal, sin borrar ni reescribir, y cuatro checks requeridos con la rama al día (`repo-checks passed`, `Build and test (mvn verify)`, `Local stack and container image` y `SonarCloud analysis`, que espera la puerta de calidad). Nadie puede saltarla, tampoco quien administra el repositorio. No exige aprobaciones: con un solo desarrollador GitHub no deja aprobar la propia PR y pedirlas bloquearía todo; el self-review del punto 3 sigue siendo obligatorio.
+
+`scripts/check_ruleset.py` corre en el CI y falla si un check requerido no coincide con el nombre de ningún job, o si se quita una regla de protección. Para cambiar la protección: se edita el archivo en una PR y, **ya fusionada**, se aplica con `bash scripts/apply-ruleset.sh` (crea o actualiza; hace falta `gh` con permisos de administración). Se aplica después y no antes porque un check requerido que aún no existe en `main` bloquearía la PR que lo introduce.
+
 ## 6. Qué NO se hace
 
 - No se trabaja directamente sobre `main`.
