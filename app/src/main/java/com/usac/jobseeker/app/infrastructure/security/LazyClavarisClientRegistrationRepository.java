@@ -4,6 +4,7 @@ import java.net.http.HttpClient;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
@@ -27,14 +28,17 @@ import org.springframework.web.client.RestClient;
 final class LazyClavarisClientRegistrationRepository implements ClientRegistrationRepository {
 
   static final String REGISTRATION_ID = "clavaris";
+  private static final String END_SESSION_ENDPOINT = "end_session_endpoint";
   private static final Logger LOG =
       LoggerFactory.getLogger(LazyClavarisClientRegistrationRepository.class);
 
   private final ClavarisProperties properties;
   private final RestClient http;
   private final Clock clock;
-  private volatile ClientRegistration registration;
-  private volatile Instant retryNotBefore = Instant.MIN;
+  // AtomicReference y no `volatile`: la publicación segura de un objeto mutable no la da
+  // `volatile`.
+  private final AtomicReference<ClientRegistration> registration = new AtomicReference<>();
+  private final AtomicReference<Instant> retryNotBefore = new AtomicReference<>(Instant.MIN);
 
   LazyClavarisClientRegistrationRepository(ClavarisProperties properties, Clock clock) {
     this.properties = properties;
@@ -51,7 +55,7 @@ final class LazyClavarisClientRegistrationRepository implements ClientRegistrati
     if (!REGISTRATION_ID.equals(registrationId)) {
       return null;
     }
-    ClientRegistration resolved = registration;
+    ClientRegistration resolved = registration.get();
     if (resolved != null) {
       return resolved;
     }
@@ -63,22 +67,23 @@ final class LazyClavarisClientRegistrationRepository implements ClientRegistrati
   // 5xx, JSON mal formado); todas significan «reintentar más tarde», nunca «impedir el arranque».
   @SuppressWarnings("PMD.AvoidCatchingGenericException")
   private synchronized ClientRegistration discover() {
-    if (registration != null) {
-      return registration;
+    if (registration.get() != null) {
+      return registration.get();
     }
     if (!properties.configured()) {
       LOG.warn("event=clavaris_not_configured reason=faltan_issuer_o_credenciales");
       return null;
     }
-    if (clock.instant().isBefore(retryNotBefore)) {
+    if (clock.instant().isBefore(retryNotBefore.get())) {
       return null;
     }
     try {
-      registration = fetch();
+      ClientRegistration discovered = fetch();
+      registration.set(discovered);
       LOG.info("event=clavaris_discovered issuer={}", properties.issuerUri());
-      return registration;
+      return discovered;
     } catch (RuntimeException failure) {
-      retryNotBefore = clock.instant().plus(properties.retryAfterFailure());
+      retryNotBefore.set(clock.instant().plus(properties.retryAfterFailure()));
       LOG.warn(
           "event=clavaris_discovery_failed reason={} retryAfter={}",
           failure.getClass().getSimpleName(),
@@ -89,7 +94,7 @@ final class LazyClavarisClientRegistrationRepository implements ClientRegistrati
 
   @SuppressWarnings("unchecked")
   private ClientRegistration fetch() {
-    String issuer = properties.issuerUri().replaceAll("/+$", "");
+    String issuer = withoutTrailingSlashes(properties.issuerUri());
     Map<String, Object> metadata =
         http.get().uri(issuer + "/.well-known/openid-configuration").retrieve().body(Map.class);
     if (metadata == null) {
@@ -97,7 +102,7 @@ final class LazyClavarisClientRegistrationRepository implements ClientRegistrati
     }
     // El `issuer` del documento debe ser el configurado: si no, otro emisor se hace pasar por
     // Clavaris.
-    if (!issuer.equals(String.valueOf(metadata.get("issuer")).replaceAll("/+$", ""))) {
+    if (!issuer.equals(withoutTrailingSlashes(String.valueOf(metadata.get("issuer"))))) {
       throw new IllegalStateException(
           "el issuer del descubrimiento no coincide con el configurado");
     }
@@ -118,11 +123,21 @@ final class LazyClavarisClientRegistrationRepository implements ClientRegistrati
     if (metadata.get("userinfo_endpoint") != null) {
       builder.userInfoUri(metadata.get("userinfo_endpoint").toString());
     }
-    if (metadata.get("end_session_endpoint") != null) {
+    if (metadata.get(END_SESSION_ENDPOINT) != null) {
       builder.providerConfigurationMetadata(
-          Map.of("end_session_endpoint", metadata.get("end_session_endpoint").toString()));
+          Map.of(END_SESSION_ENDPOINT, metadata.get(END_SESSION_ENDPOINT).toString()));
     }
     return builder.build();
+  }
+
+  // Un bucle y no la expresión regular `/+$`: con ella el tiempo crece más que lineal ante una
+  // cadena con muchas barras (S5852), y el valor viene de configuración y de la red.
+  private static String withoutTrailingSlashes(String value) {
+    int end = value.length();
+    while (end > 0 && value.charAt(end - 1) == '/') {
+      end--;
+    }
+    return value.substring(0, end);
   }
 
   private static String required(Map<String, Object> metadata, String key) {

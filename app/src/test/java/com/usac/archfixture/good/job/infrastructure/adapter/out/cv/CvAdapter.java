@@ -10,5 +10,8 @@ public class CvAdapter {
   CvUpdated lastEvent;
 
   @Scheduled(fixedDelay = 1000)
-  void poll() {}
+  void poll() {
+    // Cuerpo vacío a propósito: es el ejemplo conforme de ARCH-09 (@Scheduled dentro de
+    // infrastructure).
+  }
 }

@@ -37,7 +37,7 @@ final class AccountProvisioningSuccessHandler
     AccountId accountId;
     try {
       accountId = AccountId.fromSubject(authentication.getName());
-    } catch (IllegalArgumentException invalidSubject) {
+    } catch (IllegalArgumentException _) {
       // Un `sub` que no es un UUID no puede ser de Clavaris: se corta la sesión recién creada.
       LOG.warn("event=login_rejected reason=subject_no_uuid");
       request.getSession().invalidate();

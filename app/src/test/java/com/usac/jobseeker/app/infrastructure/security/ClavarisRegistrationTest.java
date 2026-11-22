@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 import com.usac.jobseeker.app.InfrastructureTestConfiguration;
+import java.io.IOException;
 import java.net.URI;
 import java.time.Clock;
 import java.time.Duration;
@@ -68,19 +69,22 @@ class ClavarisRegistrationTest {
 
     assertThat(location.toString()).startsWith(ISSUER.issuerUri() + "/oauth2/authorize");
     // ADR-0020, regla 10: PKCE con S256, sin depender de un valor por defecto de la biblioteca.
-    assertThat(query).containsEntry("code_challenge_method", "S256").containsKey("code_challenge");
     assertThat(query)
+        .containsEntry("code_challenge_method", "S256")
+        .containsKey("code_challenge")
         .containsEntry("response_type", "code")
-        .containsEntry("client_id", "client-de-prueba");
-    assertThat(query.get("scope")).contains("openid");
-    assertThat(query).containsKey("state").containsKey("nonce");
-    // Hasta el sub-paso 4.3 no se pide el refresh token: no hay dónde guardarlo cifrado.
-    assertThat(query.get("scope")).doesNotContain("offline_access");
-    assertThat(query.get("redirect_uri")).endsWith("/login/oauth2/code/clavaris");
+        .containsEntry("client_id", "client-de-prueba")
+        .containsKey("state")
+        .containsKey("nonce")
+        // Hasta el sub-paso 4.3 no se pide el refresh token: no hay dónde guardarlo cifrado.
+        .hasEntrySatisfying(
+            "scope", scope -> assertThat(scope).contains("openid").doesNotContain("offline_access"))
+        .hasEntrySatisfying(
+            "redirect_uri", uri -> assertThat(uri).endsWith("/login/oauth2/code/clavaris"));
   }
 
   @Test
-  void aFailedDiscoveryDoesNotBreakAndIsNotRetriedBeforeTheWait() throws Exception {
+  void aFailedDiscoveryDoesNotBreakAndIsNotRetriedBeforeTheWait() {
     AtomicReference<Instant> now = new AtomicReference<>(Instant.parse("2026-11-21T12:00:00Z"));
     Clock clock =
         new Clock() {
@@ -119,7 +123,7 @@ class ClavarisRegistrationTest {
   }
 
   @Test
-  void anIssuerThatAdvertisesAnotherIdentityIsRejected() throws Exception {
+  void anIssuerThatAdvertisesAnotherIdentityIsRejected() throws IOException {
     try (StubIssuer impostor = new StubIssuer("https://otro-emisor.example/o/x")) {
       var props =
           new ClavarisProperties(
@@ -138,7 +142,7 @@ class ClavarisRegistrationTest {
   }
 
   @Test
-  void aRegistrationIsResolvedOnceAndReused() throws Exception {
+  void aRegistrationIsResolvedOnceAndReused() throws IOException {
     try (StubIssuer issuer = new StubIssuer()) {
       var props =
           new ClavarisProperties(
@@ -158,6 +162,30 @@ class ClavarisRegistrationTest {
           .containsKey("end_session_endpoint");
       assertThat(repository.findByRegistrationId("clavaris")).isSameAs(first);
       assertThat(repository.findByRegistrationId("otro")).isNull();
+    }
+  }
+
+  @Test
+  void anIssuerConfiguredWithTrailingSlashesIsStillDiscovered() throws IOException {
+    try (StubIssuer issuer = new StubIssuer()) {
+      var props =
+          new ClavarisProperties(
+              issuer.issuerUri() + "///",
+              "id",
+              "secreto",
+              java.util.List.of("openid"),
+              Duration.ofSeconds(2),
+              Duration.ofSeconds(2),
+              Duration.ofSeconds(10));
+
+      ClientRegistration registration =
+          new LazyClavarisClientRegistrationRepository(props, Clock.systemUTC())
+              .findByRegistrationId("clavaris");
+
+      // Las barras finales no cambian el emisor: se comparan sin ellas y el valor queda
+      // normalizado.
+      assertThat(registration).isNotNull();
+      assertThat(registration.getProviderDetails().getIssuerUri()).isEqualTo(issuer.issuerUri());
     }
   }
 
