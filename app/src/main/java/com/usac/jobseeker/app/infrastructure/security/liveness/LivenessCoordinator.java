@@ -62,8 +62,9 @@ public final class LivenessCoordinator {
       return closed(NO_STATE);
     }
     if (due(state.get(), now)) {
-      Verdict renewal = renew(linkId, now);
-      if (renewal == Verdict.CLOSED) {
+      // Solo `ALIVE` deja seguir: cualquier otro valor cierra, así un resultado inesperado falla
+      // cerrado.
+      if (renew(linkId, now) != Verdict.ALIVE) {
         return Verdict.CLOSED;
       }
       state = store.find(linkId);
