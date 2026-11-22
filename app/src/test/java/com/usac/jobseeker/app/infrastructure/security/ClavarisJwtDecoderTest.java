@@ -103,6 +103,15 @@ class ClavarisJwtDecoderTest {
         clock);
   }
 
+  /**
+   * Lo que lanza el decodificador ante un token. El decodificador se crea fuera de la lambda:
+   * dentro debe haber una sola llamada que pueda fallar.
+   */
+  private Throwable rejected(String token) {
+    ClavarisJwtDecoder decoder = decoder();
+    return catchThrowable(() -> decoder.decode(token));
+  }
+
   private TestTokens.Builder token() {
     return legitimate.token(issuer.issuerUri(), now.get());
   }
@@ -118,7 +127,7 @@ class ClavarisJwtDecoderTest {
 
     assertThat(jwt.getSubject()).isEqualTo(subject.toString());
     assertThat(jwt.getAudience()).containsExactly(TestTokens.CLIENT_ID);
-    assertThat(jwt.getIssuer().toString()).isEqualTo(issuer.issuerUri());
+    assertThat(jwt.getIssuer()).hasToString(issuer.issuerUri());
   }
 
   @Test
@@ -146,7 +155,7 @@ class ClavarisJwtDecoderTest {
     // El validador acepta las dos formas habituales del claim; solo el ID token no trae ninguna.
     String token = token().noScope().build();
 
-    assertThatThrownBy(() -> decoder().decode(token)).isInstanceOf(BadJwtException.class);
+    assertThat(rejected(token)).isInstanceOf(BadJwtException.class);
   }
 
   // ---- audiencia: el control que el decodificador por defecto no hace (G6) ----
@@ -155,14 +164,14 @@ class ClavarisJwtDecoderTest {
   void aTokenIssuedToAnotherApplicationOfTheSameOrganizationIsRejected() {
     String token = token().audience("otra-aplicacion-de-la-organizacion").build();
 
-    assertThatThrownBy(() -> decoder().decode(token)).isInstanceOf(BadJwtException.class);
+    assertThat(rejected(token)).isInstanceOf(BadJwtException.class);
   }
 
   @Test
   void aTokenWithoutAudienceIsRejected() {
     String token = token().noAudience().build();
 
-    assertThatThrownBy(() -> decoder().decode(token)).isInstanceOf(BadJwtException.class);
+    assertThat(rejected(token)).isInstanceOf(BadJwtException.class);
   }
 
   @Test
@@ -177,9 +186,7 @@ class ClavarisJwtDecoderTest {
         }) {
       String token = token().audience(near).build();
 
-      assertThatThrownBy(() -> decoder().decode(token))
-          .as(near)
-          .isInstanceOf(BadJwtException.class);
+      assertThat(rejected(token)).as(near).isInstanceOf(BadJwtException.class);
     }
   }
 
@@ -189,7 +196,7 @@ class ClavarisJwtDecoderTest {
   void anIdTokenIsNotAcceptedAsAnAccessTokenEvenThoughItIsSignedAndAddressedToUs() {
     String idToken = token().noScope().build();
 
-    assertThatThrownBy(() -> decoder().decode(idToken)).isInstanceOf(BadJwtException.class);
+    assertThat(rejected(idToken)).isInstanceOf(BadJwtException.class);
   }
 
   // ---- emisor ----
@@ -198,14 +205,14 @@ class ClavarisJwtDecoderTest {
   void aTokenFromAnotherIssuerIsRejected() {
     String token = token().issuer("https://otro-emisor.example/o/x").build();
 
-    assertThatThrownBy(() -> decoder().decode(token)).isInstanceOf(BadJwtException.class);
+    assertThat(rejected(token)).isInstanceOf(BadJwtException.class);
   }
 
   @Test
   void anIssuerThatOnlyDiffersByATrailingSlashIsRejectedToo() {
     String token = token().issuer(issuer.issuerUri() + "/").build();
 
-    assertThatThrownBy(() -> decoder().decode(token)).isInstanceOf(BadJwtException.class);
+    assertThat(rejected(token)).isInstanceOf(BadJwtException.class);
   }
 
   // ---- vigencia, con la tolerancia de 30 s ----
@@ -249,14 +256,14 @@ class ClavarisJwtDecoderTest {
   void aSubjectThatIsNotACanonicalUuidIsRejected(String subject) {
     String token = token().subject(subject).build();
 
-    assertThatThrownBy(() -> decoder().decode(token)).isInstanceOf(BadJwtException.class);
+    assertThat(rejected(token)).isInstanceOf(BadJwtException.class);
   }
 
   @Test
   void aTokenWithoutSubjectIsRejected() {
     String token = token().noSubject().build();
 
-    assertThatThrownBy(() -> decoder().decode(token)).isInstanceOf(BadJwtException.class);
+    assertThat(rejected(token)).isInstanceOf(BadJwtException.class);
   }
 
   // ---- firma y algoritmo ----
@@ -265,7 +272,7 @@ class ClavarisJwtDecoderTest {
   void aTokenSignedWithAnotherKeyUnderTheSameKeyIdIsRejected() {
     String forged = token().signedBy(attacker).build();
 
-    assertThatThrownBy(() -> decoder().decode(forged)).isInstanceOf(BadJwtException.class);
+    assertThat(rejected(forged)).isInstanceOf(BadJwtException.class);
   }
 
   @Test
@@ -273,14 +280,14 @@ class ClavarisJwtDecoderTest {
     String original = UUID.randomUUID().toString();
     String tampered = token().subject(original).buildTampered(UUID.randomUUID().toString());
 
-    assertThatThrownBy(() -> decoder().decode(tampered)).isInstanceOf(BadJwtException.class);
+    assertThat(rejected(tampered)).isInstanceOf(BadJwtException.class);
   }
 
   @Test
   void aTokenWithOneSignatureByteFlippedIsRejected() {
     String forged = token().buildWithOneSignatureByteFlipped();
 
-    assertThatThrownBy(() -> decoder().decode(forged)).isInstanceOf(BadJwtException.class);
+    assertThat(rejected(forged)).isInstanceOf(BadJwtException.class);
   }
 
   @Test
@@ -300,7 +307,7 @@ class ClavarisJwtDecoderTest {
   void anUnsignedTokenIsRejected() {
     String unsigned = token().buildUnsigned();
 
-    assertThatThrownBy(() -> decoder().decode(unsigned)).isInstanceOf(BadJwtException.class);
+    assertThat(rejected(unsigned)).isInstanceOf(BadJwtException.class);
   }
 
   @Test
@@ -309,14 +316,14 @@ class ClavarisJwtDecoderTest {
     // algoritmo.
     String forged = token().buildWithHmacUsingThePublicKey();
 
-    assertThatThrownBy(() -> decoder().decode(forged)).isInstanceOf(BadJwtException.class);
+    assertThat(rejected(forged)).isInstanceOf(BadJwtException.class);
   }
 
   @Test
   void anotherRsaAlgorithmThanTheOneConfiguredIsRejectedEvenWithTheRightKey() {
     String token = token().algorithm(JWSAlgorithm.RS512).build();
 
-    assertThatThrownBy(() -> decoder().decode(token)).isInstanceOf(BadJwtException.class);
+    assertThat(rejected(token)).isInstanceOf(BadJwtException.class);
   }
 
   @ParameterizedTest
@@ -332,14 +339,14 @@ class ClavarisJwtDecoderTest {
         "Bearer abc.def.ghi"
       })
   void garbageIsRejectedAsABadTokenAndNeverAsAServerFailure(String garbage) {
-    assertThatThrownBy(() -> decoder().decode(garbage)).isInstanceOf(BadJwtException.class);
+    assertThat(rejected(garbage)).isInstanceOf(BadJwtException.class);
   }
 
   @Test
   void anEnormousTokenIsRejectedWithoutFailingTheServer() {
     String huge = "a".repeat(200_000) + "." + "b".repeat(1_000) + "." + "c".repeat(1_000);
 
-    assertThatThrownBy(() -> decoder().decode(huge)).isInstanceOf(BadJwtException.class);
+    assertThat(rejected(huge)).isInstanceOf(BadJwtException.class);
   }
 
   // ---- lo que se descarta sin necesitar a Clavaris ----
@@ -371,6 +378,58 @@ class ClavarisJwtDecoderTest {
     assertThatThrownBy(() -> decoder.decode("basura")).isInstanceOf(BadJwtException.class);
     assertThatThrownBy(() -> decoder.decode(wellFormed))
         .isInstanceOf(IdentityProviderUnavailableException.class);
+  }
+
+  // ---- un descubrimiento incompleto: sin con qué comprobar, no es un token malo ----
+
+  private ClavarisJwtDecoder decoderOverARegistrationWithout(String jwkSetUri, String issuerUri) {
+    var builder =
+        org.springframework.security.oauth2.client.registration.ClientRegistration
+            .withRegistrationId("clavaris")
+            .clientId(TestTokens.CLIENT_ID)
+            .authorizationGrantType(
+                org.springframework.security.oauth2.core.AuthorizationGrantType.AUTHORIZATION_CODE)
+            .redirectUri("http://localhost/cb")
+            .authorizationUri("http://localhost/authorize")
+            .tokenUri("http://localhost/token");
+    if (jwkSetUri != null) {
+      builder.jwkSetUri(jwkSetUri);
+    }
+    if (issuerUri != null) {
+      builder.issuerUri(issuerUri);
+    }
+    var registration = builder.build();
+    ClavarisProperties clavaris =
+        new ClavarisProperties(
+            "http://localhost/o/x",
+            TestTokens.CLIENT_ID,
+            "secreto",
+            List.of("openid"),
+            Duration.ofSeconds(2),
+            Duration.ofMillis(500),
+            RETRY);
+    return new ClavarisJwtDecoder(
+        id -> registration, new ApiAuthProperties(List.of(), List.of(), SKEW), clavaris, clock);
+  }
+
+  @Test
+  void aDiscoveryWithoutTheKeySetAddressIsAServiceFailureAndNotABadToken() {
+    ClavarisJwtDecoder decoder = decoderOverARegistrationWithout(null, "http://localhost/o/x");
+    String token = token().build();
+
+    assertThatThrownBy(() -> decoder.decode(token))
+        .isInstanceOf(IdentityProviderUnavailableException.class)
+        .hasMessageContaining("jwks_uri");
+  }
+
+  @Test
+  void aDiscoveryWithoutTheIssuerIsAServiceFailureAndNotABadToken() {
+    ClavarisJwtDecoder decoder = decoderOverARegistrationWithout("http://localhost/jwks", null);
+    String token = token().build();
+
+    assertThatThrownBy(() -> decoder.decode(token))
+        .isInstanceOf(IdentityProviderUnavailableException.class)
+        .hasMessageContaining("issuer");
   }
 
   // ---- claves: caché y rotación ----
@@ -431,7 +490,7 @@ class ClavarisJwtDecoderTest {
     issuer.jwksStatus = 500;
     String token = token().build();
 
-    Throwable failure = catchThrowable(() -> decoder().decode(token));
+    Throwable failure = rejected(token);
 
     assertThat(failure).isInstanceOf(JwtException.class).isNotInstanceOf(BadJwtException.class);
   }

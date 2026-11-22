@@ -28,7 +28,9 @@ public final class BearerAuthenticationEntryPoint implements AuthenticationEntry
       throws IOException {
     if (exception instanceof OAuth2AuthenticationException rejected) {
       String error = rejected.getError().getErrorCode();
-      LOG.info("event=api_token_rejected reason={}", reasonOf(rejected));
+      if (LOG.isInfoEnabled()) {
+        LOG.info("event=api_token_rejected reason={}", reasonOf(rejected));
+      }
       // RFC 6750: `invalid_request` (petición mal formada) es un 400; el resto de los rechazos,
       // 401.
       boolean malformed = "invalid_request".equals(error);

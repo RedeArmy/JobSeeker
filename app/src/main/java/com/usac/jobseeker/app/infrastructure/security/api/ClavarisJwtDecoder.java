@@ -101,6 +101,17 @@ public final class ClavarisJwtDecoder implements JwtDecoder {
     return built;
   }
 
+  // Sin `jwks_uri` o sin `issuer` no hay con qué comprobar la firma ni el emisor: es como si
+  // Clavaris
+  // no estuviera disponible, no un token malo.
+  private static String required(String value, String documentKey) {
+    if (value == null || value.isBlank()) {
+      throw new IdentityProviderUnavailableException(
+          "el descubrimiento de Clavaris no trae " + documentKey);
+    }
+    return value;
+  }
+
   private NimbusJwtDecoder decoderFor(ClientRegistration registration) {
     // Tiempos de espera obligatorios (ADR-0020, regla 12): sin ellos un JWKS colgado agotaría los
     // hilos.
@@ -108,8 +119,10 @@ public final class ClavarisJwtDecoder implements JwtDecoder {
         new JdkClientHttpRequestFactory(
             HttpClient.newBuilder().connectTimeout(clavaris.connectTimeout()).build());
     factory.setReadTimeout(clavaris.readTimeout());
+    String jwkSetUri = required(registration.getProviderDetails().getJwkSetUri(), "jwks_uri");
+    String issuerUri = required(registration.getProviderDetails().getIssuerUri(), "issuer");
     NimbusJwtDecoder decoder =
-        NimbusJwtDecoder.withJwkSetUri(registration.getProviderDetails().getJwkSetUri())
+        NimbusJwtDecoder.withJwkSetUri(jwkSetUri)
             .jwsAlgorithm(SignatureAlgorithm.RS256)
             .restOperations(new RestTemplate(factory))
             .build();
@@ -118,7 +131,7 @@ public final class ClavarisJwtDecoder implements JwtDecoder {
     List<OAuth2TokenValidator<Jwt>> validators =
         List.of(
             timestamps,
-            new JwtIssuerValidator(registration.getProviderDetails().getIssuerUri()),
+            new JwtIssuerValidator(issuerUri),
             new AudienceValidator(api.effectiveAudiences(clavaris)),
             new AccessTokenValidator(),
             new SubjectValidator());

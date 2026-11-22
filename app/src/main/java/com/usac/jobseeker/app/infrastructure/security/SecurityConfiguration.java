@@ -107,8 +107,7 @@ class SecurityConfiguration {
       @Qualifier(ApiConfiguration.CORS_SOURCE) CorsConfigurationSource cors,
       ProvisionAccountUseCase provisionAccount,
       ResolveActorUseCase resolveActor,
-      ClavarisProperties clavaris)
-      throws Exception {
+      ClavarisProperties clavaris) {
     // Los Bearer no traen autoridades de negocio: las capacidades las decide la cuenta local
     // (NFR-SEC-03, BR-ACCT-04), así que no se convierten los `scope` en roles.
     JwtAuthenticationConverter noAuthorities = new JwtAuthenticationConverter();
