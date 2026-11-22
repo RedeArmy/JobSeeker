@@ -70,20 +70,22 @@ class SecurityConfiguration {
 
   @Bean
   @Order(1)
-  SecurityFilterChain webhookChain(HttpSecurity http) throws Exception {
+  SecurityFilterChain webhookChain(HttpSecurity http) {
     return closedStatelessChain(http, "/api/v1/webhooks/clavaris");
   }
 
   @Bean
   @Order(2)
-  SecurityFilterChain apiChain(HttpSecurity http) throws Exception {
+  SecurityFilterChain apiChain(HttpSecurity http) {
     return closedStatelessChain(http, "/api/v1/**");
   }
 
-  private static SecurityFilterChain closedStatelessChain(HttpSecurity http, String pattern)
-      throws Exception {
+  private static SecurityFilterChain closedStatelessChain(HttpSecurity http, String pattern) {
     http.securityMatcher(pattern)
-        .csrf(csrf -> csrf.disable()) // sin cookie de sesión no hay nada que proteger de CSRF
+        // S4502: la cadena es sin estado y solo acepta Bearer o firma, sin cookie de sesión ni otra
+        // credencial ambiental que un sitio ajeno pueda reutilizar: no hay nada que proteger de
+        // CSRF.
+        .csrf(csrf -> csrf.disable()) // NOSONAR
         .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(a -> a.anyRequest().denyAll())
         .exceptionHandling(
@@ -101,8 +103,7 @@ class SecurityConfiguration {
       ResolveActorUseCase resolveActor,
       SessionProperties session,
       ClavarisProperties clavaris,
-      Clock clock)
-      throws Exception {
+      Clock clock) {
     // PKCE (S256) explícito: no se depende de un valor por defecto de la biblioteca (ADR-0020,
     // regla 10).
     DefaultOAuth2AuthorizationRequestResolver authorizationRequests =

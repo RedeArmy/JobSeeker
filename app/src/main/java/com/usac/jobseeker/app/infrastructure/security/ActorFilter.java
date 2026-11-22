@@ -45,24 +45,24 @@ final class ActorFilter extends OncePerRequestFilter {
     AccountId accountId;
     try {
       accountId = AccountId.fromSubject(authentication.getName());
-    } catch (IllegalArgumentException invalidSubject) {
+    } catch (IllegalArgumentException _) {
       ErrorEnvelope.write(
           request, response, 403, "IDENTITY_INVALID", "La identidad de la sesión no es válida.");
       return;
     }
     ActorResolution resolution = resolveActor.execute(new ResolveActorQuery(accountId));
-    if (resolution instanceof ActorResolution.Rejected rejected
-        && rejected.reason() == ActorResolution.Reason.NOT_PROVISIONED) {
+    if (resolution instanceof ActorResolution.Rejected(var reason)
+        && reason == ActorResolution.Reason.NOT_PROVISIONED) {
       // Sesión anterior al aprovisionamiento: se crea la cuenta de forma perezosa (BR-ACCT-09).
       provisionAccount.execute(new ProvisionAccountCommand(accountId));
       resolution = resolveActor.execute(new ResolveActorQuery(accountId));
     }
     switch (resolution) {
-      case ActorResolution.Resolved resolved -> {
-        request.setAttribute(CurrentActor.ATTRIBUTE, resolved.actor());
+      case ActorResolution.Resolved(var actor) -> {
+        request.setAttribute(CurrentActor.ATTRIBUTE, actor);
         chain.doFilter(request, response);
       }
-      case ActorResolution.Rejected rejected -> reject(request, response, rejected);
+      case ActorResolution.Rejected(var reason) -> reject(request, response, reason);
     }
   }
 
@@ -71,9 +71,9 @@ final class ActorFilter extends OncePerRequestFilter {
   }
 
   private static void reject(
-      HttpServletRequest request, HttpServletResponse response, ActorResolution.Rejected rejected)
+      HttpServletRequest request, HttpServletResponse response, ActorResolution.Reason reason)
       throws IOException {
-    switch (rejected.reason()) {
+    switch (reason) {
       case PENDING_DELETION ->
           ErrorEnvelope.write(
               request,
