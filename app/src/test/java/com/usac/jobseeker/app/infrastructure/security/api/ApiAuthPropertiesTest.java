@@ -72,7 +72,10 @@ class ApiAuthPropertiesTest {
   @ParameterizedTest
   @ValueSource(strings = {"*", "https://*.ejemplo.test", "https://app.*"})
   void aWildcardOriginIsRefusedBecauseCorsMustStayClosedOrExplicit(String origin) {
-    assertThatThrownBy(() -> with(List.of(), List.of(origin), Duration.ofSeconds(30)))
+    List<String> origins = List.of(origin);
+    Duration skew = Duration.ofSeconds(30);
+
+    assertThatThrownBy(() -> with(List.of(), origins, skew))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("comodines");
   }

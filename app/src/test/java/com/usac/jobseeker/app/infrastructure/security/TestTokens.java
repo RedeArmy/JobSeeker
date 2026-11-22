@@ -82,7 +82,6 @@ final class TestTokens {
   static final class Builder {
     private final TestTokens keys;
     private final String issuer;
-    private final Instant now;
     private String subject = UUID.randomUUID().toString();
     private List<String> audience = List.of(CLIENT_ID);
     private String scope = "openid profile";
@@ -98,7 +97,6 @@ final class TestTokens {
     private Builder(TestTokens keys, String issuer, Instant now) {
       this.keys = keys;
       this.issuer = issuer;
-      this.now = now;
       this.issuedAt = now;
       this.expiresAt = now.plusSeconds(300);
       this.signer = keys.key;
