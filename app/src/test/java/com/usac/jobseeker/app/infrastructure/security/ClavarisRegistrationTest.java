@@ -116,10 +116,10 @@ class ClavarisRegistrationTest {
     var repository = new LazyClavarisClientRegistrationRepository(unreachable, clock);
 
     assertThat(repository.findByRegistrationId("clavaris")).isNull();
-    long before = System.nanoTime();
+    // Que durante la espera no se vuelve a intentar lo comprueba, contando las peticiones y sin
+    // medir
+    // tiempo, LazyClavarisClientRegistrationRepositoryTest.
     assertThat(repository.findByRegistrationId("clavaris")).isNull();
-    // Durante la espera no se vuelve a intentar: la segunda llamada es inmediata.
-    assertThat(Duration.ofNanos(System.nanoTime() - before)).isLessThan(Duration.ofMillis(50));
   }
 
   @Test

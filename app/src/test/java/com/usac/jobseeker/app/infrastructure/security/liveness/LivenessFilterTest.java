@@ -125,4 +125,33 @@ class LivenessFilterTest {
     assertThat(session.isInvalid()).isFalse();
     assertThat(chain.getRequest()).isNotNull();
   }
+
+  @Test
+  void theFaviconIsNotCheckedEither() throws Exception {
+    request = new MockHttpServletRequest("GET", "/favicon.ico");
+    request.setSession(session);
+
+    run();
+
+    verify(coordinator, never()).verify(anyString());
+  }
+
+  @Test
+  void anAuthenticatedRequestWithoutASessionIsLeftAloneBecauseThereIsNothingToClose()
+      throws Exception {
+    request = new MockHttpServletRequest("GET", "/app/home");
+
+    run();
+
+    verify(coordinator, never()).verify(anyString());
+    assertThat(chain.getRequest()).isNotNull();
+  }
+
+  @Test
+  void closingASessionThatHadNoLinkDeletesNoState() throws Exception {
+    run();
+
+    assertThat(session.isInvalid()).isTrue();
+    verify(store, never()).delete(anyString());
+  }
 }

@@ -1,6 +1,7 @@
 package com.usac.jobseeker.app.infrastructure.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 import com.usac.jobseeker.app.infrastructure.security.liveness.ClavarisRefreshTokenClient;
 import com.usac.jobseeker.app.infrastructure.security.liveness.LivenessProperties;
@@ -109,13 +110,15 @@ class ClavarisRefreshTokenClientTest {
 
   @Test
   void aTimeoutIsTransientAndDoesNotHangTheCaller() {
-    issuer.tokenDelayMillis = 1500;
+    // El emisor tarda un minuto en contestar. Si el cliente no cortara por su propio tiempo de
+    // lectura (300 ms), la llamada colgaría hasta el plazo de la prueba; se detecta el cuelgue y no
+    // se mide un tiempo, que dependería de la carga de la máquina.
+    issuer.tokenDelayMillis = 60_000;
+    ClavarisRefreshTokenClient client = client(false, Duration.ofMillis(300));
 
-    long started = System.nanoTime();
-    Result result = client(false, Duration.ofMillis(300)).refresh("rt");
+    Result result = assertTimeoutPreemptively(Duration.ofSeconds(20), () -> client.refresh("rt"));
 
     assertThat(result).isEqualTo(new Result.Transient("red_o_tiempo_agotado"));
-    assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofMillis(1400));
   }
 
   @Test
@@ -154,5 +157,80 @@ class ClavarisRefreshTokenClientTest {
     issuer.close();
 
     assertThat(client(false, Duration.ofMillis(300)).revoke("rt")).isFalse();
+  }
+
+  @Test
+  void aResponseThatIsNotJsonKeepsTheCurrentTokenInsteadOfLosingTheSession() {
+    issuer.tokenBody = "<html>respuesta inesperada</html>";
+
+    assertThat(client(false, Duration.ofSeconds(5)).refresh("rt"))
+        .isEqualTo(new Result.Renewed(null));
+  }
+
+  @Test
+  void aSuccessorThatIsNotAStringIsIgnoredSoTheCurrentTokenIsKept() {
+    issuer.tokenBody = "{\"refresh_token\":12345}";
+
+    assertThat(client(false, Duration.ofSeconds(5)).refresh("rt"))
+        .isEqualTo(new Result.Renewed(null));
+  }
+
+  @Test
+  void aRejectionWithAnotherErrorOrAnUnreadableBodyIsNeverDefinitive() {
+    for (String body : new String[] {"{\"error\":\"invalid_request\"}", "no es json", ""}) {
+      issuer.tokenStatus = 400;
+      issuer.tokenBody = body;
+
+      assertThat(client(false, Duration.ofSeconds(5)).refresh("rt"))
+          .as(body)
+          .isEqualTo(new Result.Transient("http_400"));
+    }
+  }
+
+  @Test
+  void withoutAResolvedRegistrationTheRenewalIsTransientAndTheRevocationReportsFailure() {
+    var unconfigured =
+        new ClavarisProperties(
+            "",
+            "",
+            "",
+            List.of("openid"),
+            Duration.ofSeconds(2),
+            Duration.ofSeconds(2),
+            Duration.ofSeconds(10));
+    var client =
+        new ClavarisRefreshTokenClient(
+            new LazyClavarisClientRegistrationRepository(unconfigured, Clock.systemUTC()),
+            new LivenessProperties(
+                Duration.ofMinutes(10),
+                Duration.ofHours(2),
+                true,
+                false,
+                Duration.ofSeconds(45),
+                Duration.ofSeconds(30),
+                Duration.ofSeconds(10),
+                Duration.ofSeconds(2),
+                Duration.ofSeconds(5)));
+
+    assertThat(client.refresh("rt")).isEqualTo(new Result.Transient("registro_no_disponible"));
+    assertThat(client.revoke("rt")).isFalse();
+  }
+
+  @Test
+  void theRevocationEndpointIsDerivedFromTheTokenEndpointWhenTheIssuerDoesNotAdvertiseIt() {
+    // El descubrimiento es perezoso: basta fijar la bandera antes de la primera llamada.
+    issuer.advertiseRevocation = false;
+
+    boolean revoked = client(false, Duration.ofSeconds(5)).revoke("rt-derivado");
+
+    assertThat(revoked).isTrue();
+    assertThat(issuer.revokeRequests).hasSize(1);
+  }
+
+  @Test
+  void aRevocationThatTheIssuerRejectsIsReportedAsNotRevoked() {
+    issuer.revokeStatus = 500;
+
+    assertThat(client(false, Duration.ofSeconds(5)).revoke("rt")).isFalse();
   }
 }

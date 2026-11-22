@@ -87,4 +87,60 @@ class RefreshTokenCipherTest {
     assertThatThrownBy(() -> cipher("k1", "sin-separador")).hasMessageContaining("kid:clave");
     assertThatThrownBy(() -> cipher("a.b", "a.b:" + key(1))).hasMessageContaining("kid");
   }
+
+  @Test
+  void aStoredValueWithoutAKeyIdOrWithOneThatIsUnknownIsRejectedAsUndecipherable() {
+    RefreshTokenCipher cipher = cipher("k1", "k1:" + key(1));
+
+    for (String stored : new String[] {"sin-punto", ".solo-el-cuerpo", "k9.AAAA"}) {
+      assertThatThrownBy(() -> cipher.decrypt(stored, "a"))
+          .as(stored)
+          .isInstanceOf(RefreshTokenCipher.UndecipherableTokenException.class);
+    }
+  }
+
+  @Test
+  void aValueTooShortToHoldTheNonceAndTheTagIsRejectedRatherThanCrashing() {
+    RefreshTokenCipher cipher = cipher("k1", "k1:" + key(1));
+
+    // Hasta 12 bytes (solo el nonce) se rechaza por truncado; con 13 o más hay cuerpo pero la
+    // etiqueta
+    // de autenticación no cuadra, y se rechaza por alterado.
+    for (int length : new int[] {0, 11, 12}) {
+      String stored =
+          "k1." + Base64.getUrlEncoder().withoutPadding().encodeToString(new byte[length]);
+
+      assertThatThrownBy(() -> cipher.decrypt(stored, "a"))
+          .as("longitud %d", length)
+          .isInstanceOf(RefreshTokenCipher.UndecipherableTokenException.class)
+          .hasMessageContaining("truncado");
+    }
+    for (int length : new int[] {13, 27}) {
+      String stored =
+          "k1." + Base64.getUrlEncoder().withoutPadding().encodeToString(new byte[length]);
+
+      assertThatThrownBy(() -> cipher.decrypt(stored, "a"))
+          .as("longitud %d", length)
+          .isInstanceOf(RefreshTokenCipher.UndecipherableTokenException.class)
+          .hasMessageContaining("alterado");
+    }
+  }
+
+  @Test
+  void aTokenOfEveryLengthThatMattersRoundTripsIncludingTheEmptyOne() {
+    RefreshTokenCipher cipher = cipher("k1", "k1:" + key(1));
+
+    for (int length : new int[] {0, 1, 15, 16, 17, 255, 4096}) {
+      String token = "x".repeat(length);
+
+      assertThat(cipher.decrypt(cipher.encrypt(token, "enlace"), "enlace")).isEqualTo(token);
+    }
+  }
+
+  @Test
+  void theKeyIdIsPartOfTheStoredValueAndMustBeOneOfTheConfiguredKeys() {
+    assertThat(cipher("k7", "k7:" + key(7)).encrypt("t", "a")).startsWith("k7.");
+    assertThatThrownBy(() -> cipher("k1", "k1:" + key(1) + ",k2:" + key(2)).encrypt(null, "a"))
+        .isInstanceOf(NullPointerException.class);
+  }
 }

@@ -61,6 +61,7 @@ class RefreshTokenVaultTest {
         clientWith("el-refresh-token"), null, request, new MockHttpServletResponse());
 
     verify(store).begin(anyString(), any());
+    verify(store, never()).delete(anyString());
     MockHttpSession session = (MockHttpSession) request.getSession();
     assertThat(session.getAttributeNames().asIterator())
         .toIterable()
@@ -153,5 +154,56 @@ class RefreshTokenVaultTest {
         .logout(new MockHttpServletRequest(), new MockHttpServletResponse(), null);
 
     verify(clavaris, never()).revoke(anyString());
+  }
+
+  @Test
+  void removingTheClientDeletesTheStateAndForgetsTheLinkOfTheSession() {
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    request.getSession().setAttribute(VaultingAuthorizedClientRepository.LINK_ATTRIBUTE, "enlace");
+
+    vault.removeAuthorizedClient("clavaris", null, request, new MockHttpServletResponse());
+
+    verify(store).delete("enlace");
+    assertThat(request.getSession().getAttribute(VaultingAuthorizedClientRepository.LINK_ATTRIBUTE))
+        .isNull();
+  }
+
+  @Test
+  void removingWhenThereIsNoSessionOrNoLinkDoesNothing() {
+    vault.removeAuthorizedClient(
+        "clavaris", null, new MockHttpServletRequest(), new MockHttpServletResponse());
+    MockHttpServletRequest withSessionButNoLink = new MockHttpServletRequest();
+    withSessionButNoLink.getSession();
+    vault.removeAuthorizedClient(
+        "clavaris", null, withSessionButNoLink, new MockHttpServletResponse());
+
+    verify(store, never()).delete(anyString());
+  }
+
+  @Test
+  void logoutWithAStateThatIsGoneStillCleansUpAndNeverCallsClavaris() {
+    when(store.find("enlace")).thenReturn(Optional.empty());
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    request.getSession().setAttribute(VaultingAuthorizedClientRepository.LINK_ATTRIBUTE, "enlace");
+
+    new RevokingLogoutHandler(store, clavaris).logout(request, new MockHttpServletResponse(), null);
+
+    verify(clavaris, never()).revoke(anyString());
+    verify(store).delete("enlace");
+  }
+
+  @Test
+  void logoutWithATokenThatCannotBeDecryptedStillCleansUpAndNeverCallsClavaris() {
+    LivenessState state = new LivenessState("ilegible", Instant.now(), Instant.EPOCH);
+    when(store.find("enlace")).thenReturn(Optional.of(state));
+    when(store.refreshTokenOf("enlace", state))
+        .thenThrow(new RefreshTokenCipher.UndecipherableTokenException("clave retirada"));
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    request.getSession().setAttribute(VaultingAuthorizedClientRepository.LINK_ATTRIBUTE, "enlace");
+
+    new RevokingLogoutHandler(store, clavaris).logout(request, new MockHttpServletResponse(), null);
+
+    verify(clavaris, never()).revoke(anyString());
+    verify(store).delete("enlace");
   }
 }
