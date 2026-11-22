@@ -3,8 +3,8 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | ✅ Aprobado — 18-nov-2026, por el responsable del proyecto, tras la validación completa descrita al final de este documento |
-| **Versión** | 1.1 — ajustado el 18-nov-2026 tras la validación completa |
+| **Estado** | ✅ Aprobado — 18-nov-2026 (ARCH-01 a ARCH-10), por el responsable del proyecto, tras la validación completa descrita al final de este documento. **Ampliación aprobada el 22-nov-2026** (ARCH-11 a ARCH-14), tal como está escrita |
+| **Versión** | 1.2 — ampliado el 22-nov-2026 con ARCH-11 a ARCH-14; 1.1 — ajustado el 18-nov-2026 tras la validación completa |
 | **Fecha** | Noviembre 2026 |
 | **Documento relacionado** | las reglas del proyecto §7, `coding-standards.md` §2, `definition-of-done.md`, `system-design-document.md` §8 (riesgo de erosión hexagonal), ADR-0001 |
 
