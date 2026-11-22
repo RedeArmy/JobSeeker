@@ -80,8 +80,9 @@ class RefreshTokenCipherTest {
 
   @Test
   void aMisconfigurationFailsWithAMessageThatSaysWhatIsWrong() {
-    assertThatThrownBy(() -> cipher("k1", "k1:" + Base64.getEncoder().encodeToString(new byte[16])))
-        .hasMessageContaining("32 bytes");
+    String shortKey = "k1:" + Base64.getEncoder().encodeToString(new byte[16]);
+
+    assertThatThrownBy(() -> cipher("k1", shortKey)).hasMessageContaining("32 bytes");
     assertThatThrownBy(() -> cipher("k1", "k1:no es base64!!")).hasMessageContaining("base64");
     assertThatThrownBy(() -> cipher("k9", "k1:" + key(1))).hasMessageContaining("ACTIVE_KID");
     assertThatThrownBy(() -> cipher("k1", "sin-separador")).hasMessageContaining("kid:clave");
@@ -140,7 +141,8 @@ class RefreshTokenCipherTest {
   @Test
   void theKeyIdIsPartOfTheStoredValueAndMustBeOneOfTheConfiguredKeys() {
     assertThat(cipher("k7", "k7:" + key(7)).encrypt("t", "a")).startsWith("k7.");
-    assertThatThrownBy(() -> cipher("k1", "k1:" + key(1) + ",k2:" + key(2)).encrypt(null, "a"))
-        .isInstanceOf(NullPointerException.class);
+
+    RefreshTokenCipher twoKeys = cipher("k1", "k1:" + key(1) + ",k2:" + key(2));
+    assertThatThrownBy(() -> twoKeys.encrypt(null, "a")).isInstanceOf(NullPointerException.class);
   }
 }

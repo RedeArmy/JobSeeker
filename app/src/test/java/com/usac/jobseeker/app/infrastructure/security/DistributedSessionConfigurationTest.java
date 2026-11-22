@@ -58,8 +58,12 @@ class DistributedSessionConfigurationTest {
   void inProductionTheCookieIsSecureAndKeepsItsHostPrefixName() {
     String cookie = setCookieFor(configuration.cookieSerializer(session("__Host-SESSION", true)));
 
-    assertThat(cookie).startsWith("__Host-SESSION=").contains("Secure").contains("Path=/");
-    assertThat(cookie).as("el prefijo __Host- prohíbe Domain").doesNotContain("Domain");
+    // El prefijo __Host- exige Secure y Path=/ y prohíbe Domain.
+    assertThat(cookie)
+        .startsWith("__Host-SESSION=")
+        .contains("Secure")
+        .contains("Path=/")
+        .doesNotContain("Domain");
   }
 
   @Test

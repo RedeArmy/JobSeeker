@@ -35,7 +35,9 @@ class EncryptionPropertiesTest {
   @ParameterizedTest
   @ValueSource(strings = {"sin-separador", ":sin-id", "k1:", "k1:ok,roto"})
   void aMalformedEntryFailsWithAMessageThatNamesTheFormat(String keys) {
-    assertThatThrownBy(() -> new EncryptionProperties("k1", keys).parsedKeys())
+    EncryptionProperties properties = new EncryptionProperties("k1", keys);
+
+    assertThatThrownBy(properties::parsedKeys)
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("kid:clave");
   }

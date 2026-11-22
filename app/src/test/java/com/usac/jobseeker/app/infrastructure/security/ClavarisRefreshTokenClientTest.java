@@ -13,6 +13,8 @@ import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * La clasificación de la renovación contra un emisor falso (ADR-0020, regla 2 y 12): solo
@@ -71,9 +73,16 @@ class ClavarisRefreshTokenClientTest {
         .contains("refresh_token=rt-viejo");
   }
 
-  @Test
-  void aResponseWithoutASuccessorKeepsTheCurrentToken() {
-    issuer.tokenBody = "{\"access_token\":\"a\"}";
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "{\"access_token\":\"a\"}", // sin sucesor
+        "<html>respuesta inesperada</html>", // no es JSON
+        "{\"refresh_token\":12345}" // el sucesor no es una cadena
+      })
+  void aSuccessResponseWithoutAUsableSuccessorKeepsTheCurrentTokenInsteadOfLosingTheSession(
+      String body) {
+    issuer.tokenBody = body;
 
     assertThat(client(false, Duration.ofSeconds(5)).refresh("rt"))
         .isEqualTo(new Result.Renewed(null));
@@ -157,22 +166,6 @@ class ClavarisRefreshTokenClientTest {
     issuer.close();
 
     assertThat(client(false, Duration.ofMillis(300)).revoke("rt")).isFalse();
-  }
-
-  @Test
-  void aResponseThatIsNotJsonKeepsTheCurrentTokenInsteadOfLosingTheSession() {
-    issuer.tokenBody = "<html>respuesta inesperada</html>";
-
-    assertThat(client(false, Duration.ofSeconds(5)).refresh("rt"))
-        .isEqualTo(new Result.Renewed(null));
-  }
-
-  @Test
-  void aSuccessorThatIsNotAStringIsIgnoredSoTheCurrentTokenIsKept() {
-    issuer.tokenBody = "{\"refresh_token\":12345}";
-
-    assertThat(client(false, Duration.ofSeconds(5)).refresh("rt"))
-        .isEqualTo(new Result.Renewed(null));
   }
 
   @Test

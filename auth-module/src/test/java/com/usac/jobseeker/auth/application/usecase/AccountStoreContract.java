@@ -128,9 +128,10 @@ public abstract class AccountStoreContract {
   void anAccountWithoutAnyCapabilityCanNotBeCreated() {
     // BR-ACCT-01: toda cuenta tiene al menos una capacidad. Cada tecnología lo rechaza a su manera.
     AccountId id = newId();
+    AccountProvisioningPort port = provisioning();
+    Set<Capability> none = EnumSet.noneOf(Capability.class);
 
-    assertThatThrownBy(() -> provisioning().insertIfAbsent(id, EnumSet.noneOf(Capability.class)))
-        .isInstanceOf(RuntimeException.class);
+    assertThatThrownBy(() -> port.insertIfAbsent(id, none)).isInstanceOf(RuntimeException.class);
     assertThat(lookup().findById(id)).isEmpty();
   }
 

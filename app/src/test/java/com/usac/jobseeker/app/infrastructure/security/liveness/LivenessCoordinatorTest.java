@@ -41,7 +41,7 @@ class LivenessCoordinatorTest {
   private static final Duration INTERVAL = Duration.ofMinutes(10);
   private static final Duration MARGIN = Duration.ofHours(2);
 
-  private final StringRedisTemplate redis = RedisForTests.template();
+  private final StringRedisTemplate redis = SharedRedis.template();
   private final RefreshTokenCipher cipher =
       RefreshTokenCipher.from(
           new EncryptionProperties("k1", "k1:" + Base64.getEncoder().encodeToString(new byte[32])));

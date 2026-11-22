@@ -8,7 +8,6 @@ import static org.mockito.Mockito.mock;
 import com.usac.jobseeker.app.infrastructure.security.ClavarisProperties;
 import com.usac.jobseeker.app.infrastructure.security.SessionProperties;
 import com.usac.jobseeker.app.infrastructure.security.liveness.LivenessCoordinator.Verdict;
-import com.usac.jobseeker.app.infrastructure.security.liveness.RefreshTokenClient.Result;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
@@ -40,10 +39,10 @@ class LivenessConfigurationTest {
 
   @Test
   void withClavarisConfiguredAndNoEncryptionKeyTheApplicationRefusesToStartAndSaysWhatIsMissing() {
-    assertThatThrownBy(
-            () ->
-                configuration.refreshTokenCipher(
-                    new EncryptionProperties(null, null), clavaris("http://clavaris/o/x")))
+    EncryptionProperties noKeys = new EncryptionProperties(null, null);
+    ClavarisProperties configured = clavaris("http://clavaris/o/x");
+
+    assertThatThrownBy(() -> configuration.refreshTokenCipher(noKeys, configured))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("TOKEN_ENCRYPTION_KEYS");
   }
@@ -73,10 +72,10 @@ class LivenessConfigurationTest {
 
   @Test
   void aMalformedKeyStopsTheStartupInsteadOfFailingOnTheFirstLogin() {
-    assertThatThrownBy(
-            () ->
-                configuration.refreshTokenCipher(
-                    new EncryptionProperties("k1", "k1:no-es-base64!!"), clavaris("")))
+    EncryptionProperties malformed = new EncryptionProperties("k1", "k1:no-es-base64!!");
+    ClavarisProperties unconfigured = clavaris("");
+
+    assertThatThrownBy(() -> configuration.refreshTokenCipher(malformed, unconfigured))
         .isInstanceOf(IllegalStateException.class);
   }
 
@@ -117,7 +116,7 @@ class LivenessConfigurationTest {
         };
     LivenessStore store =
         new LivenessStore(
-            RedisForTests.template(),
+            SharedRedis.template(),
             RefreshTokenCipher.from(new EncryptionProperties("k1", "k1:" + KEY)),
             Duration.ofHours(8));
     RefreshTokenClient clavarisDown = new FakeClient();

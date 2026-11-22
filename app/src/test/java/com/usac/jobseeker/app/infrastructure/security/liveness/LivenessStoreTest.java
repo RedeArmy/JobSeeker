@@ -22,7 +22,7 @@ class LivenessStoreTest {
   private static final Instant NOW = Instant.parse("2026-11-22T12:00:00Z");
   private static final Duration TTL = Duration.ofSeconds(100);
 
-  private final StringRedisTemplate redis = RedisForTests.template();
+  private final StringRedisTemplate redis = SharedRedis.template();
   private final RefreshTokenCipher cipher =
       RefreshTokenCipher.from(
           new EncryptionProperties("k1", "k1:" + Base64.getEncoder().encodeToString(new byte[32])));

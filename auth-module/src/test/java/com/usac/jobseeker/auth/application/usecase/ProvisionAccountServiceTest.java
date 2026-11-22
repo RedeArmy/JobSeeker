@@ -77,8 +77,10 @@ class ProvisionAccountServiceTest {
           }
         };
 
-    assertThatThrownBy(
-            () -> new ProvisionAccountService(vanishing).execute(new ProvisionAccountCommand(id)))
+    ProvisionAccountService service = new ProvisionAccountService(vanishing);
+    ProvisionAccountCommand command = new ProvisionAccountCommand(id);
+
+    assertThatThrownBy(() -> service.execute(command))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining(id.toString());
   }

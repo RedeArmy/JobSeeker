@@ -54,9 +54,9 @@ class ActorTest {
 
   @Test
   void theCapabilitiesOfAnActorCannotBeModifiedFromOutside() {
-    Actor actor = new Actor(ID, Set.of(Capability.CANDIDATE));
+    Set<Capability> exposed = new Actor(ID, Set.of(Capability.CANDIDATE)).capabilities();
 
-    assertThatThrownBy(() -> actor.capabilities().add(Capability.RECRUITER))
+    assertThatThrownBy(() -> exposed.add(Capability.RECRUITER))
         .isInstanceOf(UnsupportedOperationException.class);
   }
 
