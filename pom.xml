@@ -48,12 +48,16 @@
         <!-- HTMX es código de terceros incluido tal cual (huella fijada en VendoredAssetsTest): analizarlo
              solo generaría hallazgos que no podemos corregir. -->
         <sonar.exclusions>**/static/js/htmx.min.js</sonar.exclusions>
-        <!-- La regla S1135 busca la palabra «todo» sin distinguir mayúsculas y en un código comentado en
-             español marca como pendiente cualquier «todo» (rechaza todo, escanea todo…). Se desactiva y
-             la reemplaza scripts/check-todo-markers.sh, que sí exige dueño y razón (coding-standards.md §5). -->
-        <sonar.issue.ignore.multicriteria>todoEnEspanol</sonar.issue.ignore.multicriteria>
-        <sonar.issue.ignore.multicriteria.todoEnEspanol.ruleKey>java:S1135</sonar.issue.ignore.multicriteria.todoEnEspanol.ruleKey>
-        <sonar.issue.ignore.multicriteria.todoEnEspanol.resourceKey>**/*.java</sonar.issue.ignore.multicriteria.todoEnEspanol.resourceKey>
+        <!-- La regla S1135 busca su marcador sin distinguir mayúsculas y, en comentarios en español, lo
+             confunde con el cuantificador de totalidad, que se escribe igual. Se desactiva para Java y
+             XML y la reemplaza scripts/check-work-markers.sh, que sí exige dueño y razón
+             (coding-standards.md §5). Ojo: este mismo comentario no puede usar esa palabra, porque
+             el análisis de XML también la marcaba. -->
+        <sonar.issue.ignore.multicriteria>pendienteJava,pendienteXml</sonar.issue.ignore.multicriteria>
+        <sonar.issue.ignore.multicriteria.pendienteJava.ruleKey>java:S1135</sonar.issue.ignore.multicriteria.pendienteJava.ruleKey>
+        <sonar.issue.ignore.multicriteria.pendienteJava.resourceKey>**/*.java</sonar.issue.ignore.multicriteria.pendienteJava.resourceKey>
+        <sonar.issue.ignore.multicriteria.pendienteXml.ruleKey>xml:S1135</sonar.issue.ignore.multicriteria.pendienteXml.ruleKey>
+        <sonar.issue.ignore.multicriteria.pendienteXml.resourceKey>**/*.xml</sonar.issue.ignore.multicriteria.pendienteXml.resourceKey>
         <sonar.cpd.exclusions>**/static/js/htmx.min.js</sonar.cpd.exclusions>
 
         <!-- Vacío por defecto: JaCoCo lo rellena con su agente y Surefire lo concatena en su argLine. -->
