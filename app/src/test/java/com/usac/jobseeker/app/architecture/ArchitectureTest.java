@@ -6,7 +6,7 @@ import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
 
 /**
- * ADR-0015: las reglas ARCH-01..10 sobre el código real, en cada build. Una violación rompe `mvn
+ * ADR-0015: las reglas ARCH-01..14 sobre el código real, en cada build. Una violación rompe `mvn
  * verify`; no hay modo advertencia. Mientras los módulos estén vacíos pasan sin evaluar clases: que
  * además detectan violaciones lo demuestra {@link ArchitectureRulesNegativeTest}.
  */
@@ -27,4 +27,8 @@ class ArchitectureTest {
   @ArchTest static final ArchRule ARCH_08 = ArchitectureRules.arch08(ROOT);
   @ArchTest static final ArchRule ARCH_09 = ArchitectureRules.arch09(ROOT);
   @ArchTest static final ArchRule ARCH_10 = ArchitectureRules.arch10(ROOT);
+  @ArchTest static final ArchRule ARCH_11 = ArchitectureRules.arch11(ROOT);
+  @ArchTest static final ArchRule ARCH_12 = ArchitectureRules.arch12(ROOT);
+  @ArchTest static final ArchRule ARCH_13 = ArchitectureRules.arch13(ROOT);
+  @ArchTest static final ArchRule ARCH_14 = ArchitectureRules.arch14(ROOT);
 }

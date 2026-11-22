@@ -12,7 +12,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 /**
- * Prueba que cada regla de ARCH-01..10 detecta de verdad una violación: con los módulos vacíos las
+ * Prueba que cada regla de ARCH-01..14 detecta de verdad una violación: con los módulos vacíos las
  * reglas reales pasan sin evaluar nada, así que sin esta prueba una regla rota no se notaría. Cada
  * caso apunta a un paquete de `com.usac.archfixture` (fuera de `com.usac.jobseeker`, para que
  * ArchitectureTest no vea estas clases) que viola exactamente esa regla.
@@ -35,7 +35,11 @@ class ArchitectureRulesNegativeTest {
     "ARCH-08, arch08",
     "ARCH-08, arch08b",
     "ARCH-09, arch09",
-    "ARCH-10, arch10"
+    "ARCH-10, arch10",
+    "ARCH-11, arch11",
+    "ARCH-12, arch12",
+    "ARCH-13, arch13",
+    "ARCH-14, arch14"
   })
   void eachRuleRejectsItsViolation(String ruleId, String fixture) {
     String root = FIXTURES + fixture;

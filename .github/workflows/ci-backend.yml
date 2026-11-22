@@ -1,5 +1,5 @@
 # CI del backend: compila los módulos y ejecuta `mvn verify`, que incluye formato (Spotless), análisis
-# estático (PMD), las pruebas unitarias y de integración, las reglas de arquitectura ARCH-01..10
+# estático (PMD), las pruebas unitarias y de integración, las reglas de arquitectura ARCH-01..14
 # (ADR-0015) y el informe de cobertura (JaCoCo). Una violación de cualquiera rompe el build.
 name: ci-backend
 

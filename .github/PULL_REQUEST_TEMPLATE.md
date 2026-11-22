@@ -13,7 +13,7 @@
 - [ ] 2. New or changed business logic has >= 80% coverage
 - [ ] 3. I reviewed my own diff end to end
 - [ ] 4. Linter / formatter report no errors or manual exceptions
-- [ ] 5. Architecture tests ARCH-01..10 pass
+- [ ] 5. Architecture tests ARCH-01..14 pass
 - [ ] 6. Schema changes are Flyway migrations: timestamp version, forward-only, expand/contract if incompatible (ADR-0027)
 - [ ] 7. Comments explain why, not what, with the BR-XXX id when it applies (Spanish, coding-standards.md §5)
 - [ ] 8. No commented-out code; no TODO without owner and reason
