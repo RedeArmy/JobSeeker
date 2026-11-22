@@ -40,6 +40,11 @@
         <pmd-plugin.version>3.28.0</pmd-plugin.version>
         <pmd.version>7.29.0</pmd.version>
 
+        <!-- Pruebas de mutación (perfil `mutation`, fuera del build normal). Versiones con más de dos
+             semanas de publicadas, como el resto de las herramientas. -->
+        <pitest-maven.version>1.30.2</pitest-maven.version>
+        <pitest-junit5-plugin.version>1.2.3</pitest-junit5-plugin.version>
+
         <!-- SonarCloud: se ejecuta desde el CI (job «SonarCloud analysis»); el token llega como secreto. -->
         <sonar-maven-plugin.version>5.9.0.7382</sonar-maven-plugin.version>
         <sonar.host.url>https://sonarcloud.io</sonar.host.url>
@@ -238,4 +243,53 @@
         </plugins>
     </build>
 
+
+    <profiles>
+        <!-- Mide si las pruebas detectan errores y no solo si pasan por el código: PIT cambia el código de
+             producción (invierte una condición, quita una llamada, altera un valor devuelto) y comprueba que
+             alguna prueba falle. Un mutante que sobrevive es una prueba que falta.
+             Uso:  mvn -Pmutation -pl common,auth-module test-compile org.pitest:pitest-maven:mutationCoverage
+             Informe: <módulo>/target/pit-reports/index.html. Es lento, por eso no corre con `mvn verify`. -->
+        <profile>
+            <id>mutation</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.pitest</groupId>
+                        <artifactId>pitest-maven</artifactId>
+                        <version>${pitest-maven.version}</version>
+                        <dependencies>
+                            <dependency>
+                                <groupId>org.pitest</groupId>
+                                <artifactId>pitest-junit5-plugin</artifactId>
+                                <version>${pitest-junit5-plugin.version}</version>
+                            </dependency>
+                        </dependencies>
+                        <configuration>
+                            <targetClasses>
+                                <param>com.usac.jobseeker.*</param>
+                            </targetClasses>
+                            <!-- STRONGER añade, entre otros, quitar condiciones y valores devueltos: sobreviven más
+                                 mutantes y por eso detecta pruebas que solo parecen fuertes. -->
+                            <mutators>
+                                <mutator>STRONGER</mutator>
+                            </mutators>
+                            <!-- Las pruebas de adaptadores arrancan un contenedor: sin esto PIT las cuenta como
+                                 «tiempo agotado» en vez de evaluarlas. -->
+                            <timeoutConstant>120000</timeoutConstant>
+                            <threads>4</threads>
+                            <timestampedReports>false</timestampedReports>
+                            <outputFormats>
+                                <outputFormat>XML</outputFormat>
+                                <outputFormat>HTML</outputFormat>
+                            </outputFormats>
+                            <failWhenNoMutations>false</failWhenNoMutations>
+                            <!-- JaCoCo y PIT inyectan su propio agente: se quita el de JaCoCo de la JVM de PIT. -->
+                            <argLine>--enable-native-access=ALL-UNNAMED</argLine>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

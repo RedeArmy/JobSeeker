@@ -13,9 +13,15 @@ public record AccountId(UUID value) {
     Objects.requireNonNull(value, "value");
   }
 
-  /** Construye el identificador desde el `sub` del token; falla si no es un UUID. */
+  /** Construye el identificador desde el `sub` del token; falla si no es un UUID canónico. */
   public static AccountId fromSubject(String subject) {
-    return new AccountId(UUID.fromString(Objects.requireNonNull(subject, "subject")));
+    UUID parsed = UUID.fromString(Objects.requireNonNull(subject, "subject"));
+    // `UUID.fromString` es permisivo y acepta `1-1-1-1-1`: una identidad no puede depender de ese
+    // relleno, así que solo vale la forma canónica de 36 caracteres que emite Clavaris.
+    if (!parsed.toString().equalsIgnoreCase(subject)) {
+      throw new IllegalArgumentException("el sub no es un UUID canónico");
+    }
+    return new AccountId(parsed);
   }
 
   @Override

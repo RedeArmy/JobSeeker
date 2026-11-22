@@ -2,6 +2,7 @@ package com.usac.jobseeker.app.architecture;
 
 import static com.tngtech.archunit.base.DescribedPredicate.not;
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage;
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.simpleNameEndingWith;
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.simpleNameStartingWith;
 import static com.tngtech.archunit.core.domain.properties.CanBeAnnotated.Predicates.annotatedWith;
 import static com.tngtech.archunit.core.domain.properties.CanBeAnnotated.Predicates.metaAnnotatedWith;
@@ -9,6 +10,7 @@ import static com.tngtech.archunit.lang.SimpleConditionEvent.violated;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noFields;
 
 import com.tngtech.archunit.core.domain.Dependency;
 import com.tngtech.archunit.core.domain.JavaClass;
@@ -21,7 +23,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Reglas ARCH-01..10 del ADR-0015, parametrizadas por el paquete raíz para poder aplicarlas al
+ * Reglas ARCH-01..14 del ADR-0015, parametrizadas por el paquete raíz para poder aplicarlas al
  * código real y a clases de ejemplo que las violan a propósito (sin eso, con los módulos vacíos
  * pasarían sin demostrar que detectan algo).
  *
@@ -49,6 +51,10 @@ final class ArchitectureRules {
     rules.put("ARCH-08", arch08(root));
     rules.put("ARCH-09", arch09(root));
     rules.put("ARCH-10", arch10(root));
+    rules.put("ARCH-11", arch11(root));
+    rules.put("ARCH-12", arch12(root));
+    rules.put("ARCH-13", arch13(root));
+    rules.put("ARCH-14", arch14(root));
     return rules;
   }
 
@@ -208,6 +214,70 @@ final class ArchitectureRules {
         .should()
         .dependOnClassesThat(simpleNameStartingWith("TransactionSynchronization"))
         .as("ARCH-10: nada de TransactionSynchronization* en application ni domain")
+        .allowEmptyShould(true);
+  }
+
+  /**
+   * ARCH-11: `common` solo depende del JDK. Es lo que todos los módulos comparten: si arrastrara un
+   * framework, cambiarlo obligaría a tocar todo el sistema.
+   */
+  static ArchRule arch11(String root) {
+    return noClasses()
+        .that()
+        .resideInAPackage(root + ".common..")
+        .should()
+        .dependOnClassesThat()
+        .resideOutsideOfPackages(root + ".common..", "java..")
+        .as("ARCH-11: common solo depende del JDK")
+        .allowEmptyShould(true);
+  }
+
+  /**
+   * ARCH-12: los puertos y los casos de uso son interfaces. Es lo que permite sustituir una
+   * tecnología (o un fake en las pruebas) sin tocar a quien los usa.
+   */
+  static ArchRule arch12(String root) {
+    return classes()
+        .that(
+            resideInAPackage(root + "..application.usecase..")
+                .and(simpleNameEndingWith("Port").or(simpleNameEndingWith("UseCase")))
+                .as("puertos y casos de uso"))
+        .should()
+        .beInterfaces()
+        .as("ARCH-12: los puertos (*Port) y los casos de uso (*UseCase) son interfaces")
+        .allowEmptyShould(true);
+  }
+
+  /**
+   * ARCH-13: nada se inyecta por campo; todo por constructor, para que se pueda construir en una
+   * prueba.
+   */
+  static ArchRule arch13(String root) {
+    return noFields()
+        .that()
+        .areDeclaredInClassesThat()
+        .resideInAPackage(root + "..")
+        .should()
+        .beAnnotatedWith("org.springframework.beans.factory.annotation.Autowired")
+        .orShould()
+        .beAnnotatedWith("jakarta.inject.Inject")
+        .as("ARCH-13: sin inyección por campo, solo por constructor")
+        .allowEmptyShould(true);
+  }
+
+  /**
+   * ARCH-14: un adaptador de entrada (web, webhooks) habla con los casos de uso y nunca con un
+   * adaptador de salida (persistencia, IA): saltarse el caso de uso se llevaría las reglas de
+   * negocio.
+   */
+  static ArchRule arch14(String root) {
+    return noClasses()
+        .that()
+        .resideInAPackage(root + "..infrastructure.adapter.in..")
+        .should()
+        .dependOnClassesThat()
+        .resideInAPackage(root + "..infrastructure.adapter.out..")
+        .as("ARCH-14: los adaptadores de entrada no dependen de los de salida")
         .allowEmptyShould(true);
   }
 

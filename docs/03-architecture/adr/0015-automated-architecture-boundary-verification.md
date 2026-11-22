@@ -3,8 +3,8 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | ✅ Aprobado — 18-nov-2026, por el responsable del proyecto, tras la validación completa descrita al final de este documento |
-| **Versión** | 1.1 — ajustado el 18-nov-2026 tras la validación completa |
+| **Estado** | ✅ Aprobado — 18-nov-2026 (ARCH-01 a ARCH-10), por el responsable del proyecto, tras la validación completa descrita al final de este documento. **Ampliación aprobada el 22-nov-2026** (ARCH-11 a ARCH-14), tal como está escrita |
+| **Versión** | 1.2 — ampliado el 22-nov-2026 con ARCH-11 a ARCH-14; 1.1 — ajustado el 18-nov-2026 tras la validación completa |
 | **Fecha** | Noviembre 2026 |
 | **Documento relacionado** | las reglas del proyecto §7, `coding-standards.md` §2, `definition-of-done.md`, `system-design-document.md` §8 (riesgo de erosión hexagonal), ADR-0001 |
 
@@ -31,6 +31,10 @@ El riesgo "erosión de la arquitectura bajo presión de tiempo con un solo desar
 | ARCH-08 | Controladores (`@Controller`/`@RestController`) solo en `..infrastructure.adapter.in.web..` |
 | ARCH-09 | Todo `@Scheduled` reside en `..infrastructure..`, nunca en `application`/`domain` |
 | ARCH-10 | Ninguna clase de `..application..` ni `..domain..` usa `TransactionSynchronization*` ni `TransactionSynchronizationManager`: ningún efecto con escritura en base de datos corre en `afterCommit` (ADR-0016; lección de TD-SEC-102 de Clavaris) |
+| ARCH-11 | `common` solo depende del JDK (`java..`): es lo que todos los módulos comparten y no puede arrastrar un framework (ampliación del 22-nov-2026) |
+| ARCH-12 | Los puertos (`*Port`) y los casos de uso (`*UseCase`) de `..application.usecase..` son interfaces: permiten sustituir una tecnología, o un *fake* en las pruebas, sin tocar a quien los usa (ampliación del 22-nov-2026) |
+| ARCH-13 | Ningún campo se inyecta con `@Autowired` ni `@Inject`: todo por constructor, para poder construir una clase en una prueba sin Spring (ampliación del 22-nov-2026) |
+| ARCH-14 | Un adaptador de entrada (`..adapter.in..`) no depende de uno de salida (`..adapter.out..`): hablan con los casos de uso, no los saltan (ampliación del 22-nov-2026) |
 
 3. **Mientras un módulo no tenga clases**, las reglas se declaran con `allowEmptyShould(true)`: desde ArchUnit 1.3 una coincidencia vacía falla la prueba, y el esqueleto actual está vacío (patrón ya usado en `../Clavaris`).
 4. Toda excepción a una regla requiere un comentario con ID `ARCH-xx`, motivo y fecha de revisión (mismo espíritu que el estándar de comentarios, las reglas del proyecto §8) y revisión explícita en el PR.
@@ -53,6 +57,7 @@ El riesgo "erosión de la arquitectura bajo presión de tiempo con un solo desar
 - Refuerza NFR-MAINT (nuevo `NFR-MAINT-04`, ver revisión de arquitectura).
 
 **Negativas / trade-offs aceptados**
+- **Ampliación del 22-nov-2026 (ARCH-11 a ARCH-14).** Nacen de revisar qué haría barato cambiar de tecnología; cada una tiene su fixture que la viola y se prueba con las mismas pruebas negativas, y el ejemplo conforme las cumple todas. Ninguna exigió cambiar código existente.
 - Las pruebas de arquitectura tardan unos segundos por build y requieren mantenimiento al renombrar paquetes.
 - Un falso positivo puede bloquear temporalmente un PR; se resuelve con ajuste de la regla, no con desactivarla.
 

@@ -4,10 +4,15 @@ import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Un Clavaris falso que solo sirve el documento de descubrimiento OIDC: basta para probar cómo
@@ -27,6 +32,19 @@ final class StubIssuer implements AutoCloseable {
   volatile String tokenBody = "{\"access_token\":\"a\",\"refresh_token\":\"rt-nuevo\"}";
   volatile long tokenDelayMillis;
   volatile boolean advertiseRevocation = true;
+  volatile int revokeStatus = 200;
+
+  /** Cuántas veces se pidió el documento de descubrimiento. */
+  final AtomicInteger discoveryRequests = new AtomicInteger();
+
+  /** Texto que el documento añade al final del emisor que anuncia (p. ej. barras). */
+  volatile String advertisedIssuerSuffix = "";
+
+  /** Claves que el documento de descubrimiento no debe traer, para probar las obligatorias. */
+  final Set<String> omittedFromDiscovery = new CopyOnWriteArraySet<>();
+
+  private static final tools.jackson.databind.json.JsonMapper JSON =
+      tools.jackson.databind.json.JsonMapper.builder().build();
 
   // Retrasa la respuesta sin dormir: espera un cierre que solo llega con `close()`, así un retraso
   // largo
@@ -46,25 +64,19 @@ final class StubIssuer implements AutoCloseable {
     server.createContext(
         "/o/test/.well-known/openid-configuration",
         exchange -> {
-          byte[] body =
-              ("{\"issuer\":\""
-                      + this.advertisedIssuer
-                      + "\",\"authorization_endpoint\":\""
-                      + issuer
-                      + "/oauth2/authorize\",\"token_endpoint\":\""
-                      + issuer
-                      + "/oauth2/token\",\"jwks_uri\":\""
-                      + issuer
-                      + "/oauth2/jwks\",\"userinfo_endpoint\":\""
-                      + issuer
-                      + "/userinfo\",\"end_session_endpoint\":\""
-                      + issuer
-                      + "/connect/logout\""
-                      + (advertiseRevocation
-                          ? ",\"revocation_endpoint\":\"" + issuer + "/oauth2/revoke\""
-                          : "")
-                      + "}")
-                  .getBytes(StandardCharsets.UTF_8);
+          discoveryRequests.incrementAndGet();
+          Map<String, String> document = new LinkedHashMap<>();
+          document.put("issuer", this.advertisedIssuer + advertisedIssuerSuffix);
+          document.put("authorization_endpoint", issuer + "/oauth2/authorize");
+          document.put("token_endpoint", issuer + "/oauth2/token");
+          document.put("jwks_uri", issuer + "/oauth2/jwks");
+          document.put("userinfo_endpoint", issuer + "/userinfo");
+          document.put("end_session_endpoint", issuer + "/connect/logout");
+          if (advertiseRevocation) {
+            document.put("revocation_endpoint", issuer + "/oauth2/revoke");
+          }
+          omittedFromDiscovery.forEach(document::remove);
+          byte[] body = JSON.writeValueAsString(document).getBytes(StandardCharsets.UTF_8);
           exchange.getResponseHeaders().add("Content-Type", "application/json");
           exchange.sendResponseHeaders(200, body.length);
           exchange.getResponseBody().write(body);
@@ -91,7 +103,7 @@ final class StubIssuer implements AutoCloseable {
         "/o/test/oauth2/revoke",
         exchange -> {
           revokeRequests.add(capture(exchange));
-          exchange.sendResponseHeaders(200, -1);
+          exchange.sendResponseHeaders(revokeStatus, -1);
           exchange.close();
         });
     server.start();

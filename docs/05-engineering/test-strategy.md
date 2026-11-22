@@ -44,7 +44,9 @@ flowchart TD
 | Mockito | Dobles de prueba para puertos de salida en pruebas unitarias de casos de uso |
 | Testcontainers | Levantar PostgreSQL (con `pgvector`) y Redis reales y efímeros para pruebas de integración de adaptadores |
 | Playwright | Automatización de flujos E2E contra Thymeleaf + HTMX renderizado |
-| JaCoCo (propuesto) | Medición de cobertura para verificar el umbral de NFR-MAINT-01 en CI — **pendiente de confirmación** como herramienta exacta |
+| JaCoCo | Medición de cobertura por módulo en cada `mvn verify`; SonarCloud la exige sobre el código nuevo (puerta de calidad del CI) |
+| ArchUnit | Reglas de arquitectura ARCH-01 a ARCH-14 (ADR-0015) en cada build, con una prueba negativa por regla |
+| PIT (perfil `mutation`) | Pruebas de mutación: mide si las pruebas detectan errores y no solo si pasan por el código (§5.3). No corre con `mvn verify` por lento |
 
 ## 5. Qué se prueba por capa (regla de la arquitectura hexagonal)
 
@@ -53,6 +55,37 @@ flowchart TD
 - **`infrastructure/adapter/out/persistence/`**: pruebas de integración con Testcontainers, verificando que el mapeo JPA y las queries realmente cumplen el contrato del puerto.
 - **`infrastructure/adapter/out/ai/`**: pruebas de integración contra una instancia real o simulada de Ollama (a definir: instancia real en CI vs. mock de contrato — ver Preguntas abiertas).
 - **`infrastructure/adapter/in/web/`**: pruebas de integración de controladores (`@WebMvcTest` o equivalente) verificando contratos de `api-contract-overview.md` (formato de error, códigos de estado).
+
+### 5.1 Principios que sigue la suite
+
+Los criterios de *Clean Code* (cap. 9) y *Clean Architecture* (cap. 28) aplicados a este repositorio:
+
+- **Rápidas, independientes, repetibles, autoverificables y oportunas (F.I.R.S.T.).** El dominio, los casos de uso, los filtros y los manejadores se prueban sin Spring ni base de datos. El tiempo entra por un `Clock` inyectado y el azar por semillas fijas, de modo que ninguna prueba depende de la hora ni del orden. Las que necesitan Postgres o Redis usan un único contenedor por JVM y identificadores nuevos por prueba, por lo que compartirlo no las acopla.
+- **Un concepto por prueba y el nombre cuenta el comportamiento**, no el método (`aSecondInsertNeverOverwritesWhatWasGrantedBefore`): una prueba que falla debe decir qué promesa se rompió sin abrir el código.
+- **Se prueba en las fronteras, no en el interior.** Los casos de uso se prueban contra sus puertos y los adaptadores contra el contrato de esos puertos (§5.2). Las clases de infraestructura finas (*humble objects*: filtros, manejadores) se prueban con fakes de los casos de uso.
+- **Las pruebas son la documentación de las decisiones.** Cada regla de seguridad (ADR-0020) tiene una prueba que la nombra, y los comentarios de las pruebas explican el porqué.
+- **Una prueba que encuentra un defecto se queda.** `AccountIdTest` descubrió que `UUID.fromString` aceptaba `1-1-1-1-1` como identidad; se corrigió y el caso quedó fijado.
+
+### 5.2 Pruebas de contrato de los puertos
+
+Un puerto promete un comportamiento, y esa promesa no debe depender de la tecnología que lo implemente. Para cada puerto hay una clase abstracta con las promesas (`AccountStoreContract`) que ejecutan **todas** sus implementaciones: el almacén en memoria con el que se prueban los casos de uso y el adaptador JDBC contra Postgres 17. Si cambiar de tecnología (o de versión) rompe una promesa, falla aquí y no en producción; y como el fake pasa el mismo contrato, las pruebas de los casos de uso son fiables.
+
+Un adaptador se prueba en **su propio módulo**, contra la tabla que crea su propia migración, sin depender de `app`. Además, la raíz de composición del módulo (`AuthConfiguration`) se ensambla sin Spring y recorre un login de punta a punta.
+
+### 5.3 Pruebas de mutación
+
+La cobertura dice qué líneas ejecutan las pruebas, no si detectan errores: una prueba sin aserciones cubre cien por cien. PIT cambia el código de producción (invierte una condición, quita una llamada, altera un valor devuelto) y comprueba que alguna prueba falle; **un mutante que sobrevive es una prueba que falta**.
+
+```
+mvn -Pmutation -pl auth-module -am test-compile org.pitest:pitest-maven:mutationCoverage -Djacoco.skip=true
+mvn -Pmutation -pl app -am test-compile org.pitest:pitest-maven:mutationCoverage -Djacoco.skip=true \
+    -DtargetClasses='com.usac.jobseeker.app.infrastructure.security.*' \
+    -DtargetTests='com.usac.jobseeker.app.infrastructure.security.*'
+```
+
+Resultado de referencia (22-nov-2026, mutadores `STRONGER`): `common` 100 % (6 de 6), `auth-module` 100 % de lo cubierto, y la capa de seguridad de `app` pasó de 79 % a **90 %** (386 de 429 mutantes) tras escribir las pruebas que los supervivientes señalaban. Lo que queda son sobre todo mutantes equivalentes (un `null` donde el llamador ya trata «no es vivo» como cerrado), bucles de espera sensibles al reloj y devoluciones de métodos de cableado de Spring; no se persigue el 100 % a cualquier precio.
+
+El informe queda en `<módulo>/target/pit-reports/index.html`. Se usan los mutadores `STRONGER`. No corre en el CI por lentitud (decenas de minutos con las pruebas que levantan Spring); se ejecuta al cerrar cada sub-paso de seguridad y al tocar el dominio, y el resultado se anota en el documento de diseño del módulo.
 
 ## 6. Trazabilidad de pruebas a reglas de negocio
 

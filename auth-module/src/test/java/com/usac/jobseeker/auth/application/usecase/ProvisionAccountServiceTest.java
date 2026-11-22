@@ -1,7 +1,9 @@
 package com.usac.jobseeker.auth.application.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.usac.jobseeker.auth.application.usecase.provisionaccount.AccountProvisioningPort;
 import com.usac.jobseeker.auth.application.usecase.provisionaccount.ProvisionAccountCommand;
 import com.usac.jobseeker.auth.application.usecase.provisionaccount.ProvisionAccountResult;
 import com.usac.jobseeker.auth.application.usecase.provisionaccount.ProvisionAccountService;
@@ -9,6 +11,7 @@ import com.usac.jobseeker.auth.domain.model.Account;
 import com.usac.jobseeker.auth.domain.model.DeletionStatus;
 import com.usac.jobseeker.common.domain.model.AccountId;
 import com.usac.jobseeker.common.domain.model.Capability;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -55,5 +58,37 @@ class ProvisionAccountServiceTest {
 
     assertThat(result.created()).isFalse();
     assertThat(result.deletionStatus()).isEqualTo(DeletionStatus.PENDING_DELETION);
+  }
+
+  @Test
+  void anAccountThatVanishesRightAfterBeingCreatedIsAnInconsistencyNotASilentSuccess() {
+    // La lectura tras el alta ve la misma fila (ADR-0016); si no la ve, algo está roto y se dice.
+    AccountId id = new AccountId(UUID.randomUUID());
+    AccountProvisioningPort vanishing =
+        new AccountProvisioningPort() {
+          @Override
+          public boolean insertIfAbsent(AccountId accountId, Set<Capability> capabilities) {
+            return true;
+          }
+
+          @Override
+          public Optional<Account> findById(AccountId accountId) {
+            return Optional.empty();
+          }
+        };
+
+    ProvisionAccountService serviceOverVanishingStore = new ProvisionAccountService(vanishing);
+    ProvisionAccountCommand command = new ProvisionAccountCommand(id);
+
+    assertThatThrownBy(() -> serviceOverVanishingStore.execute(command))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining(id.toString());
+  }
+
+  @Test
+  void theServiceCannotBeBuiltWithoutItsPort() {
+    assertThatThrownBy(() -> new ProvisionAccountService(null))
+        .isInstanceOf(NullPointerException.class)
+        .hasMessageContaining("accounts");
   }
 }
