@@ -34,6 +34,13 @@ final class StubIssuer implements AutoCloseable {
   volatile boolean advertiseRevocation = true;
   volatile int revokeStatus = 200;
 
+  /** El conjunto de claves públicas que sirve `/oauth2/jwks`, y lo que le pasa al pedirlo. */
+  volatile String jwks = "{\"keys\":[]}";
+
+  volatile int jwksStatus = 200;
+  volatile long jwksDelayMillis;
+  final AtomicInteger jwksRequests = new AtomicInteger();
+
   /** Cuántas veces se pidió el documento de descubrimiento. */
   final AtomicInteger discoveryRequests = new AtomicInteger();
 
@@ -79,6 +86,23 @@ final class StubIssuer implements AutoCloseable {
           byte[] body = JSON.writeValueAsString(document).getBytes(StandardCharsets.UTF_8);
           exchange.getResponseHeaders().add("Content-Type", "application/json");
           exchange.sendResponseHeaders(200, body.length);
+          exchange.getResponseBody().write(body);
+          exchange.close();
+        });
+    server.createContext(
+        "/o/test/oauth2/jwks",
+        exchange -> {
+          jwksRequests.incrementAndGet();
+          if (jwksDelayMillis > 0) {
+            try {
+              closed.await(jwksDelayMillis, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException _) {
+              Thread.currentThread().interrupt();
+            }
+          }
+          byte[] body = jwks.getBytes(StandardCharsets.UTF_8);
+          exchange.getResponseHeaders().add("Content-Type", "application/json");
+          exchange.sendResponseHeaders(jwksStatus, body.length);
           exchange.getResponseBody().write(body);
           exchange.close();
         });
