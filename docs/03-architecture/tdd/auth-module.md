@@ -41,7 +41,7 @@ Los casos de uso de las demás funciones (`handleclavariswebhook`, el cierre de 
 2. **El `Actor` se reconstruye en cada petición desde la base**, nunca de claims del token (ADR-0020, NFR-SEC-03). Una caché corta por sesión (≤ 60 s) se añade cuando una medición la justifique; sin ella, una consulta por clave primaria por petición es barata.
 3. **Cuenta no aprovisionada** (`NOT_PROVISIONED`): el filtro la crea de forma perezosa; solo puede ocurrir si la sesión es anterior a la cuenta.
 4. **El registro de cliente OIDC se resuelve de forma perezosa.** `ClientRegistrations.fromIssuerLocation` consulta a Clavaris al arrancar y hace fallar el contexto si no responde; reiniciar JobSeeker durante una caída de Clavaris no debe impedirlo, porque las sesiones viven en Redis. Se resuelve en la primera petición que lo necesita, se guarda y se reintenta con espera si falla.
-5. **El refresh token no se pide hasta el sub-paso 4.3.** El almacén por defecto de Spring lo guardaría en claro en la sesión de Redis, y el ADR-0020 exige cifrarlo y renovarlo con cerrojo. Hasta tener ese almacén no se solicita `offline_access`.
+5. **El refresh token no se pidió hasta el sub-paso 4.3.** El almacén por defecto de Spring lo guardaría en claro en la sesión de Redis, y el ADR-0020 exige cifrarlo y renovarlo con cerrojo. Con el almacén propio del 4.3 (§9) ya se solicita `offline_access`.
 6. **Las cadenas B y C nacen cerradas.** Mientras no estén implementadas, `/api/v1/**` y `/api/v1/webhooks/clavaris` rechazan todo: ninguna ruta queda abierta por omisión.
 
 ## 5. Orden de entrega (paso 4 del Sprint 0)
@@ -50,7 +50,7 @@ Los casos de uso de las demás funciones (`handleclavariswebhook`, el cierre de 
 |---|---|---|
 | 4.1 | `common` + `auth`: cuenta, aprovisionamiento y resolución del actor, con el adaptador JDBC | ✅ hecho |
 | 4.2 | Cadena A: login OIDC con PKCE, `/app/home`, CSRF con HTMX, cabeceras, sesión en Redis con arranque tolerante | ✅ hecho (§8) |
-| 4.3 | Refresh token cifrado, cerrojo por sesión, clasificación y margen de 2 h, logout con revocación | pendiente |
+| 4.3 | Refresh token cifrado, cerrojo por sesión, clasificación y margen de 2 h, logout con revocación | ✅ hecho (§9) |
 | 4.4 | Cadena B: Bearer con validador de `aud` y sobre de error estándar | pendiente |
 | 4.5 | Cadena C: receptor de webhooks con HMAC, deduplicación y cierre de sesiones | pendiente |
 
@@ -110,4 +110,48 @@ Con `origin/master` de Clavaris (`9bb0cd66`) compilado en solo lectura y levanta
 | Clavaris vuelve | ✅ el siguiente intento, pasada la espera de 10 s, redescubre el emisor sin reiniciar JobSeeker |
 
 Un defecto encontrado en esa validación: con Clavaris caído el login respondía un 500 genérico. Se corrigió con `IdentityProviderAvailabilityFilter` (503 controlado) y su prueba.
+
+## 9. Sub-paso 4.3: prueba de vida de la sesión
+
+Código en `app/src/main/java/com/usac/jobseeker/app/infrastructure/security/liveness`. Implementa las reglas 1–8 y 12 del ADR-0020.
+
+| Pieza | Responsabilidad |
+|---|---|
+| `VaultingAuthorizedClientRepository` | Sustituye al almacén de Spring, que dejaría el refresh token **en claro dentro de la sesión**. Cifra el token a Redis y la sesión solo guarda un identificador de enlace (regla 6: no se usa el ID de sesión, que se rota al login). Un login sin refresh token, o sin clave de cifrado, se rechaza |
+| `RefreshTokenCipher` | AES-256-GCM con identificador de clave (`kid`) y datos asociados atados al enlace: un valor copiado a otro registro no descifra. Rotar es activar una clave nueva; la anterior solo descifra |
+| `LivenessStore` | Estado en Redis (`jobseeker:liveness:{enlace}`, espacio propio) y cerrojo por sesión con liberación solo por su dueño (guion Lua) |
+| `LivenessCoordinator` | Cada ≤ 10 min por sesión renueva dentro del cerrojo y **releyendo el estado ya dentro de él** (regla 5): quien esperaba ve el token ya rotado y no renueva otra vez |
+| `ClavarisRefreshTokenClient` | Llamada directa al endpoint de tokens con tiempos de espera (2 s / 5 s). Solo `invalid_grant` es definitivo; `invalid_client`, 5xx, red o tiempo agotado son transitorios |
+| `LivenessFilter` | Antes del filtro anónimo: si la sesión ya no está respaldada, limpia el contexto e invalida la sesión; la petición sigue como anónima hacia el login. Una sesión autenticada sin enlace se cierra (fallo cerrado) |
+| `RevokingLogoutHandler` | Al salir revoca el refresh token en Clavaris (de mejor esfuerzo) y borra el estado; luego `OidcClientInitiatedLogoutSuccessHandler` redirige al fin de sesión de Clavaris |
+
+Decisiones:
+1. **Llamada directa y no el cliente de refresh de Spring**, para controlar la clasificación: un secreto de cliente rotado (`invalid_client`) cerraría la sesión de todos si se tratara como definitivo.
+2. **Margen sin Clavaris: 2 h**, nunca más que el límite absoluto de la sesión. `jobseeker.auth.liveness.fail-open-enabled=false` fuerza el cierre inmediato ante cualquier fallo (incidente de seguridad).
+3. **Caché negativa de 45 s** tras un fallo transitorio: no se reintenta esa sesión durante ese tiempo y no se repite el mismo tiempo agotado.
+4. **Sin clave de cifrado y con Clavaris configurado la aplicación no arranca**, con un mensaje que dice qué falta (`TOKEN_ENCRYPTION_KEYS`). Sin Clavaris configurado arranca igual.
+5. **Redis caído durante la comprobación no cierra a nadie**: Redis es también el almacén de la sesión, y cerrar a todos por esa caída no aporta seguridad.
+
+Pruebas: `RefreshTokenCipherTest`, `LivenessPropertiesTest`, `LivenessCoordinatorIntegrationTest` (Redis real y un Clavaris falso de tokens de un solo uso: 8 peticiones simultáneas renuevan **una** vez y ninguna reutiliza), `ClavarisRefreshTokenClientTest`, `LivenessFilterTest` y `RefreshTokenVaultTest`.
+
+**Límites conocidos:** al caducar por inactividad una sesión, su registro de vida queda en Redis (cifrado) hasta su TTL (≤ 8 h), porque los eventos de expiración de Spring Session dependen de `notify-keyspace-events`. El refresh token se revoca solo al cerrar sesión explícitamente o al cerrarla la prueba de vida.
+
+### 9.1 Validación contra Clavaris real (21-nov-2026)
+
+Con `origin/master` de Clavaris (`9bb0cd66`) compilado en solo lectura, con Postgres y Redis aislados y JobSeeker en el anfitrión con tiempos acortados (renovación cada 5 s, margen de 40 s):
+
+| Comprobación | Resultado |
+|---|---|
+| Login con `offline_access`: Clavaris entrega el refresh token | ✅ el login termina y `/app/home` responde 200 |
+| El refresh token no está en claro en la sesión | ✅ la sesión no contiene el cliente autorizado; solo el atributo de enlace |
+| Estado en Redis | ✅ `rt` cifrado (`k1.…`), `renewed`, `retryAfter`; TTL ≈ 8 h (el límite absoluto) |
+| Renovación vencida | ✅ renueva, el valor cifrado cambia (el token rotó) y la métrica `renovado` sube |
+| 8 peticiones simultáneas con la renovación vencida | ✅ 8 de 8 responden 200 y hay **una** sola renovación; los tokens de Clavaris quedan 2 revocados por rotación y 1 activo, sin reutilización |
+| Token revocado en Clavaris (equivale a suspender o borrar la cuenta) | ✅ la siguiente petición vencida cierra la sesión (302 al login), borra el estado y la cookie vieja ya no entra |
+| Logout | ✅ revoca el token en Clavaris (activos 1 → 0), borra el estado y redirige al `end_session_endpoint` con `id_token_hint` |
+| Clavaris caído, renovación vencida | ✅ 200 en 0,15 s (conexión rechazada, sin esperar un tiempo agotado), `fallo_transitorio` |
+| Segunda petición inmediata | ✅ 200 en 0,08 s: la caché negativa evita reintentar |
+| Pasado el margen sin Clavaris | ✅ la sesión se cierra (`cerrada_margen_agotado`) |
+
+Solo con el emisor falso, no con Clavaris real: el tiempo agotado con respuesta perdida (`invalid_grant` tras una caída con latencia) y la ventana de reutilización de 30 s, que exige que un operador la configure en la organización. La revocación se simuló en la base de Clavaris, no con su API de suspensión.
 

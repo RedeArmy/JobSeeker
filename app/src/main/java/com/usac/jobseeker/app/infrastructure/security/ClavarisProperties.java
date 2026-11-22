@@ -15,7 +15,9 @@ public record ClavarisProperties(
     String issuerUri,
     String clientId,
     String clientSecret,
-    @DefaultValue({"openid", "profile", "email"}) List<String> scopes,
+    // `offline_access` pide el refresh token con el que se comprueba que la cuenta sigue activa
+    // (ADR-0020, prueba de vida).
+    @DefaultValue({"openid", "profile", "email", "offline_access"}) List<String> scopes,
     @DefaultValue("2s") Duration connectTimeout,
     @DefaultValue("10s") Duration readTimeout,
     @DefaultValue("10s") Duration retryAfterFailure) {

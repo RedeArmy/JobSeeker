@@ -51,6 +51,10 @@ REDIS_HOST=localhost
 REDIS_PORT=${redis_port}
 REDIS_PASSWORD=$(secreto)
 
+# Clave AES-256 con la que se cifra el refresh token de la sesión (ADR-0020); solo desarrollo local.
+TOKEN_ENCRYPTION_ACTIVE_KID=k1
+TOKEN_ENCRYPTION_KEYS=k1:$(openssl rand -base64 32)
+
 OLLAMA_HOST=localhost
 OLLAMA_PORT=11434
 OLLAMA_EMBEDDING_MODEL=qwen3-embedding:0.6b

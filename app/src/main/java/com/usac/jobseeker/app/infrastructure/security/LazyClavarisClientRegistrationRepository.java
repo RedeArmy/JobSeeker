@@ -3,6 +3,7 @@ package com.usac.jobseeker.app.infrastructure.security;
 import java.net.http.HttpClient;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
@@ -25,10 +26,12 @@ import org.springframework.web.client.RestClient;
  * necesita, con tiempos de espera (ADR-0020, regla 12), se guarda al tener éxito y, si falla, no se
  * vuelve a intentar durante un rato para no multiplicar la espera por cada petición.
  */
-final class LazyClavarisClientRegistrationRepository implements ClientRegistrationRepository {
+public final class LazyClavarisClientRegistrationRepository
+    implements ClientRegistrationRepository {
 
-  static final String REGISTRATION_ID = "clavaris";
+  public static final String REGISTRATION_ID = "clavaris";
   private static final String END_SESSION_ENDPOINT = "end_session_endpoint";
+  private static final String REVOCATION_ENDPOINT = "revocation_endpoint";
   private static final Logger LOG =
       LoggerFactory.getLogger(LazyClavarisClientRegistrationRepository.class);
 
@@ -123,9 +126,16 @@ final class LazyClavarisClientRegistrationRepository implements ClientRegistrati
     if (metadata.get("userinfo_endpoint") != null) {
       builder.userInfoUri(metadata.get("userinfo_endpoint").toString());
     }
-    if (metadata.get(END_SESSION_ENDPOINT) != null) {
-      builder.providerConfigurationMetadata(
-          Map.of(END_SESSION_ENDPOINT, metadata.get(END_SESSION_ENDPOINT).toString()));
+    // El cierre de sesión necesita el endpoint de fin de sesión (RP-initiated logout) y el de
+    // revocación del refresh token (ADR-0020, regla 3); ambos son opcionales en el descubrimiento.
+    Map<String, Object> extra = new HashMap<>();
+    for (String key : new String[] {END_SESSION_ENDPOINT, REVOCATION_ENDPOINT}) {
+      if (metadata.get(key) != null) {
+        extra.put(key, metadata.get(key).toString());
+      }
+    }
+    if (!extra.isEmpty()) {
+      builder.providerConfigurationMetadata(extra);
     }
     return builder.build();
   }
