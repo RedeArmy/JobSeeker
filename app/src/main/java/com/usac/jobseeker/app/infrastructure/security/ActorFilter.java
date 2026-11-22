@@ -11,9 +11,10 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Set;
+import java.util.function.Predicate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
@@ -23,14 +24,25 @@ import org.springframework.web.filter.OncePerRequestFilter;
  */
 final class ActorFilter extends OncePerRequestFilter {
 
-  private static final String LOGOUT_PATH = "/app/logout";
-
   private final ResolveActorUseCase resolveActor;
   private final ProvisionAccountUseCase provisionAccount;
+  private final Predicate<Authentication> appliesTo;
+  private final Set<String> alwaysAllowedPaths;
 
-  ActorFilter(ResolveActorUseCase resolveActor, ProvisionAccountUseCase provisionAccount) {
+  /**
+   * @param appliesTo qué autenticaciones resuelven un actor: la sesión OIDC en la web y el Bearer
+   *     en la API; cualquier otra petición sigue su camino sin actor
+   * @param alwaysAllowedPaths rutas que se permiten en cualquier estado de la cuenta (salir)
+   */
+  ActorFilter(
+      ResolveActorUseCase resolveActor,
+      ProvisionAccountUseCase provisionAccount,
+      Predicate<Authentication> appliesTo,
+      Set<String> alwaysAllowedPaths) {
     this.resolveActor = resolveActor;
     this.provisionAccount = provisionAccount;
+    this.appliesTo = appliesTo;
+    this.alwaysAllowedPaths = Set.copyOf(alwaysAllowedPaths);
   }
 
   @Override
@@ -38,7 +50,9 @@ final class ActorFilter extends OncePerRequestFilter {
       HttpServletRequest request, HttpServletResponse response, FilterChain chain)
       throws ServletException, IOException {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    if (!(authentication instanceof OAuth2AuthenticationToken) || isLogout(request)) {
+    if (authentication == null
+        || !appliesTo.test(authentication)
+        || alwaysAllowedPaths.contains(request.getRequestURI())) {
       chain.doFilter(request, response);
       return;
     }
@@ -64,10 +78,6 @@ final class ActorFilter extends OncePerRequestFilter {
       }
       case ActorResolution.Rejected(var reason) -> reject(request, response, reason);
     }
-  }
-
-  private static boolean isLogout(HttpServletRequest request) {
-    return LOGOUT_PATH.equals(request.getRequestURI());
   }
 
   private static void reject(

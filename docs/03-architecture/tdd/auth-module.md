@@ -42,7 +42,7 @@ Los casos de uso de las demás funciones (`handleclavariswebhook`, el cierre de 
 3. **Cuenta no aprovisionada** (`NOT_PROVISIONED`): el filtro la crea de forma perezosa; solo puede ocurrir si la sesión es anterior a la cuenta.
 4. **El registro de cliente OIDC se resuelve de forma perezosa.** `ClientRegistrations.fromIssuerLocation` consulta a Clavaris al arrancar y hace fallar el contexto si no responde; reiniciar JobSeeker durante una caída de Clavaris no debe impedirlo, porque las sesiones viven en Redis. Se resuelve en la primera petición que lo necesita, se guarda y se reintenta con espera si falla.
 5. **El refresh token no se pidió hasta el sub-paso 4.3.** El almacén por defecto de Spring lo guardaría en claro en la sesión de Redis, y el ADR-0020 exige cifrarlo y renovarlo con cerrojo. Con el almacén propio del 4.3 (§9) ya se solicita `offline_access`.
-6. **Las cadenas B y C nacen cerradas.** Mientras no estén implementadas, `/api/v1/**` y `/api/v1/webhooks/clavaris` rechazan todo: ninguna ruta queda abierta por omisión.
+6. **Las cadenas B y C nacieron cerradas.** Hasta implementarlas rechazaban todo: ninguna ruta quedaba abierta por omisión. La B se abrió en el 4.4 (§10); la C sigue cerrada hasta el 4.5.
 
 ## 5. Orden de entrega (paso 4 del Sprint 0)
 
@@ -51,7 +51,7 @@ Los casos de uso de las demás funciones (`handleclavariswebhook`, el cierre de 
 | 4.1 | `common` + `auth`: cuenta, aprovisionamiento y resolución del actor, con el adaptador JDBC | ✅ hecho |
 | 4.2 | Cadena A: login OIDC con PKCE, `/app/home`, CSRF con HTMX, cabeceras, sesión en Redis con arranque tolerante | ✅ hecho (§8) |
 | 4.3 | Refresh token cifrado, cerrojo por sesión, clasificación y margen de 2 h, logout con revocación | ✅ hecho (§9) |
-| 4.4 | Cadena B: Bearer con validador de `aud` y sobre de error estándar | pendiente |
+| 4.4 | Cadena B: Bearer con validador de `aud` y sobre de error estándar | ✅ hecho (§10) |
 | 4.5 | Cadena C: receptor de webhooks con HMAC, deduplicación y cierre de sesiones | pendiente |
 
 ## 6. Pruebas
@@ -154,4 +154,62 @@ Con `origin/master` de Clavaris (`9bb0cd66`) compilado en solo lectura, con Post
 | Pasado el margen sin Clavaris | ✅ la sesión se cierra (`cerrada_margen_agotado`) |
 
 Solo con el emisor falso, no con Clavaris real: el tiempo agotado con respuesta perdida (`invalid_grant` tras una caída con latencia) y la ventana de reutilización de 30 s, que exige que un operador la configure en la organización. La revocación se simuló en la base de Clavaris, no con su API de suspensión.
+
+## 10. Sub-paso 4.4: la API con Bearer de Clavaris
+
+Código en `app/src/main/java/com/usac/jobseeker/app/infrastructure/security/api`. Implementa la superficie B del ADR-0020. La dependencia (`spring-boot-starter-security-oauth2-resource-server`) ya estaba decidida allí.
+
+| Pieza | Responsabilidad |
+|---|---|
+| `ClavarisJwtDecoder` | Valida la firma RS256 contra el JWKS de Clavaris (con recarga al ver un `kid` desconocido), el emisor y `exp`/`nbf` con una tolerancia configurable. Se construye de forma perezosa con el mismo registro que el login |
+| `AudienceValidator` | Exige que `aud` esté en la lista de audiencias aceptadas (G6). Comparación exacta; sin audiencias configuradas rechaza todo |
+| `AccessTokenValidator` | Exige el claim `scope`: el ID token de Clavaris tiene la misma firma, emisor y audiencia, pero no es una credencial de la API |
+| `SubjectValidator` | El `sub` debe ser un UUID canónico, que es el identificador de la cuenta local |
+| `BearerAuthenticationEntryPoint` | `401` con `WWW-Authenticate` y el sobre estándar; `400` si el Bearer está mal formado (RFC 6750). Nunca dice por qué se rechazó el token |
+| `ApiAvailabilityFilter` | Si no se puede comprobar el token porque Clavaris no responde, `503` con `Retry-After`, no `401` |
+| `ApiConfiguration` | El decodificador y el CORS cerrado por defecto |
+| `ActorFilter` (generalizado) | El mismo filtro de la web resuelve el actor del Bearer **desde la base local**: lo parametriza qué autenticación le toca y qué rutas se permiten siempre |
+
+Decisiones:
+1. **El token identifica, la base decide.** Las capacidades nunca salen de los claims ni de los `scope`: la cadena no convierte `scope` en autoridades. Una capacidad concedida después de emitir el token se ve en la petición siguiente.
+2. **Un ID token no es un Bearer.** Se exige `scope`. Sin esta comprobación un ID token (30 min de vida en vez de 5) valdría como credencial.
+3. **Fallo cerrado y sin pistas.** Sin audiencias configuradas ni `client_id`, todo se rechaza. El cuerpo y la cabecera de un `401` no dicen por qué falló el token (la cabecera lleva solo `error="invalid_token"`); el motivo queda en el log, sin el token.
+4. **Spring Security 7 añade a `WWW-Authenticate` un `resource_metadata=` construido con el `Host` de la petición** y apuntando a un documento que no se sirve. No se puede desactivar con el resolutor (devolver `null` produce la cadena `"null"`), así que la cabecera se escribe a mano.
+5. **Lo que no hace falta consultar a Clavaris se rechaza antes.** Un token mal formado, sin firma o con otro algoritmo que RS256 recibe `401` aunque Clavaris esté caído, en vez de un `503` que invitaría a sondear la API. Un token bien formado cuya firma no se puede comprobar recibe `503`.
+6. **El algoritmo se fija a RS256**: el ataque de confusión de algoritmo (HS256 con la clave pública como secreto) se rechaza.
+7. **CORS cerrado**: con la lista de orígenes vacía (el MVP) ninguna petición de otro origen se acepta; no se admiten comodines y nunca credenciales.
+8. **Sin estado ni CSRF**, con la justificación de `S4502` anotada en el código: no hay cookie de sesión que proteger.
+
+Configuración (todas opcionales; `.env.example`): `CLAVARIS_ALLOWED_AUDIENCES` (vacío = solo el `client_id`), `API_CORS_ALLOWED_ORIGINS` (vacío = CORS cerrado) y `API_TOKEN_CLOCK_SKEW_SECONDS` (30 s por defecto, máximo 120).
+
+Pruebas: `ClavarisJwtDecoderTest` (tokens RSA reales: caducidad y `nbf` en el borde exacto de la tolerancia, emisor, audiencia exacta, ID token, `sub`, firma ajena con el mismo `kid`, cuerpo alterado, `alg: none`, confusión de algoritmo, basura y un token enorme, caché y rotación de claves, y Clavaris caído o sin responder), pruebas unitarias de cada validador, de la respuesta `401`, del filtro `503` y del CORS, y tres pruebas de integración de la cadena completa con la base real (`ApiBearerChainIntegrationTest`, `ApiConfiguredIntegrationTest` y `ApiIdentityProviderDownIntegrationTest`). Mutación (PIT) sobre el paquete: 93 % de entrada y 98 % tras cerrar los supervivientes; queda un mutante equivalente (el segundo chequeo del bloqueo del decodificador).
+
+**Límites conocidos:**
+- Cada token con un `kid` desconocido fuerza una recarga del JWKS. Sin límite de tasa, alguien podría usarlo para presionar a Clavaris; lo cubre el límite de tasa transversal (ADR-0011), que aún no existe.
+- Un `404` de una ruta de la API no usa todavía el sobre estándar: llega con el primer endpoint real.
+- Un access token revocado en Clavaris sigue valiendo hasta que expira (5 min); es un límite de Clavaris (ADR-0044 de Clavaris) y JobSeeker no depende de la revocación inmediata.
+
+### 10.1 Validación contra Clavaris real (22-nov-2026)
+
+Con `origin/master` de Clavaris (`9bb0cd66`) compilado en solo lectura, con Postgres y Redis aislados, **una organización con dos clientes** (JobSeeker y otra aplicación, que comparten clave de firma) y JobSeeker en el anfitrión. Los tokens se obtuvieron con el flujo de código con PKCE S256. La API no tiene aún endpoints: una ruta inexistente responde `404` si el token pasó la autenticación y `401` si no, que es lo que se distingue.
+
+| Comprobación | Resultado |
+|---|---|
+| Claims reales del token de acceso y del ID token | ✅ el de acceso lleva `scope`, el ID token no; `aud` es el `client_id` de cada cliente; vida 300 s. Confirma la suposición de `AccessTokenValidator` |
+| Sin token | ✅ `401`, `WWW-Authenticate: Bearer`, `AUTHENTICATION_REQUIRED` |
+| Token de acceso de JobSeeker | ✅ pasa la autenticación (`404` de la ruta inexistente) |
+| La cuenta se aprovisiona al primer uso del Bearer | ✅ una fila, candidato `true`, reclutador `false` |
+| **ID token del mismo cliente** (misma firma, emisor y audiencia) | ✅ `401` `invalid_token`: no sirve como credencial |
+| **Token de acceso válido de otra aplicación de la misma organización (G6)** | ✅ `401` `invalid_token`: sin el validador propio de `aud` habría pasado |
+| Firma alterada (un carácter del medio) | ✅ `401` |
+| Basura | ✅ `401` |
+| El log del rechazo y el token | ✅ el motivo queda en el log (`audience`, `access token`, `no es un JWT`) y **ningún token aparece en él** |
+| Clavaris caído, token con la clave ya en caché | ✅ sigue valiendo |
+| JobSeeker reiniciado con Clavaris caído: token bien formado | ✅ `503`, `Retry-After: 10`, `IDENTITY_PROVIDER_UNAVAILABLE` |
+| Lo mismo: basura, sin token y la web | ✅ `401`, `401` y `302` al login: solo el login y la comprobación de tokens dependen de Clavaris |
+| Clavaris vuelve | ✅ pasada la espera, un token nuevo vale sin reiniciar JobSeeker |
+
+**Un hallazgo de la validación.** Un token con el **último carácter** de la firma alterado seguía siendo aceptado. No es una debilidad: una firma RSA-2048 son 256 bytes y el último carácter en base64 solo aporta 2 bits de datos y 4 de relleno, así que cambiarlo deja los mismos bytes; con un carácter del medio, `401`. Quedó fijado en dos pruebas (`aTokenWithOneSignatureByteFlippedIsRejected` y la que documenta el relleno), y en el helper de pruebas con la advertencia correspondiente.
+
+**No se validó con Clavaris real** (sí con tokens RSA propios, en los bordes exactos): un token realmente caducado (se desmontó el entorno antes de que venciera el de la prueba), `nbf`, la rotación de claves (publicar un `kid` nuevo) y un token de otra organización con el mismo `client_id`.
 

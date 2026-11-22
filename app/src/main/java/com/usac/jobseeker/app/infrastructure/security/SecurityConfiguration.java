@@ -1,5 +1,8 @@
 package com.usac.jobseeker.app.infrastructure.security;
 
+import com.usac.jobseeker.app.infrastructure.security.api.ApiAvailabilityFilter;
+import com.usac.jobseeker.app.infrastructure.security.api.ApiConfiguration;
+import com.usac.jobseeker.app.infrastructure.security.api.BearerAuthenticationEntryPoint;
 import com.usac.jobseeker.app.infrastructure.security.liveness.LivenessCoordinator;
 import com.usac.jobseeker.app.infrastructure.security.liveness.LivenessFilter;
 import com.usac.jobseeker.app.infrastructure.security.liveness.LivenessStore;
@@ -9,6 +12,9 @@ import com.usac.jobseeker.auth.application.usecase.provisionaccount.ProvisionAcc
 import com.usac.jobseeker.auth.application.usecase.resolveactor.ResolveActorUseCase;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
+import java.util.List;
+import java.util.Set;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
@@ -20,12 +26,17 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.client.oidc.web.logout.OidcClientInitiatedLogoutSuccessHandler;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestCustomizers;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestRedirectFilter;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
@@ -34,6 +45,7 @@ import org.springframework.security.web.authentication.LoginUrlAuthenticationEnt
 import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.csrf.CsrfException;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
+import org.springframework.web.cors.CorsConfigurationSource;
 
 /**
  * Las tres cadenas de seguridad del único desplegable (ADR-0020), de más a menos específica:
@@ -41,12 +53,13 @@ import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWrite
  * <ol>
  *   <li>`/api/v1/webhooks/clavaris`: sin sesión ni Bearer; la autenticidad la dará solo la firma
  *       (sub-paso 4.5). Hasta entonces rechaza todo.
- *   <li>`/api/v1/**`: API sin estado con Bearer (sub-paso 4.4). Hasta entonces rechaza todo.
+ *   <li>`/api/v1/**`: API sin estado con Bearer de Clavaris (sub-paso 4.4).
  *   <li>El resto: web con sesión en Redis y CSRF tras un login OIDC con Clavaris.
  * </ol>
  *
- * Las cadenas B y C nacen cerradas: ninguna ruta queda abierta por omisión mientras no se
- * implementen. Todo lo no declarado en la cadena web también se rechaza.
+ * La cadena C nace cerrada: ninguna ruta queda abierta por omisión mientras no se implemente. Todo
+ * lo no declarado en la cadena web también se rechaza, y toda ruta de la API exige un Bearer
+ * válido.
  */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties({ClavarisProperties.class, SessionProperties.class})
@@ -81,10 +94,50 @@ class SecurityConfiguration {
     return closedStatelessChain(http, "/api/v1/webhooks/clavaris");
   }
 
+  /**
+   * Superficie B (ADR-0020): la API JSON con Bearer de Clavaris. Sin estado, sin cookie y sin CSRF;
+   * la identidad sale del token (firma, emisor, vigencia, audiencia y tipo) y la autoridad, de la
+   * base local en cada petición, nunca de los claims.
+   */
   @Bean
   @Order(2)
-  SecurityFilterChain apiChain(HttpSecurity http) {
-    return closedStatelessChain(http, "/api/v1/**");
+  SecurityFilterChain apiChain(
+      HttpSecurity http,
+      JwtDecoder jwtDecoder,
+      @Qualifier(ApiConfiguration.CORS_SOURCE) CorsConfigurationSource cors,
+      ProvisionAccountUseCase provisionAccount,
+      ResolveActorUseCase resolveActor,
+      ClavarisProperties clavaris) {
+    // Los Bearer no traen autoridades de negocio: las capacidades las decide la cuenta local
+    // (NFR-SEC-03, BR-ACCT-04), así que no se convierten los `scope` en roles.
+    JwtAuthenticationConverter noAuthorities = new JwtAuthenticationConverter();
+    noAuthorities.setJwtGrantedAuthoritiesConverter(jwt -> List.of());
+
+    http.securityMatcher("/api/v1/**")
+        // S4502: sin cookie de sesión ni otra credencial ambiental que un sitio ajeno pueda
+        // reutilizar, no hay nada que proteger de CSRF.
+        .csrf(csrf -> csrf.disable()) // NOSONAR
+        .cors(c -> c.configurationSource(cors))
+        .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+        .authorizeHttpRequests(a -> a.anyRequest().authenticated())
+        .oauth2ResourceServer(
+            resource ->
+                resource
+                    .jwt(jwt -> jwt.decoder(jwtDecoder).jwtAuthenticationConverter(noAuthorities))
+                    .authenticationEntryPoint(new BearerAuthenticationEntryPoint())
+                    .accessDeniedHandler(accessDenied()))
+        .exceptionHandling(
+            e ->
+                e.authenticationEntryPoint(new BearerAuthenticationEntryPoint())
+                    .accessDeniedHandler(accessDenied()))
+        .addFilterBefore(
+            new ApiAvailabilityFilter(clavaris.retryAfterFailure()),
+            BearerTokenAuthenticationFilter.class)
+        .addFilterAfter(
+            new ActorFilter(
+                resolveActor, provisionAccount, JwtAuthenticationToken.class::isInstance, Set.of()),
+            BearerTokenAuthenticationFilter.class);
+    return http.build();
   }
 
   private static SecurityFilterChain closedStatelessChain(HttpSecurity http, String pattern) {
@@ -172,7 +225,12 @@ class SecurityConfiguration {
         .addFilterBefore(
             new LivenessFilter(liveness, livenessStore), AnonymousAuthenticationFilter.class)
         .addFilterAfter(
-            new ActorFilter(resolveActor, provisionAccount), AnonymousAuthenticationFilter.class);
+            new ActorFilter(
+                resolveActor,
+                provisionAccount,
+                OAuth2AuthenticationToken.class::isInstance,
+                Set.of("/app/logout")),
+            AnonymousAuthenticationFilter.class);
     return http.build();
   }
 

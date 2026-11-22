@@ -18,16 +18,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Predicate;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 /**
  * El actor se reconstruye desde la base en cada petición y nunca desde el token (ADR-0020,
@@ -70,7 +74,18 @@ class ActorFilterTest {
                 "clavaris"));
   }
 
+  /** El filtro de la sesión web: solo actúa con una sesión OIDC y deja salir siempre. */
   private ActorFilter filter() {
+    return filterFor(OAuth2AuthenticationToken.class::isInstance, Set.of("/app/logout"));
+  }
+
+  /** El filtro de la API: solo actúa con un Bearer y no tiene rutas siempre permitidas. */
+  private ActorFilter apiFilter() {
+    return filterFor(JwtAuthenticationToken.class::isInstance, Set.of());
+  }
+
+  private ActorFilter filterFor(
+      Predicate<Authentication> appliesTo, Set<String> alwaysAllowedPaths) {
     ResolveActorUseCase resolve =
         query -> {
           resolved.add(query);
@@ -84,7 +99,7 @@ class ActorFilterTest {
               DeletionStatus.ACTIVE,
               true);
         };
-    return new ActorFilter(resolve, provision);
+    return new ActorFilter(resolve, provision, appliesTo, alwaysAllowedPaths);
   }
 
   private void run() throws Exception {
@@ -210,5 +225,75 @@ class ActorFilterTest {
     assertThat(chain.getRequest()).isNotNull();
     assertThat(resolved).isEmpty();
     assertThat(CurrentActor.from(request)).isEmpty();
+  }
+
+  // ---- el mismo filtro al servicio de la API (Bearer) ----
+
+  private void bearerLogin(String subject) {
+    Jwt jwt = Jwt.withTokenValue("token").header("alg", "RS256").subject(subject).build();
+    SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
+  }
+
+  @Test
+  void aBearerResolvesItsActorFromTheLocalAccountExactlyLikeAWebSession() throws Exception {
+    first = new ActorResolution.Resolved(new Actor(account, Set.of(Capability.RECRUITER)));
+    bearerLogin(account.toString());
+    request = new MockHttpServletRequest("GET", "/api/v1/algo");
+
+    apiFilter().doFilter(request, response, chain);
+
+    assertThat(resolved).containsExactly(new ResolveActorQuery(account));
+    assertThat(CurrentActor.from(request).orElseThrow().capabilities())
+        .containsExactly(Capability.RECRUITER);
+    assertThat(chain.getRequest()).isNotNull();
+  }
+
+  @Test
+  void aBearerForAnAccountInItsGracePeriodIsRejectedWith403() throws Exception {
+    first = new ActorResolution.Rejected(Reason.PENDING_DELETION);
+    bearerLogin(account.toString());
+    request = new MockHttpServletRequest("GET", "/api/v1/algo");
+
+    apiFilter().doFilter(request, response, chain);
+
+    assertThat(response.getStatus()).isEqualTo(403);
+    assertThat(response.getContentAsString()).contains("ACCOUNT_PENDING_DELETION");
+    assertThat(chain.getRequest()).isNull();
+  }
+
+  @Test
+  void aBearerForAnAccountNeverSeenBeforeIsProvisionedLazilyLikeAFirstLogin() throws Exception {
+    first = new ActorResolution.Rejected(Reason.NOT_PROVISIONED);
+    second = new ActorResolution.Resolved(new Actor(account, Set.of(Capability.CANDIDATE)));
+    bearerLogin(account.toString());
+    request = new MockHttpServletRequest("GET", "/api/v1/algo");
+
+    apiFilter().doFilter(request, response, chain);
+
+    assertThat(provisioned).containsExactly(new ProvisionAccountCommand(account));
+    assertThat(chain.getRequest()).isNotNull();
+  }
+
+  @Test
+  void theApiFilterIgnoresAWebSessionAndTheWebFilterIgnoresABearer() throws Exception {
+    request = new MockHttpServletRequest("GET", "/api/v1/algo");
+    apiFilter().doFilter(request, response, new MockFilterChain()); // sesión web, filtro de la API
+    assertThat(resolved).isEmpty();
+
+    bearerLogin(account.toString());
+    filter().doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
+    assertThat(resolved).as("Bearer, filtro de la web").isEmpty();
+  }
+
+  @Test
+  void onTheApiNoPathIsExemptSoEvenALogoutLookingPathIsResolved() throws Exception {
+    first = new ActorResolution.Rejected(Reason.PENDING_DELETION);
+    bearerLogin(account.toString());
+    request = new MockHttpServletRequest("POST", "/app/logout");
+
+    apiFilter().doFilter(request, response, chain);
+
+    assertThat(resolved).hasSize(1);
+    assertThat(response.getStatus()).isEqualTo(403);
   }
 }

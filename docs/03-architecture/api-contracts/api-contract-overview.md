@@ -72,7 +72,7 @@ Toda respuesta de error sigue el mismo sobre (envelope), independientemente del 
 | `traceId` | Correlaciona con el logging estructurado (NFR-OBS-01) |
 | `timestamp` | Momento del error en UTC, formato ISO-8601 |
 
-Códigos de estado HTTP usados de forma consistente: `400` (validación), `401` (sin autenticación; en `/api/v1` con cabecera `WWW-Authenticate: Bearer`), `403` (autenticado sin autorización — p. ej. BR-VIS-03 — o petición mutante de `/app` sin token CSRF válido, código `CSRF_TOKEN_INVALID`), `404` (recurso no encontrado o no visible para el solicitante), `409` (conflicto, p. ej. BR-TRACK-01 postulación duplicada), `429` (rate limit excedido, código `RATE_LIMIT_EXCEEDED`, sección 10), `500` (error no controlado).
+Códigos de estado HTTP usados de forma consistente: `400` (validación, o una petición con el Bearer mal formado: `TOKEN_REQUEST_INVALID`), `401` (sin autenticación; en `/api/v1` con cabecera `WWW-Authenticate: Bearer`, y con `error="invalid_token"` cuando se presentó un token que no vale; códigos `AUTHENTICATION_REQUIRED` y `TOKEN_INVALID`, y el cuerpo nunca dice por qué se rechazó el token), `503` (Clavaris no responde y no se puede comprobar el token, o el login: `IDENTITY_PROVIDER_UNAVAILABLE`, con `Retry-After`; un token basura sigue recibiendo `401` porque no necesita a Clavaris para rechazarse), `403` (autenticado sin autorización — p. ej. BR-VIS-03 — o petición mutante de `/app` sin token CSRF válido, código `CSRF_TOKEN_INVALID`), `404` (recurso no encontrado o no visible para el solicitante), `409` (conflicto, p. ej. BR-TRACK-01 postulación duplicada), `429` (rate limit excedido, código `RATE_LIMIT_EXCEEDED`, sección 10), `500` (error no controlado).
 
 ## 7. Endpoints HTMX (fragmentos HTML)
 

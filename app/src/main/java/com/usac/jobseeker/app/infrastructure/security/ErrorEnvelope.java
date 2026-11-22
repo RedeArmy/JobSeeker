@@ -12,13 +12,13 @@ import tools.jackson.databind.json.JsonMapper;
  * Sobre de error estándar (api-contract-overview.md §6) para las respuestas que genera la propia
  * capa de seguridad: nunca lleva datos sensibles (BR-DATA-01) y siempre trae el `traceId`.
  */
-final class ErrorEnvelope {
+public final class ErrorEnvelope {
 
   private static final JsonMapper JSON = JsonMapper.builder().build();
 
   private ErrorEnvelope() {}
 
-  static void write(
+  public static void write(
       HttpServletRequest request,
       HttpServletResponse response,
       int status,

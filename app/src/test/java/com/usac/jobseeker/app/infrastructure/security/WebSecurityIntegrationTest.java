@@ -182,17 +182,15 @@ class WebSecurityIntegrationTest {
   }
 
   @Test
-  void theApiAndWebhookChainsAreClosedUntilTheyAreImplemented() throws Exception {
+  void theApiRequiresABearerAndTheWebhookChainIsStillClosed() throws Exception {
+    // La cadena de la API se prueba a fondo en ApiBearerChainIntegrationTest; aquí solo que la web
+    // y la API siguen siendo superficies distintas y que la de webhooks sigue cerrada hasta el 4.5.
     mvc.perform(get("/api/v1/anything"))
         .andExpect(status().isUnauthorized())
         .andExpect(header().string("WWW-Authenticate", "Bearer"))
         .andExpect(jsonPath("$.error.code").value("AUTHENTICATION_REQUIRED"));
     mvc.perform(post("/api/v1/webhooks/clavaris").content("{}"))
         .andExpect(status().isUnauthorized());
-    // Una identidad web tampoco abre la API: la cadena es independiente y rechaza todo (con una
-    // identidad inyectada el rechazo es 403; con una cookie real, la cadena sin estado ni la lee).
-    mvc.perform(get("/api/v1/anything").with(loggedInAs(UUID.randomUUID())))
-        .andExpect(status().isForbidden());
   }
 
   @Test
