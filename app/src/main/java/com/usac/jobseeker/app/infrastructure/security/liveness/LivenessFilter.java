@@ -61,7 +61,7 @@ public final class LivenessFilter extends OncePerRequestFilter {
     LivenessCoordinator.Verdict verdict;
     try {
       verdict = linkId == null ? LivenessCoordinator.Verdict.CLOSED : coordinator.verify(linkId);
-    } catch (DataAccessException redisFailure) {
+    } catch (DataAccessException _) {
       // Redis es también el almacén de la sesión: si falla aquí, la sesión ya habría fallado. Se
       // deja seguir y se avisa; cerrar a todos por una caída de Redis no aporta seguridad.
       LOG.warn("event=liveness_check_skipped reason=redis_no_disponible");

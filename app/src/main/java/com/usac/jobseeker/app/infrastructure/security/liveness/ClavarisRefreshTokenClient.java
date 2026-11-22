@@ -8,6 +8,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.HttpStatusCodeException;
@@ -33,6 +34,7 @@ public final class ClavarisRefreshTokenClient implements RefreshTokenClient {
   private static final JsonMapper JSON = JsonMapper.builder().build();
   private static final long RETRY_PAUSE_MILLIS = 1_000;
   private static final String REFRESH_TOKEN = "refresh_token";
+  private static final String NETWORK_OR_TIMEOUT = "red_o_tiempo_agotado";
 
   private final ClientRegistrationRepository clients;
   private final RestClient http;
@@ -61,8 +63,8 @@ public final class ClavarisRefreshTokenClient implements RefreshTokenClient {
     // reutilización
     // de Clavaris configurada; un token rotado cuya respuesta se perdió se recupera dentro de ella.
     if (retryOnceOnTimeout
-        && result instanceof Result.Transient transientFailure
-        && "red_o_tiempo_agotado".equals(transientFailure.reason())) {
+        && result instanceof Result.Transient(var reason)
+        && NETWORK_OR_TIMEOUT.equals(reason)) {
       pause();
       result = attemptRefresh(registration, refreshToken);
     }
@@ -98,7 +100,7 @@ public final class ClavarisRefreshTokenClient implements RefreshTokenClient {
 
   private Result attemptRefresh(ClientRegistration registration, String refreshToken) {
     MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
-    form.add("grant_type", "refresh_token");
+    form.add("grant_type", AuthorizationGrantType.REFRESH_TOKEN.getValue());
     form.add(REFRESH_TOKEN, refreshToken);
     try {
       String body =
@@ -117,8 +119,8 @@ public final class ClavarisRefreshTokenClient implements RefreshTokenClient {
         return new Result.InvalidGrant();
       }
       return new Result.Transient("http_" + rejected.getStatusCode().value());
-    } catch (ResourceAccessException network) {
-      return new Result.Transient("red_o_tiempo_agotado");
+    } catch (ResourceAccessException _) {
+      return new Result.Transient(NETWORK_OR_TIMEOUT);
     } catch (RuntimeException unexpected) { // NOPMD: cualquier otra causa es «reintentar luego»
       return new Result.Transient("inesperado_" + unexpected.getClass().getSimpleName());
     }
@@ -128,7 +130,7 @@ public final class ClavarisRefreshTokenClient implements RefreshTokenClient {
     try {
       JsonNode error = JSON.readTree(body).path("error");
       return "invalid_grant".equals(error.asString());
-    } catch (JacksonException notJson) {
+    } catch (JacksonException _) {
       return false;
     }
   }
@@ -137,7 +139,7 @@ public final class ClavarisRefreshTokenClient implements RefreshTokenClient {
     try {
       JsonNode token = JSON.readTree(body).path(REFRESH_TOKEN);
       return token.isString() ? token.asString() : null;
-    } catch (JacksonException notJson) {
+    } catch (JacksonException _) {
       // Una respuesta 200 ilegible no prueba nada sobre la cuenta: se conserva el token actual.
       return null;
     }
@@ -156,7 +158,7 @@ public final class ClavarisRefreshTokenClient implements RefreshTokenClient {
   private static void pause() {
     try {
       Thread.sleep(RETRY_PAUSE_MILLIS);
-    } catch (InterruptedException interrupted) {
+    } catch (InterruptedException _) {
       Thread.currentThread().interrupt();
     }
   }

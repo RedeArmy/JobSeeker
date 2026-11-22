@@ -27,6 +27,7 @@ public final class LivenessCoordinator {
   }
 
   private static final Logger LOG = LoggerFactory.getLogger(LivenessCoordinator.class);
+  private static final String NO_STATE = "sin_estado";
 
   private final LivenessStore store;
   private final RefreshTokenClient client;
@@ -58,7 +59,7 @@ public final class LivenessCoordinator {
     Instant now = clock.instant();
     Optional<LivenessState> state = store.find(linkId);
     if (state.isEmpty()) {
-      return closed("sin_estado");
+      return closed(NO_STATE);
     }
     if (due(state.get(), now)) {
       Verdict renewal = renew(linkId, now);
@@ -67,7 +68,7 @@ public final class LivenessCoordinator {
       }
       state = store.find(linkId);
       if (state.isEmpty()) {
-        return closed("sin_estado");
+        return closed(NO_STATE);
       }
     }
     if (Duration.between(state.get().lastRenewed(), now).compareTo(margin) > 0) {
@@ -93,7 +94,7 @@ public final class LivenessCoordinator {
     try {
       Optional<LivenessState> fresh = store.find(linkId);
       if (fresh.isEmpty()) {
-        return closed("sin_estado");
+        return closed(NO_STATE);
       }
       // Regla 5/8: quien esperaba el cerrojo ve el estado ya actualizado y no renueva otra vez.
       if (!due(fresh.get(), now)) {
@@ -109,23 +110,23 @@ public final class LivenessCoordinator {
     String refreshToken;
     try {
       refreshToken = store.refreshTokenOf(linkId, state);
-    } catch (RefreshTokenCipher.UndecipherableTokenException undecipherable) {
+    } catch (RefreshTokenCipher.UndecipherableTokenException _) {
       store.delete(linkId);
       return closed("token_ilegible");
     }
     RefreshTokenClient.Result result = client.refresh(refreshToken);
     switch (result) {
-      case RefreshTokenClient.Result.Renewed renewed -> {
-        store.recordRenewed(linkId, renewed.newRefreshToken(), state, now);
+      case RefreshTokenClient.Result.Renewed(var newRefreshToken) -> {
+        store.recordRenewed(linkId, newRefreshToken, state, now);
         count("renovado");
         return Verdict.ALIVE;
       }
-      case RefreshTokenClient.Result.InvalidGrant ignored -> {
+      case RefreshTokenClient.Result.InvalidGrant() -> {
         store.delete(linkId);
         return closed("invalid_grant");
       }
-      case RefreshTokenClient.Result.Transient failure -> {
-        LOG.warn("event=liveness_renewal_failed reason={}", failure.reason());
+      case RefreshTokenClient.Result.Transient(var reason) -> {
+        LOG.warn("event=liveness_renewal_failed reason={}", reason);
         count("fallo_transitorio");
         if (!properties.failOpenEnabled()) {
           store.delete(linkId);

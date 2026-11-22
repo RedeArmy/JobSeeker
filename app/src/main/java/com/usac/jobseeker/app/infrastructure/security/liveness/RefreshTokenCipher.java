@@ -117,7 +117,7 @@ public final class RefreshTokenCipher {
       cipher.updateAAD(associatedData.getBytes(StandardCharsets.UTF_8));
       return new String(
           cipher.doFinal(packed, IV_BYTES, packed.length - IV_BYTES), StandardCharsets.UTF_8);
-    } catch (GeneralSecurityException | IllegalArgumentException failure) {
+    } catch (GeneralSecurityException | IllegalArgumentException _) {
       throw new UndecipherableTokenException("valor alterado o clave incorrecta");
     }
   }

@@ -111,7 +111,7 @@ public final class LivenessStore {
       }
       try {
         Thread.sleep(50);
-      } catch (InterruptedException interrupted) {
+      } catch (InterruptedException _) {
         Thread.currentThread().interrupt();
         return Optional.empty();
       }
