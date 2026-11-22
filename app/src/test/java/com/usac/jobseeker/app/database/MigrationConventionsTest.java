@@ -85,9 +85,10 @@ class MigrationConventionsTest {
                 new Migration(
                     "cv",
                     "V20261121100100__cv_create_candidates.sql",
-                    "-- referencia a job en un comentario: references job_postings\n"
-                        + "create table candidate_profiles (id uuid primary key);\n"
-                        + "create index idx_c on candidate_profiles (id);"),
+                    """
+                    -- referencia a job en un comentario: references job_postings
+                    create table candidate_profiles (id uuid primary key);
+                    create index idx_c on candidate_profiles (id);"""),
                 new Migration(
                     "job",
                     "V20261121100200__job_create_postings.sql",

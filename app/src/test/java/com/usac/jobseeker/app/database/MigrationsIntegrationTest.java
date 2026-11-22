@@ -113,14 +113,16 @@ class MigrationsIntegrationTest {
 
   @Test
   void outboxRejectsInconsistentStatusAndKeepsProcessedAtInSync() {
-    assertThatThrownBy(
-            () ->
-                insertOutbox(
-                    UUID.randomUUID(), "PENDING", "now()")) // pendiente con fecha de proceso
+    // Cada identificador se crea fuera de la lambda: dentro debe haber una sola llamada que pueda
+    // fallar.
+    UUID pendingWithProcessDate = UUID.randomUUID();
+    UUID processedWithoutDate = UUID.randomUUID();
+    UUID unknownStatus = UUID.randomUUID();
+    assertThatThrownBy(() -> insertOutbox(pendingWithProcessDate, "PENDING", "now()"))
         .isInstanceOf(DataIntegrityViolationException.class);
-    assertThatThrownBy(() -> insertOutbox(UUID.randomUUID(), "PROCESSED", "null"))
+    assertThatThrownBy(() -> insertOutbox(processedWithoutDate, "PROCESSED", "null"))
         .isInstanceOf(DataIntegrityViolationException.class);
-    assertThatThrownBy(() -> insertOutbox(UUID.randomUUID(), "LOST", "null"))
+    assertThatThrownBy(() -> insertOutbox(unknownStatus, "LOST", "null"))
         .isInstanceOf(DataIntegrityViolationException.class);
     insertOutbox(UUID.randomUUID(), "PENDING", "null");
   }
