@@ -12,8 +12,9 @@ import org.springframework.transaction.annotation.Transactional;
  * Se registra como bean en `infrastructure.config`, sin estereotipos aquí (ADR-0015, ARCH-02).
  *
  * <p>Es el caso de uso plantilla del paso 5 del Sprint 0: muestra dónde van la métrica de negocio y
- * el log estructurado. Ninguno lleva el identificador de la cuenta: es un dato de usuario que no
- * debe acabar en un registro ni disparar la cardinalidad de una métrica (BR-DATA-01).
+ * el log estructurado. Ninguno lleva el identificador de la cuenta: en la métrica dispararía su
+ * cardinalidad, y en el log el `accountId` por petición lo debe aportar el contexto (MDC,
+ * NFR-OBS-01), una sola vez, y no cada caso de uso.
  */
 public class GetMyAccountService implements GetMyAccountUseCase {
 
