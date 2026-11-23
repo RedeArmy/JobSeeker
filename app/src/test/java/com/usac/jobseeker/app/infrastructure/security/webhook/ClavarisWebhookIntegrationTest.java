@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 import com.usac.jobseeker.app.InfrastructureTestConfiguration;
 import com.usac.jobseeker.app.infrastructure.outbox.OutboxPoller;
+import com.usac.jobseeker.app.infrastructure.outbox.WithoutOutboxScheduler;
 import com.usac.jobseeker.app.infrastructure.security.liveness.LivenessStore;
 import com.usac.jobseeker.app.infrastructure.security.liveness.VaultingAuthorizedClientRepository;
 import com.usac.jobseeker.common.application.outbox.DomainEventPublisherPort;
@@ -23,9 +24,11 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.session.FindByIndexNameSessionRepository;
@@ -46,6 +49,8 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(InfrastructureTestConfiguration.class)
+// El sondeo se dispara a mano para que cada prueba controle cuándo ocurre.
+@WithoutOutboxScheduler
 class ClavarisWebhookIntegrationTest {
 
   private static final String URL = "/api/v1/webhooks/clavaris";
@@ -57,13 +62,12 @@ class ClavarisWebhookIntegrationTest {
     registry.add("jobseeker.auth.webhook.secret", () -> SECRET);
     registry.add("jobseeker.auth.webhook.previous-secret", () -> PREVIOUS);
     registry.add("jobseeker.auth.webhook.max-body-bytes", () -> "2048");
-    // El sondeo se dispara a mano para que cada prueba controle cuándo ocurre.
-    registry.add("jobseeker.outbox.poll-interval", () -> "1h");
   }
 
   @Autowired private MockMvc mvc;
   @Autowired private JdbcTemplate jdbc;
   @Autowired private OutboxPoller poller;
+  @Autowired private ApplicationContext context;
   @Autowired private RedisIndexedSessionRepository sessions;
   @Autowired private LivenessStore liveness;
   @MockitoSpyBean private DomainEventPublisherPort publisher;
@@ -139,6 +143,13 @@ class ClavarisWebhookIntegrationTest {
     assertThat(result.getResponse().getStatus()).isEqualTo(status);
     assertThat(result.getResponse().getContentAsString())
         .contains("\"code\":\"" + code + "\"", "\"traceId\"", "\"timestamp\"");
+  }
+
+  @Test
+  void theRealOutboxSchedulerIsReplacedByAMockSoOnlyTheTestPollsTheOutbox() {
+    // Guarda de @WithoutOutboxScheduler: si dejara de aplicarse, estas pruebas volverían a ser
+    // intermitentes sin que nada lo avisara.
+    assertThat(Mockito.mockingDetails(context.getBean("outboxScheduler")).isMock()).isTrue();
   }
 
   // ---- una entrega auténtica ----
