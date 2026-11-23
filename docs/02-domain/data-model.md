@@ -4,7 +4,7 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | 🟡 En revisión |
-| **Versión** | 1.2 — perfil de candidato (TDD de `cv`, 23-nov-2026): moneda y periodo del salario, `candidate_skills`, versión de los agregados, catálogos cerrados; 1.1 — embeddings versionados (ADR-0018): §3, §4.4, §4.6, §4.7, §5 y nueva §5.1 |
+| **Versión** | 1.3 — vectores en tablas propias de `matching` (TDD de `matching`, D1): §3, §4.4, §4.6, nueva §4.7.1, §5 y §5.1; 1.2 — perfil de candidato (TDD de `cv`, 23-nov-2026): moneda y periodo del salario, `candidate_skills`, versión de los agregados, catálogos cerrados; 1.1 — embeddings versionados (ADR-0018): §3, §4.4, §4.6, §4.7, §5 y nueva §5.1 |
 | **Fecha** | Agosto 2026 · actualizado en noviembre 2026 |
 | **Documentos relacionados** | Domain Model, Business Rules, Integration Design, ADR-0018 |
 
@@ -19,7 +19,7 @@ Traducir el modelo de dominio (`domain-model.md`) a un modelo de datos relaciona
 - **Flyway** es la única fuente de verdad del esquema, aplicado de forma idéntica en Docker local y en Supabase (producción).
 - Cada cambio de esquema es una migración versionada por marca de tiempo (`V<yyyyMMddHHmmss>__<modulo>_<descripcion>.sql`), nunca una edición manual de tabla existente. Cada módulo guarda las suyas en su `db/migration` y es dueño solo de las tablas de su contexto; una sola instancia de Flyway en `app` las aplica (ADR-0027, aprobado el 20-nov-2026).
 - Estrategia de rollback: **solo hacia adelante** — despliegue de la versión anterior de la aplicación y, si el esquema ya cambió, una migración que lo corrige; los cambios incompatibles van en fases expandir/contraer (ADR-0027). No hay migraciones `undo` (Flyway Community no las ejecuta; ver `roadmap-and-release-plan.md` §5).
-- Extensión requerida en PostgreSQL: `pgvector` (ADR-0002), habilitada en `V1__enable_extensions.sql` del módulo `app`, antes que cualquier tabla: `candidate_profiles` y `job_postings` ya llevan columnas `embedding` (§5.1), así que no puede esperar al esquema de `matching`.
+- Extensión requerida en PostgreSQL: `pgvector` (ADR-0002), habilitada en `V1__enable_extensions.sql` del módulo `app`, antes que cualquier tabla: las tablas de vectores de `matching` (§4.7.1) la necesitan, y `V1` es de `app` para que ninguna migración de un módulo dependa del orden de otro.
 
 ## 3. Diagrama entidad-relación
 
@@ -85,12 +85,6 @@ erDiagram
         string contact_email
         string contact_phone
         text raw_cv_text
-        vector embedding "vector(1024), dimension del modelo vigente"
-        string embedding_model
-        int embedding_dim
-        string embedding_content_hash
-        boolean embedding_truncated
-        timestamptz embedding_computed_at
         boolean discoverable
         string availability_status
         string country_of_residence
@@ -148,6 +142,26 @@ erDiagram
         date end_date
         string url
     }
+    PROFILE_EMBEDDINGS {
+        uuid candidate_profile_id PK "sin FK: la tabla es de otro contexto"
+        boolean discoverable "copia, la mantiene el evento de cv"
+        vector embedding "vector(1024), dimension del modelo vigente"
+        string embedding_model
+        int embedding_dim
+        string embedding_content_hash
+        boolean embedding_truncated
+        timestamptz embedding_computed_at
+    }
+    JOB_EMBEDDINGS {
+        uuid job_posting_id PK "sin FK: la tabla es de otro contexto"
+        boolean published "copia, la mantienen los eventos de job"
+        vector embedding "vector(1024), dimension del modelo vigente"
+        string embedding_model
+        int embedding_dim
+        string embedding_content_hash
+        boolean embedding_truncated
+        timestamptz embedding_computed_at
+    }
     CANDIDATE_SKILLS {
         uuid id PK
         uuid candidate_profile_id FK
@@ -167,12 +181,6 @@ erDiagram
         numeric salary_max
         string salary_currency
         string salary_period
-        vector embedding "vector(1024), dimension del modelo vigente"
-        string embedding_model
-        int embedding_dim
-        string embedding_content_hash
-        boolean embedding_truncated
-        timestamptz embedding_computed_at
         string status
         boolean accepting_applications
         string recruiting_stage
@@ -380,15 +388,7 @@ CHECK `(is_candidate_enabled OR is_recruiter_enabled)` — toda cuenta debe tene
 | contact_email | varchar | NOT NULL | Contacto para postulación (BR-CAND-01) — puede diferir del email de acceso de la cuenta |
 | contact_phone | varchar | NULL | Contacto opcional adicional |
 | raw_cv_text | text | NULL | Texto extraído del CV cargado, insumo para embeddings |
-| embedding | vector(1024) | NULL | Embedding de la **representación canónica sin nombre** del perfil (`02-hld-system-design.md` §4.3), generado con el modelo vigente de ADR-0018 vía Ollama. La dimensión es **fija por columna** (necesaria para el índice HNSW) y corresponde al modelo vigente: 1024 con el valor provisional `qwen3-embedding:0.6b`. Un cambio de modelo no altera esta columna: sigue el procedimiento de §5.1 |
-| embedding_model | varchar | NULL | Modelo que produjo el vector (p. ej. `qwen3-embedding:0.6b`). Forma parte de `algorithm_version` (BR-MATCH-04) |
-| embedding_dim | integer | NULL | Dimensión declarada; la restricción `ck_cp_embedding_complete` exige que coincida con `vector_dims(embedding)`. Es una columna normal y no generada: añadir una columna generada almacenada reescribe la tabla entera |
-| embedding_content_hash | char(64) | NULL | SHA-256 de la representación canónica embebida. Si el hash no cambia, **no se vuelve a llamar a Ollama** (guarda de idempotencia, BR-MATCH-03) |
-| embedding_truncated | boolean | NOT NULL DEFAULT false | `true` si el texto excedió el contexto del modelo y se aplicó una estrategia de reducción registrada (ADR-0018, regla de `truncate=false`) |
-| embedding_computed_at | timestamptz | NULL | Momento del cálculo; permite medir el retraso de frescura (NFR-PERF-07) |
-
-**Restricción `ck_cp_embedding_complete`:** el bloque `embedding*` es **todo o nada**: o todas las columnas del bloque son `NULL`, o `embedding`, `embedding_model`, `embedding_dim`, `embedding_content_hash` y `embedding_computed_at` están todas presentes y `embedding_dim = vector_dims(embedding)`. Así un vector nunca queda sin saber con qué modelo se calculó.
-| discoverable | boolean | NOT NULL DEFAULT true | Controla si el perfil es elegible para sugerencia de candidatos a reclutadores sin postulación previa (BR-VIS-04); opt-out del candidato (BR-DATA-03) |
+| discoverable | boolean | NOT NULL DEFAULT true | **Fuente de verdad** de la descubribilidad; `matching` guarda una copia en `profile_embeddings` que mantiene el evento `CandidateDiscoverabilityChanged` (§4.7.1). Controla si el perfil es elegible para sugerencia de candidatos a reclutadores sin postulación previa (BR-VIS-04); opt-out del candidato (BR-DATA-03) |
 | availability_status | varchar | NOT NULL DEFAULT 'UNSET', CHECK IN ('OPEN_TO_WORK','NOT_LOOKING','UNSET') | Señal de intención de cambio (BR-CAND-04); prioriza el orden de sugerencia (BR-MATCH-07) pero nunca es input del cálculo de `overall_score` |
 | country_of_residence | varchar | NULL | País del candidato, evaluado por reglas de elegibilidad de tipo `COUNTRY_OF_RESIDENCE` (BR-ELIG-01) |
 | desired_modality | varchar | NULL, CHECK IN ('REMOTE','HYBRID','ONSITE') | Modalidad de trabajo buscada por el candidato, evaluada por reglas de tipo `MODALITY` |
@@ -400,11 +400,11 @@ CHECK `(is_candidate_enabled OR is_recruiter_enabled)` — toda cuenta debe tene
 | version | bigint | NOT NULL DEFAULT 0 | Bloqueo optimista, igual que en `professional_profiles` (§4.2) |
 | updated_at | timestamptz | NOT NULL DEFAULT now() | Fecha de la última edición. El recálculo (BR-MATCH-03) lo dispara el **evento** `ProfileUpdatedEvent` por la bandeja de salida (ADR-0016), no esta columna |
 
-> Nota: `full_name` ya no vive aquí — se lee de `professional_profiles` vía `account_id` (BR-ACCT-02/06, ADR-0008). `country_of_residence`, `desired_modality`, `preferred_work_schedule`, `relocation_willingness` y `salary_expectation_min/max` son datos de **elegibilidad** (BR-ELIG-01), evaluados por `EligibilityRule` — nunca son input directo de `compatibility_scores.overall_score` (BR-ELIG-06), aunque se solapen conceptualmente con dimensiones del scoring ponderado (ubicación/modalidad, salario) que sí son input del score (ver pregunta abierta en `domain-model.md` §8 sobre si es el mismo dato leído por ambos módulos o una proyección propia de `job`).
+> Nota: **los vectores ya no viven aquí**: el embedding del perfil lo calcula y guarda `matching` en `profile_embeddings` (§4.7.1) y este contexto no tiene columnas de embedding. `full_name` ya no vive aquí — se lee de `professional_profiles` vía `account_id` (BR-ACCT-02/06, ADR-0008). `country_of_residence`, `desired_modality`, `preferred_work_schedule`, `relocation_willingness` y `salary_expectation_min/max` son datos de **elegibilidad** (BR-ELIG-01), evaluados por `EligibilityRule` — nunca son input directo de `compatibility_scores.overall_score` (BR-ELIG-06), aunque se solapen conceptualmente con dimensiones del scoring ponderado (ubicación/modalidad, salario) que sí son input del score (ver pregunta abierta en `domain-model.md` §8 sobre si es el mismo dato leído por ambos módulos o una proyección propia de `job`).
 
-**Restricciones de coherencia:** `ck_cp_salary_complete` (moneda, periodo y al menos un importe: todos o ninguno) y la ya citada `ck_cp_embedding_complete`. Toda restricción nueva sobre una tabla con filas se añade con `NOT VALID` y se valida después (ADR-0027, squawk).
+**Restricción de coherencia:** `ck_cp_salary_complete` (moneda, periodo y al menos un importe: todos o ninguno), la única de esta tabla. Toda restricción nueva sobre una tabla con filas se añade con `NOT VALID` y se valida después (ADR-0027, squawk).
 
-**Anonimización (BR-DATA-05, ADR-0013):** `contact_email`/`contact_phone`/`raw_cv_text` y **todo el bloque `embedding*`** (`embedding`, `embedding_model`, `embedding_dim`, `embedding_content_hash`, `embedding_computed_at`; la restricción exige anularlas a la vez) → `NULL`; `discoverable` → `false` (forzado, para que un perfil anonimizado nunca vuelva a aparecer en sugerencias); el resto de columnas (elegibilidad, disponibilidad) se conservan sin identificar a la persona — son datos de preferencia, no PII directa, y mantenerlos no permite reidentificar a nadie por sí solos. `candidate_work_authorizations`/`candidate_languages` se eliminan físicamente (mismo criterio que las tablas hijas de `professional_profiles`).
+**Anonimización (BR-DATA-05, ADR-0013):** `contact_email`/`contact_phone`/`raw_cv_text` → `NULL`; el vector del perfil lo borra `matching` al recibir `AccountAnonymized` (§4.7.1); `discoverable` → `false` (forzado, para que un perfil anonimizado nunca vuelva a aparecer en sugerencias); el resto de columnas (elegibilidad, disponibilidad) se conservan sin identificar a la persona — son datos de preferencia, no PII directa, y mantenerlos no permite reidentificar a nadie por sí solos. `candidate_work_authorizations`/`candidate_languages` se eliminan físicamente (mismo criterio que las tablas hijas de `professional_profiles`).
 
 ### 4.5 `recruiter_profiles` (contexto `cv`)
 
@@ -433,8 +433,6 @@ Deliberadamente **no** incluye ninguna columna de las orientadas a búsqueda de 
 | salary_min / salary_max | numeric | NULL, CHECK (min <= max) | Rango salarial (dimensión de matching) |
 | salary_currency | char(3) | NULL, CHECK (~ '^[A-Z]{3}$') | Moneda ISO 4217 del rango (BR-JOB-21). Obligatoria si hay `salary_min` o `salary_max`, y viceversa: la restricción `ck_jp_salary_complete` exige que moneda, periodo y al menos un importe estén todos presentes o todos ausentes |
 | salary_period | varchar | NULL, CHECK IN ('MONTH','YEAR') | Periodo del importe; sin él un importe no se puede comparar con la expectativa del candidato (BR-MATCH-10) |
-| embedding | vector(1024) | NULL | Embedding de la descripción (representación canónica de la vacante), generado con el modelo vigente de ADR-0018. Misma regla de dimensión fija que `candidate_profiles.embedding` |
-| embedding_model / embedding_dim / embedding_content_hash / embedding_truncated / embedding_computed_at | varchar / integer / char(64) / boolean / timestamptz | mismas reglas | Idénticas a `candidate_profiles` (§4.4), con la restricción `ck_jp_embedding_complete` |
 | status | varchar | NOT NULL DEFAULT 'DRAFT', CHECK IN ('DRAFT','PUBLISHED','CLOSED','ARCHIVED','DELETED') | Máquina de estados del ciclo de vida (BR-JOB-03, BR-JOB-06 a 11; ver diagrama en `domain-model.md` §4.1). Reemplaza el modelo binario `OPEN`/`CLOSED` original |
 | accepting_applications | boolean | NOT NULL DEFAULT true | Pausa reversible de recepción de nuevas postulaciones, independiente de `status` (BR-JOB-10); solo tiene efecto mientras `status = 'PUBLISHED'` |
 | recruiting_stage | varchar | NOT NULL DEFAULT 'HIRING', CHECK IN ('HIRING','REVIEWING') | Etapa de reclutamiento por vacante, independiente de `accepting_applications` (BR-JOB-04); `REVIEWING` pausa nueva sugerencia de candidatos (BR-MATCH-08); sin efecto salvo `status = 'PUBLISHED'` |
@@ -457,6 +455,29 @@ Deliberadamente **no** incluye ninguna columna de las orientadas a búsqueda de 
 | computed_at | timestamptz | NOT NULL DEFAULT now() | Momento del cálculo; un nuevo cálculo inserta una nueva fila en vez de sobrescribir, preservando histórico auditable |
 
 > Nota: se modela como **histórico append-only** (una fila nueva por recálculo) en vez de UPDATE in-place, para que BR-MATCH-04 ("versionado para auditar y comparar precisión entre iteraciones") sea consultable directamente sin tabla de auditoría paralela. La aplicación consulta siempre la fila con `computed_at` más reciente por par `(cv_profile_id, job_posting_id)` como score vigente.
+
+### 4.7.1 `profile_embeddings` y `job_embeddings` (contexto `matching`)
+
+Los vectores los calcula y guarda `matching` (caso de uso `embedentity`), así que son **suyos**: cada contexto es dueño de sus tablas (ADR-0027) y `cv` y `job` no cargan columnas que no escriben. Antes vivían en `candidate_profiles` y `job_postings`; se movieron porque el escritor era otro módulo.
+
+| Columna | Tipo | Restricciones | Descripción |
+|---|---|---|---|
+| candidate_profile_id / job_posting_id | uuid | PK, **sin FK** | Identificador de la entidad dueña, en otro contexto. No hay clave foránea entre contextos aquí: la consistencia la dan los eventos y la anonimización, y se evita que una tabla de `cv` o de `job` dependa de `matching` |
+| discoverable (solo `profile_embeddings`) | boolean | NOT NULL DEFAULT false | **Copia** de `candidate_profiles.discoverable` (BR-DATA-03), necesaria porque el índice HNSW parcial solo puede nombrar columnas de su propia tabla. Se fija al calcular el vector y la mantiene `CandidateDiscoverabilityChanged`. El valor por defecto es `false`: ante la duda, el perfil **no** es descubrible |
+| published (solo `job_embeddings`) | boolean | NOT NULL DEFAULT false | **Copia** de `job_postings.status = 'PUBLISHED'`, por la misma razón; la mantienen los eventos de ciclo de vida de `job` |
+| embedding | vector(1024) | NULL | Embedding de la representación canónica (`02-hld-system-design.md` §4.3), con el modelo vigente de ADR-0018. La dimensión es **fija por columna** (necesaria para el índice HNSW): 1024 con el valor provisional `qwen3-embedding:0.6b`; un cambio de modelo sigue el procedimiento de §5.1 |
+| embedding_model | text | NULL | Modelo que produjo el vector; forma parte de `algorithm_version` (BR-MATCH-04) |
+| embedding_dim | integer | NULL | Dimensión declarada; debe coincidir con `vector_dims(embedding)` |
+| embedding_content_hash | char(64) | NULL | SHA-256 de la representación canónica embebida; si no cambia, **no se vuelve a llamar a Ollama** (BR-MATCH-03) |
+| embedding_truncated | boolean | NOT NULL DEFAULT false | `true` si el texto excedió el contexto y se aplicó una estrategia de reducción registrada (ADR-0018, `truncate=false`) |
+| embedding_computed_at | timestamptz | NULL | Momento del cálculo; mide el retraso de frescura (NFR-PERF-07) |
+| updated_at | timestamptz | NOT NULL DEFAULT now() | Última escritura de la fila |
+
+**Restricciones `ck_pe_embedding_complete` y `ck_je_embedding_complete`:** el bloque `embedding*` es **todo o nada**: o `embedding`, `embedding_model`, `embedding_dim`, `embedding_content_hash` y `embedding_computed_at` son todas `NULL`, o están todas presentes con `embedding_dim = vector_dims(embedding)`. Así un vector nunca queda sin saber con qué modelo se calculó.
+
+**Quién mantiene las copias.** `embedentity` fija `discoverable` o `published` desde la lectura de `cv` o `job` al crear la fila, y los consumidores de `CandidateDiscoverabilityChanged` y de los eventos de `job` las actualizan después. Mientras una copia no se haya fijado vale `false`: el perfil no aparece en sugerencias y la vacante no se puntúa, que es el lado seguro del error.
+
+**Anonimización (BR-DATA-05):** al recibir `AccountAnonymized`, `matching` anula **todo** el bloque `embedding*` a la vez (la restricción lo exige) y fuerza `discoverable = false`. Nunca se borra la fila, para que una repetición del evento sea idempotente.
 
 ### 4.8 `applications` (contextos `ats` / `tracker`)
 
@@ -624,9 +645,9 @@ Infraestructura transversal, sin claves foráneas (ADR-0027): el historial de au
 
 | Índice | Justificación |
 |---|---|
-| `idx_cp_embedding_hnsw` — HNSW (`vector_cosine_ops`) sobre `candidate_profiles.embedding`, **parcial** `WHERE discoverable AND embedding IS NOT NULL` | Búsqueda de similitud semántica eficiente (NFR-PERF-01) solo sobre candidatos descubribles (BR-VIS-04); excluye perfiles anonimizados (BR-DATA-05) |
-| `idx_jp_embedding_hnsw` — HNSW sobre `job_postings.embedding`, **parcial** `WHERE status = 'PUBLISHED' AND embedding IS NOT NULL` | Ídem, lado vacante; una vacante no publicada nunca es candidata a scoring (BR-JOB-06/11) |
-| `idx_cp_embedding_model` sobre `candidate_profiles (embedding_model)` parcial `WHERE embedding IS NOT NULL` | Contar y localizar vectores que no son del modelo vigente durante un cambio de modelo (§5.1) |
+| `idx_pe_embedding_hnsw` — HNSW (`vector_cosine_ops`) sobre `profile_embeddings.embedding`, **parcial** `WHERE discoverable AND embedding IS NOT NULL` | Búsqueda de similitud semántica eficiente (NFR-PERF-01) solo sobre candidatos descubribles (BR-VIS-04); excluye perfiles anonimizados (BR-DATA-05) |
+| `idx_je_embedding_hnsw` — HNSW sobre `job_embeddings.embedding`, **parcial** `WHERE published AND embedding IS NOT NULL` | Ídem, lado vacante; una vacante no publicada nunca es candidata a scoring (BR-JOB-06/11) |
+| `idx_pe_embedding_model` sobre `profile_embeddings (embedding_model)` parcial `WHERE embedding IS NOT NULL` (y el equivalente de vacantes) | Contar y localizar vectores que no son del modelo vigente durante un cambio de modelo (§5.1) |
 | `compatibility_scores (cv_profile_id, job_posting_id, computed_at DESC)` | Recuperar el score vigente sin escanear histórico completo |
 | `applications (job_posting_id, status)` | Renderizado del pipeline de reclutador con hasta 200 candidatos (NFR-PERF-02) |
 | `candidate_profiles (discoverable)` parcial (`WHERE discoverable = true`) | Acelera la consulta de sugerencia de candidatos (BR-MATCH-06), que filtra primero por descubribilidad antes de rankear por similitud/score |
@@ -652,7 +673,7 @@ DDL exacto y procedimiento ejecutable en `architecture-review-2026-11/anexos/emb
 
 | Consulta | Plan | Mediana | p95 |
 |---|---|---|---|
-| Top-20 de candidatos descubribles por similitud coseno | **HNSW** (`idx_cp_embedding_hnsw`) | 4,6 ms | 10 ms |
+| Top-20 de candidatos descubribles por similitud coseno | **HNSW** (`idx_pe_embedding_hnsw`) | 4,6 ms | 10 ms |
 | Lo mismo con un filtro selectivo adicional (país, ~14 %) | Escaneo exacto + ordenación (el planificador descarta el índice) | 16 ms | 20 ms |
 | Vacantes publicadas (2.000 filas) | Escaneo exacto + ordenación | 10 ms | 23 ms |
 
