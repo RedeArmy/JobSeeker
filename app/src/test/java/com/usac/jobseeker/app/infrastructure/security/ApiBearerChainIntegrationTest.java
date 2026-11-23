@@ -377,9 +377,12 @@ class ApiBearerChainIntegrationTest {
   // ---- las otras cadenas no cambian ----
 
   @Test
-  void theWebhookChainStaysClosedAndTheWebStillRedirectsToTheLogin() throws Exception {
+  void theWebhookChainStaysClosedWithoutASecretAndTheWebStillRedirectsToTheLogin()
+      throws Exception {
+    // Sin secreto configurado el receptor responde 503 y no autentica nada (ADR-0020, superficie
+    // C).
     mvc.perform(post("/api/v1/webhooks/clavaris").content("{}"))
-        .andExpect(status().isUnauthorized());
+        .andExpect(status().isServiceUnavailable());
     mvc.perform(get("/app/home")).andExpect(status().is3xxRedirection());
   }
 

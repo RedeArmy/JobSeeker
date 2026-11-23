@@ -1,5 +1,6 @@
 package com.usac.jobseeker.app.infrastructure.security;
 
+import com.usac.jobseeker.app.infrastructure.security.webhook.SessionInvalidationConsumer;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
@@ -33,6 +34,12 @@ class DistributedSessionConfiguration {
   static TolerantSessionListenerStartup tolerantSessionListenerStartup(
       ObjectProvider<MeterRegistry> meters) {
     return new TolerantSessionListenerStartup(meters::getIfAvailable);
+  }
+
+  // Consumidor de la bandeja que cierra las sesiones de una cuenta (webhooks de Clavaris, 4.5).
+  @Bean
+  SessionInvalidationConsumer sessionInvalidationConsumer(RedisIndexedSessionRepository sessions) {
+    return new SessionInvalidationConsumer(sessions);
   }
 
   @Bean

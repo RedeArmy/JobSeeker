@@ -45,6 +45,12 @@ jobseeker:
       allowed-audiences: ${CLAVARIS_ALLOWED_AUDIENCES:}
       allowed-origins: ${API_CORS_ALLOWED_ORIGINS:}
       clock-skew: ${API_TOKEN_CLOCK_SKEW_SECONDS:30}s
+    # Receptor de webhooks (ADR-0020, superficie C). Sin secreto el receptor responde 503 y no
+    # acepta nada. `previous-secret` solo mientras dura la rotación del secreto en Clavaris.
+    webhook:
+      secret: ${CLAVARIS_WEBHOOK_SECRET:}
+      previous-secret: ${CLAVARIS_WEBHOOK_SECRET_PREVIOUS:}
+      tolerance: ${CLAVARIS_WEBHOOK_TOLERANCE_SECONDS:300}s
     session:
       idle-timeout: ${SESSION_IDLE_TIMEOUT_MINUTES:30}m
       absolute-timeout: ${SESSION_ABSOLUTE_TIMEOUT_HOURS:8}h
@@ -59,6 +65,12 @@ jobseeker:
       clavaris-unavailable-margin: ${LIVENESS_CLAVARIS_UNAVAILABLE_MARGIN_HOURS:2}h
       fail-open-enabled: ${LIVENESS_FAIL_OPEN_ENABLED:true}
       retry-once-within-grace: ${LIVENESS_RETRY_ONCE_WITHIN_GRACE:false}
+
+  # Bandeja de salida (ADR-0016): sondeo, reintentos con retroceso y tope de intentos.
+  outbox:
+    poll-interval: ${OUTBOX_POLL_INTERVAL_MILLIS:1000}ms
+    batch-size: ${OUTBOX_BATCH_SIZE:50}
+    max-attempts: ${OUTBOX_MAX_ATTEMPTS:10}
 
 management:
   endpoints:
