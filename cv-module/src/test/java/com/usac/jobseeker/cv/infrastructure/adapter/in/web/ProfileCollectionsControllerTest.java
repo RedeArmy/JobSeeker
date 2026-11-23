@@ -55,7 +55,7 @@ class ProfileCollectionsControllerTest {
           Instant.parse("2026-11-23T10:00:00Z"),
           ProfileCollections.empty());
 
-  private ProfessionalProfileView record(Object command) {
+  private ProfessionalProfileView capture(Object command) {
     commands.add(command);
     if (failure != null) {
       throw failure;
@@ -67,54 +67,54 @@ class ProfileCollectionsControllerTest {
       new ProfileCollectionsController(
           new ManageExperiencesUseCase() {
             public ProfessionalProfileView add(AddExperienceCommand c) {
-              return record(c);
+              return capture(c);
             }
 
             public ProfessionalProfileView update(UpdateExperienceCommand c) {
-              return record(c);
+              return capture(c);
             }
 
             public ProfessionalProfileView remove(RemoveExperienceCommand c) {
-              return record(c);
+              return capture(c);
             }
           },
           new ManageEducationUseCase() {
             public ProfessionalProfileView add(AddEducationCommand c) {
-              return record(c);
+              return capture(c);
             }
 
             public ProfessionalProfileView update(UpdateEducationCommand c) {
-              return record(c);
+              return capture(c);
             }
 
             public ProfessionalProfileView remove(RemoveEducationCommand c) {
-              return record(c);
+              return capture(c);
             }
           },
           new ManageCertificationsUseCase() {
             public ProfessionalProfileView add(AddCertificationCommand c) {
-              return record(c);
+              return capture(c);
             }
 
             public ProfessionalProfileView update(UpdateCertificationCommand c) {
-              return record(c);
+              return capture(c);
             }
 
             public ProfessionalProfileView remove(RemoveCertificationCommand c) {
-              return record(c);
+              return capture(c);
             }
           },
           new ManageProjectsUseCase() {
             public ProfessionalProfileView add(AddProjectCommand c) {
-              return record(c);
+              return capture(c);
             }
 
             public ProfessionalProfileView update(UpdateProjectCommand c) {
-              return record(c);
+              return capture(c);
             }
 
             public ProfessionalProfileView remove(RemoveProjectCommand c) {
-              return record(c);
+              return capture(c);
             }
           });
 

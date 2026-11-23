@@ -124,7 +124,7 @@ class ProfileItemsTest {
             EducationLevel.POSTGRAD_SPECIALIZATION,
             EducationLevel.MASTERS,
             EducationLevel.DOCTORATE);
-    assertThat(EducationLevel.MASTERS.compareTo(EducationLevel.BACHELOR)).isPositive();
+    assertThat(EducationLevel.MASTERS).isGreaterThan(EducationLevel.BACHELOR);
   }
 
   @Test
@@ -256,8 +256,8 @@ class ProfileItemsTest {
     source.clear();
 
     assertThat(collections.experiences()).hasSize(1);
-    assertThatThrownBy(() -> collections.experiences().clear())
-        .isInstanceOf(UnsupportedOperationException.class);
+    var stored = collections.experiences();
+    assertThatThrownBy(stored::clear).isInstanceOf(UnsupportedOperationException.class);
     assertThat(ProfileCollections.empty().experiences()).isEmpty();
     assertThat(ProfileCollections.MAX_PER_COLLECTION).isEqualTo(50);
   }

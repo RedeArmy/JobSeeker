@@ -336,8 +336,10 @@ class ManageCollectionsServicesTest {
     var f = new Fixture();
     var s = factory.apply(f);
 
+    UUID item = UUID.randomUUID();
+
     assertThatThrownBy(() -> s.add(f.account, -1)).isInstanceOf(ValidationFailedException.class);
-    assertThatThrownBy(() -> s.remove(f.account, -1, UUID.randomUUID()))
+    assertThatThrownBy(() -> s.remove(f.account, -1, item))
         .isInstanceOf(ValidationFailedException.class);
   }
 }

@@ -19,6 +19,14 @@ final class TextRules {
   static final LocalDate LATEST = LocalDate.of(2100, 12, 31);
   static final int URL_MAX = 2000;
 
+  // Códigos estables de violación: los usa la API y los traduce la pantalla.
+  private static final String REQUIRED = "REQUIRED";
+  private static final String TOO_LONG = "TOO_LONG";
+  private static final String INVALID_CHARACTERS = "INVALID_CHARACTERS";
+  private static final String OUT_OF_RANGE = "OUT_OF_RANGE";
+  private static final String END_BEFORE_START = "END_BEFORE_START";
+  private static final String INVALID_URL = "INVALID_URL";
+
   private TextRules() {}
 
   /** Una sola línea; vacía equivale a no haberla dado. Devuelve el valor recortado o nulo. */
@@ -27,15 +35,15 @@ final class TextRules {
     String value = raw == null ? "" : raw.strip();
     if (value.isEmpty()) {
       if (required) {
-        violations.add(new FieldViolation(field, "REQUIRED"));
+        violations.add(new FieldViolation(field, REQUIRED));
       }
       return null;
     }
     // Un salto de línea en un nombre o titular no tiene sentido y rompe listados y correos.
     if (hasForbiddenControl(value, false)) {
-      violations.add(new FieldViolation(field, "INVALID_CHARACTERS"));
+      violations.add(new FieldViolation(field, INVALID_CHARACTERS));
     } else if (value.codePointCount(0, value.length()) > max) {
-      violations.add(new FieldViolation(field, "TOO_LONG"));
+      violations.add(new FieldViolation(field, TOO_LONG));
     }
     return value;
   }
@@ -47,9 +55,9 @@ final class TextRules {
       return null;
     }
     if (hasForbiddenControl(value, true)) {
-      violations.add(new FieldViolation(field, "INVALID_CHARACTERS"));
+      violations.add(new FieldViolation(field, INVALID_CHARACTERS));
     } else if (value.codePointCount(0, value.length()) > max) {
-      violations.add(new FieldViolation(field, "TOO_LONG"));
+      violations.add(new FieldViolation(field, TOO_LONG));
     }
     return value;
   }
@@ -59,12 +67,12 @@ final class TextRules {
       String field, LocalDate value, boolean required, List<FieldViolation> violations) {
     if (value == null) {
       if (required) {
-        violations.add(new FieldViolation(field, "REQUIRED"));
+        violations.add(new FieldViolation(field, REQUIRED));
       }
       return null;
     }
     if (value.isBefore(EARLIEST) || value.isAfter(LATEST)) {
-      violations.add(new FieldViolation(field, "OUT_OF_RANGE"));
+      violations.add(new FieldViolation(field, OUT_OF_RANGE));
     }
     return value;
   }
@@ -75,7 +83,7 @@ final class TextRules {
   static void order(
       String endField, LocalDate start, LocalDate end, List<FieldViolation> violations) {
     if (start != null && end != null && end.isBefore(start)) {
-      violations.add(new FieldViolation(endField, "END_BEFORE_START"));
+      violations.add(new FieldViolation(endField, END_BEFORE_START));
     }
   }
 
@@ -89,9 +97,9 @@ final class TextRules {
       return null;
     }
     if (value.codePointCount(0, value.length()) > URL_MAX) {
-      violations.add(new FieldViolation(field, "TOO_LONG"));
+      violations.add(new FieldViolation(field, TOO_LONG));
     } else if (!isWebUrl(value)) {
-      violations.add(new FieldViolation(field, "INVALID_URL"));
+      violations.add(new FieldViolation(field, INVALID_URL));
     }
     return value;
   }
@@ -106,7 +114,7 @@ final class TextRules {
       return (scheme.equals("http") || scheme.equals("https"))
           && uri.getHost() != null
           && !uri.getHost().isBlank();
-    } catch (URISyntaxException invalid) {
+    } catch (URISyntaxException _) {
       return false;
     }
   }

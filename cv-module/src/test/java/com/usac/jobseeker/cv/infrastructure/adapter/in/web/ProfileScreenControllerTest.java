@@ -43,7 +43,7 @@ class ProfileScreenControllerTest {
           Instant.parse("2026-11-23T10:00:00Z"),
           ProfileCollections.empty());
 
-  private ProfessionalProfileView record(Object command) {
+  private ProfessionalProfileView capture(Object command) {
     commands.add(command);
     return view;
   }
@@ -57,15 +57,15 @@ class ProfileScreenControllerTest {
           },
           new ManageExperiencesUseCase() {
             public ProfessionalProfileView add(AddExperienceCommand c) {
-              return record(c);
+              return capture(c);
             }
 
             public ProfessionalProfileView update(UpdateExperienceCommand c) {
-              return record(c);
+              return capture(c);
             }
 
             public ProfessionalProfileView remove(RemoveExperienceCommand c) {
-              return record(c);
+              return capture(c);
             }
           },
           (ManageEducationUseCase) null,
@@ -80,9 +80,9 @@ class ProfileScreenControllerTest {
   void thePageShowsTheProfileOfTheSessionAccountAndNothingElse() {
     var model = new ConcurrentModel();
 
-    String view = controller.page(who(), model);
+    String viewName = controller.page(who(), model);
 
-    assertThat(view).isEqualTo("cv/profile");
+    assertThat(viewName).isEqualTo("cv/profile");
     assertThat(model.getAttribute("profile"))
         .isInstanceOfSatisfying(
             ProfessionalProfileResponse.class, p -> assertThat(p.version()).isEqualTo(4));

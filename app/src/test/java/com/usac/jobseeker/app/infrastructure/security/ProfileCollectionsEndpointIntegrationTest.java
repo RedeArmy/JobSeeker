@@ -379,8 +379,8 @@ class ProfileCollectionsEndpointIntegrationTest {
     String body = result.getResponse().getContentAsString();
     assertThat(body)
         .contains(
-            "company", "REQUIRED", "title", "INVALID_CHARACTERS", "endDate", "END_BEFORE_START");
-    assertThat(body).doesNotContain("secreto-del-usuario");
+            "company", "REQUIRED", "title", "INVALID_CHARACTERS", "endDate", "END_BEFORE_START")
+        .doesNotContain("secreto-del-usuario");
     assertThat(versionOf(id)).isEqualTo(1L);
   }
 
@@ -482,12 +482,12 @@ class ProfileCollectionsEndpointIntegrationTest {
                 + " where payload ->> 'accountId' = ? order by aggregate_version",
             id.toString());
     assertThat(events).extracting(e -> e.get("aggregate_version")).containsExactly(1L, 2L, 3L);
-    assertThat(events.get(1).get("change")).isEqualTo("experience");
+    assertThat(events.get(1)).containsEntry("change", "experience");
     assertThat(events.get(1).get("payload").toString()).doesNotContain("Acme");
-    assertThat(events.get(2).get("change")).isEqualTo("project");
+    assertThat(events.get(2)).containsEntry("change", "project");
     assertThat(events.get(2).get("payload").toString()).doesNotContain("JobSeeker");
-    assertThat(events.get(1).get("trace_id"))
-        .isEqualTo(added.getResponse().getHeader("X-Trace-Id"));
+    assertThat(events.get(1))
+        .containsEntry("trace_id", added.getResponse().getHeader("X-Trace-Id"));
   }
 
   @Test

@@ -5,9 +5,8 @@ import com.usac.jobseeker.cv.domain.model.ProfileItemId;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
- * Lo que es idéntico en las cuatro tablas de colecciones: contar y borrar por perfil dueño. El
- * nombre de la tabla se concatena en la consulta, así que **solo** se acepta uno de los cuatro
- * conocidos; nunca llega un dato externo ahí.
+ * Lo que es idéntico en las cuatro tablas de colecciones: contar y borrar por perfil dueño. Solo se
+ * acepta una de las cuatro tablas conocidas y cada una tiene su consulta completa.
  */
 final class ProfileItemTables {
 
@@ -19,8 +18,7 @@ final class ProfileItemTables {
   private ProfileItemTables() {}
 
   static int count(JdbcClient jdbc, String table, ProfessionalProfileId profileId) {
-    return jdbc.sql(
-            "select count(*) from " + known(table) + " where professional_profile_id = :profile")
+    return jdbc.sql(countSql(table))
         .param("profile", profileId.value())
         .query(Integer.class)
         .single();
@@ -30,19 +28,38 @@ final class ProfileItemTables {
   // inexistente, nunca se borra (BR-ACCT-04).
   static boolean delete(
       JdbcClient jdbc, String table, ProfessionalProfileId profileId, ProfileItemId itemId) {
-    return jdbc.sql(
-                "delete from "
-                    + known(table)
-                    + " where id = :id and professional_profile_id = :profile")
+    return jdbc.sql(deleteSql(table))
             .param("id", itemId.value())
             .param("profile", profileId.value())
             .update()
         == 1;
   }
 
-  private static String known(String table) {
+  // Cada tabla tiene su consulta completa y fija: no se arma texto SQL con ningún valor, ni
+  // siquiera
+  // con un nombre de tabla de una lista cerrada, así no hay nada que inyectar ni que revisar.
+  private static String countSql(String table) {
     return switch (table) {
-      case EXPERIENCES, EDUCATION, CERTIFICATIONS, PROJECTS -> table;
+      case EXPERIENCES ->
+          "select count(*) from experiences where professional_profile_id = :profile";
+      case EDUCATION ->
+          "select count(*) from education_entries where professional_profile_id = :profile";
+      case CERTIFICATIONS ->
+          "select count(*) from certifications where professional_profile_id = :profile";
+      case PROJECTS -> "select count(*) from projects where professional_profile_id = :profile";
+      default -> throw new IllegalArgumentException("tabla desconocida");
+    };
+  }
+
+  private static String deleteSql(String table) {
+    return switch (table) {
+      case EXPERIENCES ->
+          "delete from experiences where id = :id and professional_profile_id = :profile";
+      case EDUCATION ->
+          "delete from education_entries where id = :id and professional_profile_id = :profile";
+      case CERTIFICATIONS ->
+          "delete from certifications where id = :id and professional_profile_id = :profile";
+      case PROJECTS -> "delete from projects where id = :id and professional_profile_id = :profile";
       default -> throw new IllegalArgumentException("tabla desconocida");
     };
   }

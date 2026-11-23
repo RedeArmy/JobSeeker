@@ -139,8 +139,9 @@ class ProfileScreenIntegrationTest {
                 .param("headline", "\"><img src=x onerror=alert(2)>")
                 .param("version", "0"));
 
-    assertThat(html).doesNotContain("<script>alert(1)", "<img src=x");
-    assertThat(html).contains("&lt;script&gt;alert(1)&lt;/script&gt;");
+    assertThat(html)
+        .doesNotContain("<script>alert(1)", "<img src=x")
+        .contains("&lt;script&gt;alert(1)&lt;/script&gt;");
   }
 
   @Test
@@ -159,8 +160,8 @@ class ProfileScreenIntegrationTest {
 
     assertThat(html)
         .contains(
-            "Acme", "Backend", "2022-03-01", "actual", "hx-delete=\"/app/profile/experiences/");
-    assertThat(html).contains("hx-confirm=\"¿Quitar esta experiencia?\"");
+            "Acme", "Backend", "2022-03-01", "actual", "hx-delete=\"/app/profile/experiences/")
+        .contains("hx-confirm=\"¿Quitar esta experiencia?\"");
     assertThat(hiddenVersion(html)).isEqualTo("2");
   }
 
@@ -177,8 +178,8 @@ class ProfileScreenIntegrationTest {
                 .param("level", "BACHELOR")
                 .param("version", "1"));
     assertThat(html)
-        .contains("USAC", "Ingeniería", "en curso", "selected", "Licenciatura o grado", "Maestría");
-    assertThat(html).doesNotContain(">POSTGRAD_SPECIALIZATION<", ">BACHELOR<");
+        .contains("USAC", "Ingeniería", "en curso", "selected", "Licenciatura o grado", "Maestría")
+        .doesNotContain(">POSTGRAD_SPECIALIZATION<", ">BACHELOR<");
 
     html =
         body(
@@ -244,8 +245,9 @@ class ProfileScreenIntegrationTest {
             "id=\"profile-errors\"",
             "La empresa es obligatorio.",
             "El puesto contiene caracteres",
-            "La fecha de fin no puede ser anterior");
-    assertThat(html).doesNotContain("secreto-del-usuario").doesNotContain("id=\"profile-content\"");
+            "La fecha de fin no puede ser anterior")
+        .doesNotContain("secreto-del-usuario")
+        .doesNotContain("id=\"profile-content\"");
   }
 
   @Test
@@ -289,8 +291,9 @@ class ProfileScreenIntegrationTest {
             .andReturn();
 
     String html = result.getResponse().getContentAsString();
-    assertThat(html).contains("El perfil cambió desde que lo abriste", "Primero");
-    assertThat(html).doesNotContain("Pisado");
+    assertThat(html)
+        .contains("El perfil cambió desde que lo abriste", "Primero")
+        .doesNotContain("Pisado");
     assertThat(hiddenVersion(html)).isEqualTo("2");
   }
 

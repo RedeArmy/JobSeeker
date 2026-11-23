@@ -251,9 +251,9 @@ class JdbcProfileCollectionsRepositoryTest {
   @Test
   void theDatabaseRefusesAnItemOfAProfileThatDoesNotExist() {
     var orphan = new ProfessionalProfileId(UUID.randomUUID());
+    var item = new Experience(id(), "A", "B", JAN, null, null);
 
-    assertThatThrownBy(
-            () -> experiences.insert(orphan, new Experience(id(), "A", "B", JAN, null, null)))
+    assertThatThrownBy(() -> experiences.insert(orphan, item))
         .isInstanceOf(DataAccessException.class);
   }
 
@@ -295,24 +295,32 @@ class JdbcProfileCollectionsRepositoryTest {
   void theDatabaseRefusesAnUnknownLevelOrTypeWrittenBehindTheDomain() {
     var profile = newProfile();
 
-    assertThatThrownBy(
-            () ->
-                jdbc.sql(
-                        "insert into education_entries (id, professional_profile_id, institution, degree, level)"
-                            + " values (:id, :p, 'U', 'D', 'PHD')")
-                    .param("id", UUID.randomUUID())
-                    .param("p", profile.value())
-                    .update())
+    assertThatThrownBy(() -> insertEducationWithLevel(profile, "PHD"))
         .isInstanceOf(DataAccessException.class);
-    assertThatThrownBy(
-            () ->
-                jdbc.sql(
-                        "insert into projects (id, professional_profile_id, name, type)"
-                            + " values (:id, :p, 'P', 'FREELANCE')")
-                    .param("id", UUID.randomUUID())
-                    .param("p", profile.value())
-                    .update())
+    assertThatThrownBy(() -> insertProjectWithType(profile, "FREELANCE"))
         .isInstanceOf(DataAccessException.class);
+  }
+
+  // Escritura directa, saltándose el dominio, para comprobar que la base rechaza lo que el dominio
+  // ya no deja pasar.
+  private void insertEducationWithLevel(ProfessionalProfileId profile, String level) {
+    jdbc.sql(
+            "insert into education_entries (id, professional_profile_id, institution, degree, level)"
+                + " values (:id, :p, 'U', 'D', :level)")
+        .param("id", UUID.randomUUID())
+        .param("p", profile.value())
+        .param("level", level)
+        .update();
+  }
+
+  private void insertProjectWithType(ProfessionalProfileId profile, String type) {
+    jdbc.sql(
+            "insert into projects (id, professional_profile_id, name, type)"
+                + " values (:id, :p, 'P', :type)")
+        .param("id", UUID.randomUUID())
+        .param("p", profile.value())
+        .param("type", type)
+        .update();
   }
 
   @Test
@@ -331,7 +339,9 @@ class JdbcProfileCollectionsRepositoryTest {
     assertThatThrownBy(
             () -> ProfileItemTables.count(jdbc, "accounts; drop table accounts", profile))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> ProfileItemTables.delete(jdbc, "accounts", profile, id()))
+    var item = id();
+
+    assertThatThrownBy(() -> ProfileItemTables.delete(jdbc, "accounts", profile, item))
         .isInstanceOf(IllegalArgumentException.class);
   }
 }
