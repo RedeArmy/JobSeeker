@@ -24,6 +24,7 @@ Requisitos de calidad del sistema, expresados como escenarios medibles (formato 
 | NFR-PERF-04 | Sugerencia de candidatos (BR-MATCH-06) | Reclutador abre la vista de candidatos sugeridos (no postulados) para una vacante | Listado inicial de candidatos sugeridos renderizado en ≤ 3 segundos, sobre el conjunto de perfiles descubribles (NFR-SCAL-02) |
 | NFR-PERF-05 | Formulario de postulación con prellenado (BR-APPQ-05) | Candidato abre el formulario de postulación de una vacante con preguntas configuradas | Formulario renderizado, con las respuestas vinculadas ya prellenadas desde el perfil, en ≤ 3 segundos |
 | NFR-PERF-06 | Sugerencia de vínculo por IA (BR-APPQ-04) | Reclutador guarda una pregunta de texto libre sin vínculo manual a un campo del perfil | El sistema responde con una sugerencia de vínculo (o su ausencia) en ≤ 2 segundos — es una comparación de embeddings, no una generación de texto |
+| NFR-PERF-07 | Frescura del score (BR-MATCH-03, ADR-0017) | Un candidato edita su perfil o un reclutador edita su vacante | El score actualizado está disponible con *p95* ≤ **120 s**; mientras un par está pendiente la interfaz lo indica («actualizando…»). El objetivo se **mide con Ollama real y el modelo residente** antes de publicarlo como alerta (control C4 del ADR-0017) |
 
 ## 3. Escalabilidad
 
