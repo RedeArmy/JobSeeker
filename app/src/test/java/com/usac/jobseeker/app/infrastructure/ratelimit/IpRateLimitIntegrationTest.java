@@ -63,7 +63,7 @@ class IpRateLimitIntegrationTest {
             post("/api/v1/webhooks/clavaris")
                 .with(from(address))
                 .content(body)
-                .header("Clavaris-Signature", WebhookSignerForTests.header(body, SECRET))
+                .header("Clavaris-Signature", DeliverySigner.header(body, SECRET))
                 .header("Clavaris-Event-Type", "account.suspended")
                 .header("Clavaris-Event-Id", UUID.randomUUID().toString()))
         .andReturn()

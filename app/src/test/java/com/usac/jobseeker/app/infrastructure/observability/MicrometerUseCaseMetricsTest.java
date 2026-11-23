@@ -22,9 +22,9 @@ class MicrometerUseCaseMetricsTest {
 
   @Test
   void eachCallIncrementsTheCounterOfItsUseCaseAndOutcome() {
-    metrics.record("get_my_account", "found");
-    metrics.record("get_my_account", "found");
-    metrics.record("get_my_account", "not_found");
+    metrics.count("get_my_account", "found");
+    metrics.count("get_my_account", "found");
+    metrics.count("get_my_account", "not_found");
 
     assertThat(count("get_my_account", "found")).isEqualTo(2);
     assertThat(count("get_my_account", "not_found")).isOne();
@@ -32,8 +32,8 @@ class MicrometerUseCaseMetricsTest {
 
   @Test
   void useCasesAreIndependentUnderOneSingleMetricName() {
-    metrics.record("get_my_account", "found");
-    metrics.record("otro_caso_de_uso", "found");
+    metrics.count("get_my_account", "found");
+    metrics.count("otro_caso_de_uso", "found");
 
     assertThat(count("otro_caso_de_uso", "found")).isOne();
     assertThat(meters.getMeters().stream().map(m -> m.getId().getName()).distinct())

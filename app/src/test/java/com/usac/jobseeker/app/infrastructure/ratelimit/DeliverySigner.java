@@ -7,9 +7,9 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
 /** Firma una entrega como Clavaris: HMAC-SHA256 sobre `"<t>.<cuerpo>"`. */
-final class WebhookSignerForTests {
+final class DeliverySigner {
 
-  private WebhookSignerForTests() {}
+  private DeliverySigner() {}
 
   static String header(byte[] body, String secret) {
     long epoch = Instant.now().getEpochSecond();

@@ -34,7 +34,7 @@ public class GetMyAccountService implements GetMyAccountUseCase {
     Optional<MyAccountView> view =
         accounts.findById(query.accountId()).map(GetMyAccountService::view);
     String outcome = view.isPresent() ? "found" : "not_found";
-    metrics.record(USE_CASE, outcome);
+    metrics.count(USE_CASE, outcome);
     LOG.info("event=account_viewed outcome={} Consulta de la propia cuenta", outcome);
     return view;
   }

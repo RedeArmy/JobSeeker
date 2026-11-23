@@ -27,6 +27,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
  */
 public class ClavarisWebhookFilter extends OncePerRequestFilter {
 
+  // NOSONAR (S1075): es el contrato con Clavaris, no un valor de entorno: la URL que se registra en
+  // su consola es esta, y se comparte entre la cadena de seguridad y el límite de tasa.
+  public static final String PATH = "/api/v1/webhooks/clavaris"; // NOSONAR
+
   static final String SIGNATURE = "Clavaris-Signature";
   static final String EVENT_TYPE = "Clavaris-Event-Type";
   static final String EVENT_ID = "Clavaris-Event-Id";

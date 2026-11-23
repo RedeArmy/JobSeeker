@@ -15,5 +15,5 @@ public interface UseCaseMetricsPort {
    * @param useCase nombre estable del caso de uso, en `snake_case` (p. ej. `get_my_account`)
    * @param outcome resultado de un conjunto cerrado (p. ej. `found`, `not_found`)
    */
-  void record(String useCase, String outcome);
+  void count(String useCase, String outcome);
 }

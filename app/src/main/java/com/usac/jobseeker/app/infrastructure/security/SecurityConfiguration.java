@@ -118,7 +118,7 @@ class SecurityConfiguration {
     http.addFilterBefore(filter, AuthorizationFilter.class);
     // Límite por IP antes que nada: quien no sabe firmar no gasta ni la lectura del cuerpo.
     http.addFilterBefore(rateLimits.beforeAuthentication(), ClavarisWebhookFilter.class);
-    return closedStatelessChain(http, "/api/v1/webhooks/clavaris");
+    return closedStatelessChain(http, ClavarisWebhookFilter.PATH);
   }
 
   /**

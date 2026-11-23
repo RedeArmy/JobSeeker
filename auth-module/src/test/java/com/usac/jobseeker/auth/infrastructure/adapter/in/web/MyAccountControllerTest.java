@@ -32,7 +32,7 @@ class MyAccountControllerTest {
   private final MyAccountController controller = new MyAccountController(useCase);
 
   private static Principal principal(UUID id) {
-    return () -> id.toString();
+    return id::toString;
   }
 
   @Test

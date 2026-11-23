@@ -63,7 +63,7 @@ class OpenApiSpecIntegrationTest {
     var operation = spec.getPaths().get("/api/v1/me").getGet();
     assertThat(operation.getSummary()).isEqualTo("Consultar mi cuenta");
     assertThat(operation.getTags()).containsExactly("auth");
-    assertThat(operation.getResponses().keySet()).contains("200", "401", "403", "404", "429");
+    assertThat(operation.getResponses()).containsKeys("200", "401", "403", "404", "429");
     var schema = spec.getComponents().getSchemas().get("MyAccountResponse");
     assertThat(schema.getProperties()).containsKeys("id", "capabilities");
     assertThat(

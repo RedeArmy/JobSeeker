@@ -322,7 +322,7 @@ Criterio de salida del Sprint 0 (`roadmap-and-release-plan.md`): un caso de uso 
 | Autenticación y cuenta activa | cadena B + `ActorFilter` | Ya resueltas: el controlador solo ve peticiones con Bearer válido y una cuenta que puede actuar |
 | Límite de tasa | `app`, `infrastructure.ratelimit` | **Transversal**: una política por tipo de petición, no una anotación por endpoint (§12.2) |
 | OpenAPI | `@Tag`/`@Operation`/`@ApiResponse` en el controlador; documento único en `app` | §12.3 |
-| Métrica de negocio | puerto `UseCaseMetricsPort` en `common` | El caso de uso dice `record("get_my_account", "found")`; `app` lo traduce al contador `jobseeker_usecase_total{use_case,outcome}`. Una sola métrica para todos los casos de uso, con etiquetas de conjunto cerrado: añadir un caso de uso no obliga a tocar los paneles |
+| Métrica de negocio | puerto `UseCaseMetricsPort` en `common` | El caso de uso dice `count("get_my_account", "found")`; `app` lo traduce al contador `jobseeker_usecase_total{use_case,outcome}`. Una sola métrica para todos los casos de uso, con etiquetas de conjunto cerrado: añadir un caso de uso no obliga a tocar los paneles |
 | Log estructurado | el caso de uso, con `event=… clave=valor` y mensaje en español | El `traceId` lo añade el MDC; **nunca** lleva el identificador de la cuenta ni datos personales (BR-DATA-01) |
 | Errores | `ApiExceptionHandler` (`app`) | Todo error de un controlador sale con el sobre estándar y sin detalles internos; 500 genérico con la causa solo en el registro |
 

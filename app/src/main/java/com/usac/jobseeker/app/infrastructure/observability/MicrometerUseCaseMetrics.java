@@ -19,7 +19,7 @@ public class MicrometerUseCaseMetrics implements UseCaseMetricsPort {
   }
 
   @Override
-  public void record(String useCase, String outcome) {
+  public void count(String useCase, String outcome) {
     meters.counter(METRIC, "use_case", useCase, "outcome", outcome).increment();
   }
 }

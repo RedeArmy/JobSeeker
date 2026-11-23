@@ -1,5 +1,6 @@
 package com.usac.jobseeker.app.infrastructure.ratelimit;
 
+import com.usac.jobseeker.app.infrastructure.security.webhook.ClavarisWebhookFilter;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Optional;
 import java.util.Set;
@@ -16,7 +17,6 @@ final class RateLimitRules {
   static final String WRITE = "write";
   static final String READ = "read";
 
-  private static final String WEBHOOK_PATH = "/api/v1/webhooks/clavaris";
   private static final Set<String> SAFE_METHODS = Set.of("GET", "HEAD", "OPTIONS");
 
   private RateLimitRules() {}
@@ -33,7 +33,7 @@ final class RateLimitRules {
     if (path.startsWith("/oauth2/authorization/") || path.startsWith("/login/oauth2/code/")) {
       return Optional.of(LOGIN);
     }
-    if (path.equals(WEBHOOK_PATH)) {
+    if (path.equals(ClavarisWebhookFilter.PATH)) {
       return Optional.of(WEBHOOK);
     }
     return Optional.of(SAFE_METHODS.contains(request.getMethod()) ? READ : WRITE);
