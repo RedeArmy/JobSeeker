@@ -4,6 +4,7 @@ import com.usac.jobseeker.auth.application.usecase.provisionaccount.AccountProvi
 import com.usac.jobseeker.auth.application.usecase.resolveactor.ActorLookupPort;
 import com.usac.jobseeker.auth.domain.model.Account;
 import com.usac.jobseeker.auth.domain.model.DeletionStatus;
+import com.usac.jobseeker.auth.domain.model.IdentityStatus;
 import com.usac.jobseeker.common.domain.model.AccountId;
 import com.usac.jobseeker.common.domain.model.Capability;
 import java.util.EnumSet;
@@ -41,7 +42,7 @@ public class JdbcAccountRepository implements AccountProvisioningPort, ActorLook
   @Override
   public Optional<Account> findById(AccountId id) {
     return jdbc.sql(
-            "select id, is_candidate_enabled, is_recruiter_enabled, deletion_status"
+            "select id, is_candidate_enabled, is_recruiter_enabled, deletion_status, identity_status"
                 + " from accounts where id = :id")
         .param("id", id.value())
         .query(
@@ -56,7 +57,8 @@ public class JdbcAccountRepository implements AccountProvisioningPort, ActorLook
               return new Account(
                   new AccountId(rows.getObject("id", java.util.UUID.class)),
                   capabilities,
-                  DeletionStatus.valueOf(rows.getString("deletion_status")));
+                  DeletionStatus.valueOf(rows.getString("deletion_status")),
+                  IdentityStatus.valueOf(rows.getString("identity_status")));
             })
         .optional();
   }
