@@ -3,11 +3,15 @@ package com.usac.jobseeker.cv.application.usecase.saveprofessionalprofile;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.usac.jobseeker.common.application.observability.UseCaseMetricsPort;
+import com.usac.jobseeker.common.application.outbox.DomainEventPublisherPort;
 import com.usac.jobseeker.common.application.outbox.OutboxEvent;
 import com.usac.jobseeker.common.domain.error.StaleStateException;
 import com.usac.jobseeker.common.domain.error.ValidationFailedException;
 import com.usac.jobseeker.common.domain.model.AccountId;
+import com.usac.jobseeker.cv.application.usecase.getmyprofessionalprofile.ProfileCollectionsReadPort;
 import com.usac.jobseeker.cv.domain.model.ProfessionalProfile;
+import com.usac.jobseeker.cv.domain.model.ProfileCollections;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -15,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
 
 class SaveProfessionalProfileServiceTest {
@@ -32,6 +37,7 @@ class SaveProfessionalProfileServiceTest {
   private SaveProfessionalProfileService service() {
     return new SaveProfessionalProfileService(
         port,
+        profileId -> ProfileCollections.empty(),
         id -> candidate,
         events::add,
         (useCase, outcome) -> metrics.add(useCase + ":" + outcome),
@@ -241,35 +247,40 @@ class SaveProfessionalProfileServiceTest {
   @Test
   void everyCollaboratorIsRequired() {
     Clock clock = Clock.systemUTC();
+    ProfileCollectionsReadPort none = profileId -> ProfileCollections.empty();
+    CandidateCapabilityPort cap = id -> true;
+    DomainEventPublisherPort publisher = events::add;
+    UseCaseMetricsPort counter = (a, b) -> {};
+    Supplier<UUID> ids = UUID::randomUUID;
+
     assertThatThrownBy(
             () ->
-                new SaveProfessionalProfileService(
-                    null, id -> true, events::add, (a, b) -> {}, clock, UUID::randomUUID))
+                new SaveProfessionalProfileService(null, none, cap, publisher, counter, clock, ids))
         .isInstanceOf(NullPointerException.class);
     assertThatThrownBy(
             () ->
                 new SaveProfessionalProfileService(
-                    store, null, events::add, (a, b) -> {}, clock, UUID::randomUUID))
+                    store, null, cap, publisher, counter, clock, ids))
         .isInstanceOf(NullPointerException.class);
     assertThatThrownBy(
             () ->
                 new SaveProfessionalProfileService(
-                    store, id -> true, null, (a, b) -> {}, clock, UUID::randomUUID))
+                    store, none, null, publisher, counter, clock, ids))
+        .isInstanceOf(NullPointerException.class);
+    assertThatThrownBy(
+            () -> new SaveProfessionalProfileService(store, none, cap, null, counter, clock, ids))
+        .isInstanceOf(NullPointerException.class);
+    assertThatThrownBy(
+            () -> new SaveProfessionalProfileService(store, none, cap, publisher, null, clock, ids))
+        .isInstanceOf(NullPointerException.class);
+    assertThatThrownBy(
+            () ->
+                new SaveProfessionalProfileService(store, none, cap, publisher, counter, null, ids))
         .isInstanceOf(NullPointerException.class);
     assertThatThrownBy(
             () ->
                 new SaveProfessionalProfileService(
-                    store, id -> true, events::add, null, clock, UUID::randomUUID))
-        .isInstanceOf(NullPointerException.class);
-    assertThatThrownBy(
-            () ->
-                new SaveProfessionalProfileService(
-                    store, id -> true, events::add, (a, b) -> {}, null, UUID::randomUUID))
-        .isInstanceOf(NullPointerException.class);
-    assertThatThrownBy(
-            () ->
-                new SaveProfessionalProfileService(
-                    store, id -> true, events::add, (a, b) -> {}, clock, null))
+                    store, none, cap, publisher, counter, clock, null))
         .isInstanceOf(NullPointerException.class);
   }
 }
