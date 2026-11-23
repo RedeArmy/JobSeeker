@@ -14,6 +14,8 @@ create table profile_embeddings (
     embedding_model text,
     embedding_dim integer,
     -- SHA-256 en hexadecimal de la representación canónica: si no cambia, no se llama a Ollama.
+    -- Siempre de 64 caracteres, así que char(64) es exacto y no rellena (como `request_hash` de app).
+    -- squawk-ignore ban-char-field
     embedding_content_hash char(64),
     embedding_truncated boolean not null default false,
     embedding_computed_at timestamptz,
@@ -43,6 +45,8 @@ create table job_embeddings (
     embedding vector(1024),
     embedding_model text,
     embedding_dim integer,
+    -- SHA-256 en hexadecimal, siempre de 64 caracteres: char(64) es exacto y no rellena.
+    -- squawk-ignore ban-char-field
     embedding_content_hash char(64),
     embedding_truncated boolean not null default false,
     embedding_computed_at timestamptz,
