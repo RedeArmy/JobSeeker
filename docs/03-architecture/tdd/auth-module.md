@@ -76,7 +76,7 @@ Código en `app/src/main/java/com/usac/jobseeker/app/infrastructure/security` y 
 |---|---|
 | `SecurityConfiguration` | Las tres cadenas con `@Order`: webhooks y API cerradas (rechazan todo) y la web con login OIDC, CSRF, cabeceras y la regla «lo no declarado se rechaza» |
 | `LazyClavarisClientRegistrationRepository` | Descubrimiento perezoso del emisor con tiempos de espera, comprobación de que el `issuer` coincide y espera tras un fallo |
-| `ActorFilter` / `CurrentActor` | Reconstruye el `Actor` desde la base en cada petición y rechaza cuentas en eliminación o anonimizadas |
+| `ActorFilter` / `CurrentActor` | Reconstruye el `Actor` desde la base en cada petición y rechaza cuentas en eliminación o anonimizadas y pone el `accountId` en el MDC (§12.1) |
 | `AccountProvisioningSuccessHandler` | Crea la cuenta local al terminar el login (BR-ACCT-09) |
 | `AbsoluteSessionTimeoutFilter` | Límite absoluto de la sesión (8 h por defecto) |
 | `DistributedSessionConfiguration` + `TolerantSessionListenerStartup` | Sesión indexada en Redis; el oyente no impide el arranque con Redis caído (ADR-0020, regla 9) |
@@ -403,7 +403,7 @@ Criterio de salida del Sprint 0 (`roadmap-and-release-plan.md`): un caso de uso 
 | Límite de tasa | `app`, `infrastructure.ratelimit` | **Transversal**: una política por tipo de petición, no una anotación por endpoint (§12.2) |
 | OpenAPI | `@Tag`/`@Operation`/`@ApiResponse` en el controlador; documento único en `app` | §12.3 |
 | Métrica de negocio | puerto `UseCaseMetricsPort` en `common` | El caso de uso dice `count("get_my_account", "found")`; `app` lo traduce al contador `jobseeker_usecase_total{use_case,outcome}`. Una sola métrica para todos los casos de uso, con etiquetas de conjunto cerrado: añadir un caso de uso no obliga a tocar los paneles |
-| Log estructurado | el caso de uso, con `event=… clave=valor` y mensaje en español | El `traceId` lo añade el MDC. El mensaje no repite el identificador de la cuenta ni datos personales: el `accountId` por petición que piden la arquitectura de seguridad (§ de logs) y el modelo de amenazas contra el repudio debe aportarlo el contexto (MDC), una sola vez, y no cada caso de uso (hoy **no existe**, ver §12.6) |
+| Log estructurado | el caso de uso, con `event=… clave=valor` y mensaje en español | El `traceId` (`TraceIdFilter`) y el `accountId` (`ActorFilter`) los añade el MDC como campos de **cada** línea de la petición, desde un solo sitio. El mensaje del caso de uso no repite el identificador ni lleva datos personales |
 | Errores | `ApiExceptionHandler` (`app`) | Todo error de un controlador sale con el sobre estándar y sin detalles internos; 500 genérico con la causa solo en el registro |
 
 ### 12.2 Límite de tasa (ADR-0011)
@@ -451,7 +451,7 @@ Criterio de salida del Sprint 0 (`roadmap-and-release-plan.md`): un caso de uso 
 - **`X-Forwarded-For`**: ver §12.2 y §11.7 (receta validada con nginx); depende del ADR-0026.
 - **Swagger UI en producción**: apagada. Si se quiere en staging, falta decidir su protección (hoy `permitAll` donde está encendida, solo en `dev`).
 - **Snapshot del spec versionado en el repositorio** (pregunta abierta del ADR-0010): no se hace todavía.
-- **`accountId` por petición en el log** (hueco previo, no de este paso): `security-architecture.md` y el modelo de amenazas (repudio) piden que los logs estructurados lleven `traceId` **y** `accountId`, pero el MDC solo tiene `traceId`. Hoy el identificador solo aparece en `event=login_succeeded` (4.2). Habría que ponerlo en el MDC desde `ActorFilter` y retirarlo al terminar la petición. Es un dato de identificación, no personal; **BR-DATA-01 trata datos de CV**, y mi comentario inicial en `GetMyAccountService` la citaba para otra cosa.
+- **`accountId` por petición en el log**: resuelto. `security-architecture.md` y el modelo de amenazas (repudio) lo piden y no existía: `ActorFilter` lo pone en el MDC en cuanto toma el `sub` de un token ya validado (antes de resolver el actor, para que cubra también el aprovisionamiento y el rechazo) y lo retira siempre en un `finally`, porque el hilo se reutiliza. Es un identificador, no un dato personal (BR-DATA-01 trata datos de CV). Solo lo llevan las peticiones autenticadas: las del receptor de webhooks no tienen cuenta que identificar, y `event=login_succeeded` (4.2) lo sigue llevando en su mensaje porque ocurre antes de que corra el filtro.
 - **Códigos de error genéricos** (`REQUEST_INVALID`, `RESOURCE_NOT_FOUND`…): los propios del dominio (`JOB_POSTING_NOT_FOUND`…) los pondrá cada módulo al tenerlos.
 - **Pruebas de mutación**: 
 

@@ -13,6 +13,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Set;
 import java.util.function.Predicate;
+import org.slf4j.MDC;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -25,6 +26,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
 final class ActorFilter extends OncePerRequestFilter {
 
   private final ResolveActorUseCase resolveActor;
+
+  /** Clave del MDC con la que cada línea de log lleva la cuenta de la petición. */
+  static final String MDC_KEY = "accountId";
+
   private final ProvisionAccountUseCase provisionAccount;
   private final Predicate<Authentication> appliesTo;
   private final Set<String> alwaysAllowedPaths;
@@ -64,6 +69,26 @@ final class ActorFilter extends OncePerRequestFilter {
           request, response, 403, "IDENTITY_INVALID", "La identidad de la sesión no es válida.");
       return;
     }
+    // NFR-OBS-01 y modelo de amenazas (repudio): cada línea de log de una petición autenticada
+    // lleva
+    // `accountId`, una sola vez y desde aquí, y no cada caso de uso por su cuenta. Es un
+    // identificador, no un dato personal (security-architecture.md, logs); sale del `sub` de un
+    // token
+    // ya validado, no de un parámetro, y se retira siempre: el hilo se reutiliza.
+    MDC.put(MDC_KEY, accountId.value().toString());
+    try {
+      continueAs(accountId, request, response, chain);
+    } finally {
+      MDC.remove(MDC_KEY);
+    }
+  }
+
+  private void continueAs(
+      AccountId accountId,
+      HttpServletRequest request,
+      HttpServletResponse response,
+      FilterChain chain)
+      throws ServletException, IOException {
     ActorResolution resolution = resolveActor.execute(new ResolveActorQuery(accountId));
     if (resolution instanceof ActorResolution.Rejected(var reason)
         && reason == ActorResolution.Reason.NOT_PROVISIONED) {

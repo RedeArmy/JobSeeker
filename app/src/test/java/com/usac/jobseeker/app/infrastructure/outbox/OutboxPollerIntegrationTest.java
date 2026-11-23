@@ -19,12 +19,11 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -34,15 +33,11 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @SpringBootTest
 @Import(InfrastructureTestConfiguration.class)
+@WithoutOutboxScheduler
 class OutboxPollerIntegrationTest {
 
   private static final String TYPE = "prueba.evento";
-
-  @DynamicPropertySource
-  static void props(DynamicPropertyRegistry registry) {
-    registry.add("jobseeker.outbox.poll-interval", () -> "1h");
-  }
-
+  @Autowired private OutboxConfiguration.OutboxScheduler scheduler;
   @Autowired private OutboxStore store;
   @Autowired private JdbcTemplate jdbc;
   @Autowired private PlatformTransactionManager transactions;
@@ -50,6 +45,13 @@ class OutboxPollerIntegrationTest {
   private final OutboxProperties properties =
       new OutboxProperties(
           Duration.ofSeconds(1), 10, 3, Duration.ofMillis(1), Duration.ofMillis(5));
+
+  @Test
+  void theRealSchedulerIsReplacedByAMockSoNoOtherPollerCanTakeTheRowsOfTheseTests() {
+    // Guarda de @WithoutOutboxScheduler: si dejara de aplicarse, estas pruebas volverían a ser
+    // intermitentes sin que nada lo avisara.
+    assertThat(Mockito.mockingDetails(scheduler).isMock()).isTrue();
+  }
 
   @BeforeEach
   void clean() {
