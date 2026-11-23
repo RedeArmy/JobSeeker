@@ -14,8 +14,70 @@
     <packaging>jar</packaging>
 
     <name>matching-module</name>
-    <description>POM de marcador de posición del módulo matching. Aún sin dependencias.</description>
+    <description>Módulo cv: perfil profesional compartido y perfil de candidato. Ver docs/03-architecture/tdd/cv-module.md.</description>
 
-    <!-- Los starters de Spring Boot y las dependencias propias del módulo se añadirán más adelante. -->
+    <dependencies>
+        <dependency>
+            <groupId>com.usac.jobseeker</groupId>
+            <artifactId>common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- Transacciones en application (ADR-0015, ARCH-02); JDBC y configuración solo en infrastructure. -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-tx</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
+        </dependency>
+        <!-- Log estructurado de los casos de uso (ADR-0012): solo la API, el motor lo pone `app`. -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- El adaptador JDBC se prueba en este módulo, contra la tabla real que su propia migración crea
+             (Postgres 17, ADR-0028): un módulo prueba sus adaptadores sin depender de `app`. -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 
 </project>

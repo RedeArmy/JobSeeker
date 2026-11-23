@@ -235,7 +235,7 @@ final class MigrationRules {
         "candidate_invitations",
         "job_posting_scheduled_transitions",
         "application_questions");
-    put(owners, "matching", "compatibility_scores");
+    put(owners, "matching", "compatibility_scores", "profile_embeddings", "job_embeddings");
     put(
         owners,
         "ats",
