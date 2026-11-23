@@ -154,7 +154,9 @@ class HandleClavarisWebhookServiceTest {
   void ifPublishingFailsTheFailureReachesTheCallerSoTheTransactionRollsBackAndClavarisRetries() {
     publisherFails = true;
 
-    assertThatThrownBy(() -> handle("account.suspended", UUID.randomUUID(), T0))
+    UUID id = UUID.randomUUID();
+
+    assertThatThrownBy(() -> handle("account.suspended", id, T0))
         .isInstanceOf(IllegalStateException.class);
   }
 

@@ -88,7 +88,7 @@ class IdentityStateTest {
   @Test
   void theTieBreakComparesTheUuidAsUnsignedBytesLikePostgresDoes() {
     // Con signo, 0xF000… sería MENOR que 0x0000…01 y el empate se resolvería al revés que en SQL.
-    assertThat(HIGH.compareTo(LOW)).as("UUID.compareTo compara con signo").isNegative();
+    assertThat(HIGH).as("UUID.compareTo compara con signo").isLessThan(LOW);
     assertThat(IdentityState.compareUnsigned(HIGH, LOW)).isPositive();
     assertThat(IdentityState.compareUnsigned(LOW, HIGH)).isNegative();
     assertThat(IdentityState.compareUnsigned(HIGH, HIGH)).isZero();

@@ -86,12 +86,11 @@ class SessionInvalidationConsumerTest {
     when(repository.findByPrincipalName(account.toString()))
         .thenThrow(new IllegalStateException("Redis caído"));
 
-    assertThatThrownBy(
-            () ->
-                consumer.consume(
-                    event(
-                        AccountSessionsInvalidationRequested.payload(
-                            new AccountId(account), ClavarisEvent.SUSPENDED, UUID.randomUUID()))))
-        .isInstanceOf(IllegalStateException.class);
+    OutboxEvent request =
+        event(
+            AccountSessionsInvalidationRequested.payload(
+                new AccountId(account), ClavarisEvent.SUSPENDED, UUID.randomUUID()));
+
+    assertThatThrownBy(() -> consumer.consume(request)).isInstanceOf(IllegalStateException.class);
   }
 }

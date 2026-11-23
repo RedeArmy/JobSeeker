@@ -123,7 +123,7 @@ public final class WebhookSignatureVerifier {
     }
     try {
       return HexFormat.of().parseHex(text);
-    } catch (IllegalArgumentException e) {
+    } catch (IllegalArgumentException _) {
       return NO_SIGNATURE;
     }
   }

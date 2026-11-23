@@ -81,16 +81,13 @@ public class ClavarisWebhookFilter extends OncePerRequestFilter {
     }
     var outcome = verifier.verify(request.getHeader(SIGNATURE), body.get(), clock.instant());
     if (outcome != WebhookSignatureVerifier.Outcome.VALID) {
-      LOG.warn(
-          "event=webhook_rejected reason={} Webhook de Clavaris rechazado por su firma",
-          outcome.name().toLowerCase(java.util.Locale.ROOT));
+      String reason = outcome.name().toLowerCase(java.util.Locale.ROOT);
+      if (LOG.isWarnEnabled()) {
+        LOG.warn(
+            "event=webhook_rejected reason={} Webhook de Clavaris rechazado por su firma", reason);
+      }
       reply(
-          request,
-          response,
-          401,
-          ERROR_CODE_SIGNATURE,
-          "Firma no válida.",
-          "signature_" + outcome.name().toLowerCase(java.util.Locale.ROOT));
+          request, response, 401, ERROR_CODE_SIGNATURE, "Firma no válida.", "signature_" + reason);
       return;
     }
     Optional<HandleClavarisWebhookCommand> command =

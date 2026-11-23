@@ -36,20 +36,23 @@ class WebhookPropertiesTest {
 
   @Test
   void theToleranceMustBePositiveAndAtMostFifteenMinutes() {
-    assertThat(new WebhookProperties("s", "", Duration.ofMinutes(15), 1).tolerance())
-        .isEqualTo(Duration.ofMinutes(15));
-    assertThatThrownBy(() -> new WebhookProperties("s", "", Duration.ZERO, 1))
+    Duration max = Duration.ofMinutes(15);
+    Duration overMax = max.plusSeconds(1);
+    Duration negative = Duration.ofSeconds(-1);
+    Duration zero = Duration.ZERO;
+    assertThat(new WebhookProperties("s", "", max, 1).tolerance()).isEqualTo(max);
+    assertThatThrownBy(() -> new WebhookProperties("s", "", zero, 1))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> new WebhookProperties("s", "", Duration.ofSeconds(-1), 1))
+    assertThatThrownBy(() -> new WebhookProperties("s", "", negative, 1))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(
-            () -> new WebhookProperties("s", "", Duration.ofMinutes(15).plusSeconds(1), 1))
+    assertThatThrownBy(() -> new WebhookProperties("s", "", overMax, 1))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
   @Test
   void theBodyLimitMustBePositive() {
-    assertThatThrownBy(() -> new WebhookProperties("s", "", Duration.ofMinutes(5), 0))
+    Duration tolerance = Duration.ofMinutes(5);
+    assertThatThrownBy(() -> new WebhookProperties("s", "", tolerance, 0))
         .isInstanceOf(IllegalArgumentException.class);
   }
 }

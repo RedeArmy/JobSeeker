@@ -42,15 +42,17 @@ class OutboxPropertiesTest {
   @Test
   void invalidSettingsAreRejectedAtStartup() {
     Duration s = Duration.ofSeconds(1);
-    assertThatThrownBy(() -> new OutboxProperties(Duration.ZERO, 1, 1, s, s))
+    Duration zero = Duration.ZERO;
+    Duration twoSeconds = Duration.ofSeconds(2);
+    assertThatThrownBy(() -> new OutboxProperties(zero, 1, 1, s, s))
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(() -> new OutboxProperties(s, 0, 1, s, s))
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(() -> new OutboxProperties(s, 1, 0, s, s))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> new OutboxProperties(s, 1, 1, Duration.ZERO, s))
+    assertThatThrownBy(() -> new OutboxProperties(s, 1, 1, zero, s))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> new OutboxProperties(s, 1, 1, Duration.ofSeconds(2), s))
+    assertThatThrownBy(() -> new OutboxProperties(s, 1, 1, twoSeconds, s))
         .isInstanceOf(IllegalArgumentException.class);
   }
 

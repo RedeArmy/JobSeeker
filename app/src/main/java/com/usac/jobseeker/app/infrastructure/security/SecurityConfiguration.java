@@ -104,8 +104,7 @@ class SecurityConfiguration {
       HandleClavarisWebhookUseCase handleWebhook,
       WebhookProperties webhook,
       MeterRegistry meters,
-      Clock clock)
-      throws Exception {
+      Clock clock) {
     // La autenticidad la da solo la firma HMAC del filtro, que además responde: no hay sesión,
     // Bearer ni CSRF. El filtro no es un bean para que no se registre también fuera de esta cadena.
     ClavarisWebhookFilter filter = new ClavarisWebhookFilter(handleWebhook, webhook, meters, clock);

@@ -41,7 +41,7 @@ public record OutboxProperties(
    */
   public Duration backoff(int attempt, double jitter) {
     long millis = baseBackoff.toMillis();
-    int doublings = Math.min(Math.max(attempt - 1, 0), 30);
+    int doublings = Math.clamp(attempt - 1, 0, 30);
     long capped = Math.min(maxBackoff.toMillis(), millis << doublings);
     // Entre la mitad y el total: nunca 0, para que un fallo persistente no se reintente en bucle.
     return Duration.ofMillis(Math.max(1, (long) (capped * (0.5 + 0.5 * jitter))));

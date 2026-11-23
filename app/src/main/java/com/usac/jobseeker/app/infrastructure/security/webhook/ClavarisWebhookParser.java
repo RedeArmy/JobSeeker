@@ -38,7 +38,7 @@ final class ClavarisWebhookParser {
               new AccountId(accountId(root.path("accountId"))),
               occurredAt(root.path("occurredAt")),
               traceId == null || traceId.isBlank() ? null : traceId));
-    } catch (RuntimeException e) {
+    } catch (RuntimeException _) {
       // JSON inválido, UUID mal formado, dato ausente, etc.: cuerpo sin la forma esperada.
       return Optional.empty();
     }

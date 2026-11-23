@@ -74,8 +74,8 @@ public record IdentityState(IdentityStatus status, Instant eventAt, UUID eventId
   public static int compareUnsigned(UUID left, UUID right) {
     int byMostSignificant =
         Long.compareUnsigned(left.getMostSignificantBits(), right.getMostSignificantBits());
-    return byMostSignificant != 0
-        ? byMostSignificant
-        : Long.compareUnsigned(left.getLeastSignificantBits(), right.getLeastSignificantBits());
+    return byMostSignificant == 0
+        ? Long.compareUnsigned(left.getLeastSignificantBits(), right.getLeastSignificantBits())
+        : byMostSignificant;
   }
 }
