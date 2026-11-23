@@ -1,6 +1,7 @@
 package com.usac.jobseeker.app.infrastructure.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.usac.jobseeker.auth.application.usecase.provisionaccount.ProvisionAccountCommand;
 import com.usac.jobseeker.auth.application.usecase.provisionaccount.ProvisionAccountResult;
@@ -22,6 +23,7 @@ import java.util.function.Predicate;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -306,5 +308,106 @@ class ActorFilterTest {
 
     assertThat(resolved).hasSize(1);
     assertThat(response.getStatus()).isEqualTo(403);
+  }
+
+  // ---- el accountId llega a cada línea de log de la petición (NFR-OBS-01) ----
+
+  private final List<String> seenInMdc = new ArrayList<>();
+
+  private jakarta.servlet.FilterChain observingChain() {
+    return (req, res) -> seenInMdc.add(MDC.get(ActorFilter.MDC_KEY));
+  }
+
+  @Test
+  void theAccountIdIsInTheLoggingContextWhileTheRestOfTheChainRuns() throws Exception {
+    filter().doFilter(request, response, observingChain());
+
+    assertThat(seenInMdc).containsExactly(account.value().toString());
+  }
+
+  @Test
+  void theAccountIdIsRemovedWhenTheRequestEndsSoTheNextRequestOnTheSameThreadDoesNotInheritIt()
+      throws Exception {
+    filter().doFilter(request, response, observingChain());
+
+    assertThat(MDC.get(ActorFilter.MDC_KEY)).isNull();
+  }
+
+  @Test
+  void theAccountIdIsRemovedEvenIfTheRestOfTheChainFails() {
+    jakarta.servlet.FilterChain failing =
+        (req, res) -> {
+          throw new IllegalStateException("fallo aguas abajo");
+        };
+    ActorFilter filter = filter();
+
+    assertThatThrownBy(() -> filter.doFilter(request, response, failing))
+        .isInstanceOf(IllegalStateException.class);
+    assertThat(MDC.get(ActorFilter.MDC_KEY)).isNull();
+  }
+
+  @Test
+  void aRejectedAccountIsLoggedWithItsIdAndLeavesNothingBehind() throws Exception {
+    first = new ActorResolution.Rejected(Reason.PENDING_DELETION);
+    List<String> whileRejecting = new ArrayList<>();
+    ResolveActorUseCase resolve =
+        query -> {
+          whileRejecting.add(MDC.get(ActorFilter.MDC_KEY));
+          return first;
+        };
+    ProvisionAccountUseCase provision = command -> null;
+    ActorFilter filter =
+        new ActorFilter(resolve, provision, OAuth2AuthenticationToken.class::isInstance, Set.of());
+
+    filter.doFilter(request, response, observingChain());
+
+    assertThat(whileRejecting).containsExactly(account.value().toString());
+    assertThat(seenInMdc).as("la cadena no continuó").isEmpty();
+    assertThat(MDC.get(ActorFilter.MDC_KEY)).isNull();
+  }
+
+  @Test
+  void lazyProvisioningAlsoRunsWithTheAccountIdInTheLoggingContext() throws Exception {
+    List<String> whileProvisioning = new ArrayList<>();
+    ResolveActorUseCase resolve =
+        query ->
+            whileProvisioning.isEmpty()
+                ? new ActorResolution.Rejected(Reason.NOT_PROVISIONED)
+                : first;
+    ProvisionAccountUseCase provision =
+        command -> {
+          whileProvisioning.add(MDC.get(ActorFilter.MDC_KEY));
+          return new ProvisionAccountResult(
+              new Actor(command.accountId(), Set.of(Capability.CANDIDATE)),
+              DeletionStatus.ACTIVE,
+              true);
+        };
+    ActorFilter filter =
+        new ActorFilter(resolve, provision, OAuth2AuthenticationToken.class::isInstance, Set.of());
+
+    filter.doFilter(request, response, observingChain());
+
+    assertThat(whileProvisioning).containsExactly(account.value().toString());
+  }
+
+  @Test
+  void anAnonymousRequestOrAnotherKindOfAuthenticationGetsNoAccountId() throws Exception {
+    SecurityContextHolder.clearContext();
+    filter().doFilter(request, response, observingChain());
+    login(account.toString());
+    apiFilter()
+        .doFilter(new MockHttpServletRequest("GET", "/api/v1/me"), response, observingChain());
+
+    assertThat(seenInMdc).hasSize(2).containsOnlyNulls();
+  }
+
+  @Test
+  void anInvalidSubjectNeverReachesTheLoggingContext() throws Exception {
+    login("esto-no-es-un-uuid");
+
+    filter().doFilter(request, response, observingChain());
+
+    assertThat(seenInMdc).isEmpty();
+    assertThat(MDC.get(ActorFilter.MDC_KEY)).isNull();
   }
 }

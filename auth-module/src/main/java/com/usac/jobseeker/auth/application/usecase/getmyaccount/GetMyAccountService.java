@@ -13,8 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>Es el caso de uso plantilla del paso 5 del Sprint 0: muestra dónde van la métrica de negocio y
  * el log estructurado. Ninguno lleva el identificador de la cuenta: en la métrica dispararía su
- * cardinalidad, y en el log el `accountId` por petición lo debe aportar el contexto (MDC,
- * NFR-OBS-01), una sola vez, y no cada caso de uso.
+ * cardinalidad, y en el log el `accountId` ya lo aporta `ActorFilter` en cada línea de la petición
+ * (MDC, NFR-OBS-01), una sola vez, y no cada caso de uso.
  */
 public class GetMyAccountService implements GetMyAccountUseCase {
 

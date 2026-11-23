@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.jayway.jsonpath.JsonPath;
 import com.usac.jobseeker.app.InfrastructureTestConfiguration;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
@@ -229,8 +230,8 @@ class MyAccountEndpointIntegrationTest {
   }
 
   @Test
-  void theStructuredLogCarriesTheTraceIdAndNeverTheAccountId(CapturedOutput output)
-      throws Exception {
+  void theStructuredLogCarriesTheTraceIdAndTheAccountIdAsFieldsButNotInTheMessage(
+      CapturedOutput output) throws Exception {
     UUID id = UUID.randomUUID();
     createAccount(id, true, false, "ACTIVE");
 
@@ -245,7 +246,12 @@ class MyAccountEndpointIntegrationTest {
             .filter(l -> l.contains("event=account_viewed"))
             .reduce((a, b) -> b)
             .orElseThrow();
-    assertThat(line).contains("\"traceId\":\"" + traceId + "\"").contains("outcome=found");
-    assertThat(output.getAll()).doesNotContain(id.toString());
+    // El id va como campo propio de la línea (lo pone el contexto, una sola vez)...
+    assertThat(line)
+        .contains("\"traceId\":\"" + traceId + "\"")
+        .contains("\"accountId\":\"" + id + "\"")
+        .contains("outcome=found");
+    // ...y el mensaje del caso de uso no lo repite ni lleva otro dato de la cuenta.
+    assertThat(JsonPath.<String>read(line, "$.message")).doesNotContain(id.toString());
   }
 }
