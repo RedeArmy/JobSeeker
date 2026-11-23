@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -33,11 +34,23 @@ public final class ErrorEnvelope {
 
   /** El cuerpo del sobre, para quien lo devuelve como objeto (p. ej. el manejador global). */
   public static Map<String, Object> body(HttpServletRequest request, String code, String message) {
+    return body(request, code, message, List.of());
+  }
+
+  /**
+   * Igual, con el detalle por campo de una validación fallida. Solo nombre de campo y código: el
+   * valor recibido puede ser un dato personal y nunca vuelve en la respuesta (BR-DATA-01).
+   */
+  public static Map<String, Object> body(
+      HttpServletRequest request, String code, String message, List<Map<String, String>> details) {
     Map<String, Object> error = new LinkedHashMap<>();
     error.put("code", code);
     error.put("message", message);
     error.put("traceId", TraceIdFilter.traceId(request));
     error.put("timestamp", Instant.now().toString());
+    if (!details.isEmpty()) {
+      error.put("details", details);
+    }
     return Map.of("error", error);
   }
 }
