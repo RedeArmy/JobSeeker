@@ -6,6 +6,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.usac.jobseeker.common.domain.error.FieldViolation;
+import com.usac.jobseeker.common.domain.error.StaleStateException;
+import com.usac.jobseeker.common.domain.error.ValidationFailedException;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.web.servlet.MockMvc;
@@ -36,6 +40,18 @@ class ApiExceptionHandlerTest {
     @GetMapping("/conflict")
     String conflict() {
       throw new ResponseStatusException(HttpStatus.CONFLICT);
+    }
+
+    @GetMapping("/invalid")
+    String invalid() {
+      throw new ValidationFailedException(
+          List.of(
+              new FieldViolation("fullName", "REQUIRED"), new FieldViolation("bio", "TOO_LONG")));
+    }
+
+    @GetMapping("/stale")
+    String stale() {
+      throw new StaleStateException();
     }
   }
 
@@ -108,5 +124,31 @@ class ApiExceptionHandlerTest {
     assertThat(ApiExceptionHandler.message(HttpStatus.CONFLICT))
         .isEqualTo("La petición fue rechazada.");
     assertThat(ApiExceptionHandler.message(HttpStatus.BAD_GATEWAY)).isEqualTo("Error interno.");
+  }
+
+  @Test
+  void aFailedValidationIsA400WithEveryFieldAndNeverTheValue() throws Exception {
+    mvc.perform(get("/invalid").requestAttr(TRACE_ATTRIBUTE, "traza-de-prueba"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
+        .andExpect(jsonPath("$.error.traceId").value("traza-de-prueba"))
+        .andExpect(jsonPath("$.error.details.length()").value(2))
+        .andExpect(jsonPath("$.error.details[0].field").value("fullName"))
+        .andExpect(jsonPath("$.error.details[0].code").value("REQUIRED"))
+        .andExpect(jsonPath("$.error.details[1].field").value("bio"))
+        .andExpect(jsonPath("$.error.details[1].code").value("TOO_LONG"));
+  }
+
+  @Test
+  void anOrdinaryErrorCarriesNoDetailsField() throws Exception {
+    mvc.perform(get("/missing")).andExpect(jsonPath("$.error.details").doesNotExist());
+  }
+
+  @Test
+  void aStaleStateIsA409WithItsOwnStableCode() throws Exception {
+    mvc.perform(get("/stale").requestAttr(TRACE_ATTRIBUTE, "traza-de-prueba"))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.error.code").value("STALE_STATE"))
+        .andExpect(jsonPath("$.error.traceId").value("traza-de-prueba"));
   }
 }

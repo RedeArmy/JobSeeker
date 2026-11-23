@@ -113,10 +113,10 @@ Rutas de ejemplo; el contrato lo genera springdoc de los controladores anotados 
 | Método y ruta | Caso de uso | Rate limit | Idempotente | Errores clave |
 |---|---|---|---|---|
 | `GET /api/v1/me/professional-profile` | `getmyprofessionalprofile` | lectura | sí | 401 |
-| `PUT /api/v1/me/professional-profile` | `saveprofessionalprofile` | escritura | sí | 422 `VALIDATION_FAILED`, 409 `STALE_STATE` |
-| `POST`/`PUT`/`DELETE /api/v1/me/professional-profile/experiences[/{id}]` (y `education`, `certifications`, `projects`) | `manage…` | escritura | `PUT` y `DELETE` sí | 404 `NOT_FOUND`, 422, 409 |
-| `GET`/`PUT /api/v1/me/candidate-profile` | `getmycandidateprofile`, `savecandidateprofile` | lectura / escritura | `PUT` sí | 403 `FORBIDDEN_CAPABILITY`, 422, 409 |
-| `PUT /api/v1/me/candidate-profile/skills`, `…/languages`, `…/work-authorizations` | `replace…` | escritura | sí | 403, 422 |
+| `PUT /api/v1/me/professional-profile` | `saveprofessionalprofile` | escritura | sí | 400 `VALIDATION_FAILED`, 409 `STALE_STATE` |
+| `POST`/`PUT`/`DELETE /api/v1/me/professional-profile/experiences[/{id}]` (y `education`, `certifications`, `projects`) | `manage…` | escritura | `PUT` y `DELETE` sí | 404 `NOT_FOUND`, 400, 409 |
+| `GET`/`PUT /api/v1/me/candidate-profile` | `getmycandidateprofile`, `savecandidateprofile` | lectura / escritura | `PUT` sí | 403 `FORBIDDEN_CAPABILITY`, 400, 409 |
+| `PUT /api/v1/me/candidate-profile/skills`, `…/languages`, `…/work-authorizations` | `replace…` | escritura | sí | 403, 400 |
 | `PUT /api/v1/me/candidate-profile/discoverability`, `…/availability` | `change…` | escritura | sí | 403 |
 | `GET`/`POST`/`DELETE /api/v1/me/candidate-profile/availability-exclusions[/{accountId}]` | `manageavailabilityexclusions` | lectura / escritura | `POST` por clave natural | 403, 404, 409 duplicada |
 
@@ -149,7 +149,7 @@ Las pruebas de la migración (la de «publicadas inmutables» y el análisis de 
 
 ## 9. Anonimización (BR-DATA-05)
 
-`anonymizeprofiledata` recibe una cuenta y anonimiza **solo los datos de `cv`**, como dice `data-model.md` §4.2 y §4.4: nombre al marcador genérico, titular, biografía y foto a nulo; contacto, texto de CV y todo el bloque de embedding a nulo **a la vez** (la restricción `ck_cp_embedding_complete` lo exige); `discoverable` forzado a `false`; las filas hijas y las autorizaciones e idiomas se eliminan físicamente; el resto de atributos de preferencia se conserva porque no identifica a nadie por sí solo. La lista de exclusión del candidato anonimizado se elimina (`data-model.md` §4.10).
+`anonymizeprofiledata` recibe una cuenta y anonimiza **solo los datos de `cv`**, como dice `data-model.md` §4.2 y §4.4: nombre al marcador genérico, titular, biografía y foto a nulo; contacto y texto de CV a nulo; el vector del perfil **no** está en `cv` sino en `matching`, que lo anula al recibir `AccountAnonymized` (`data-model.md` §4.7.1); `discoverable` forzado a `false`; las filas hijas y las autorizaciones e idiomas se eliminan físicamente; el resto de atributos de preferencia se conserva porque no identifica a nadie por sí solo. La lista de exclusión del candidato anonimizado se elimina (`data-model.md` §4.10).
 
 **Idempotente y reanudable** (`03-lld.md` §8): cada paso comprueba su estado y un reintento tras una caída a mitad termina el trabajo, nunca lo repite con otro resultado. Emite `AccountAnonymized`, que invalida cualquier score en caché con datos derivados.
 
@@ -159,12 +159,26 @@ Las pruebas de la migración (la de «publicadas inmutables» y el análisis de 
 
 | Sub-paso | Entrega | Depende de |
 |---|---|---|
-| 1 | Migración de `professional_profiles` y sus hijas; `ProfessionalProfile` con sus reglas, `getmyprofessionalprofile` y `saveprofessionalprofile`, adaptador JDBC y los dos controladores. **Es la rebanada plantilla del módulo**: lleva todas las transversales | — |
-| 2 | Las cuatro colecciones (`manage*`) | 1 |
+| 1 | ✅ **Hecho (23-nov-2026).** Migración de `professional_profiles` (solo la raíz), `ProfessionalProfile` con sus reglas, `getmyprofessionalprofile` y `saveprofessionalprofile`, adaptador JDBC y el controlador JSON. **Es la rebanada plantilla del módulo**: lleva todas las transversales. Detalle y desvíos de este documento en §10.1 | — |
+| 2 | Las tablas hijas y las cuatro colecciones (`manage*`), y **las pantallas HTMX del perfil** (nota en §10.1) | 1 |
 | 3 | `CandidateProfile`: moneda y periodo (M1), `get`/`save`, habilidades, idiomas, autorizaciones | 1 |
 | 4 | Descubribilidad, disponibilidad y lista de exclusión, con sus eventos | 3 |
 | 5 | `getprofilesnapshot` y los eventos conectados a la bandeja; prueba de contrato con `matching` | 3, TDD de `matching` |
 | 6 | `anonymizeprofiledata` | 2, 3, 4 |
+
+### 10.1 Sub-paso 1: qué se construyó y en qué se desvió de este documento
+
+Se construyó lo descrito en §4 para `getmyprofessionalprofile` y `saveprofessionalprofile`, con estas decisiones que la primera versión de este documento no tenía:
+
+- **Solo la tabla raíz.** La migración crea `professional_profiles`; las hijas llegan con el sub-paso 2, junto con los casos de uso que las escriben. Una tabla que nadie puede llenar no se puede probar de verdad. Se usa `text` con restricciones de longitud en vez de `varchar(n)` (cambiar un límite es más barato) y la clave foránea a `accounts` se prueba contra la migración real de `auth`, que `cv` tiene en su classpath por depender de ella.
+- **Solo la API JSON; las pantallas HTMX pasan al sub-paso 2.** Una pantalla del perfil con solo nombre, titular y biografía habría que rehacerla al añadir las colecciones; se construye una vez con el perfil completo.
+- **Validación es `400 VALIDATION_FAILED`, no `422`.** §6 decía 422, pero `api-contract-overview.md` §6 fija 400 para la validación. Se corrigió §6 y el sobre de error ganó un campo opcional `details` con `{field, code}` por violación, nunca el valor.
+- **Dos errores nuevos y compartidos en `common`**: `ValidationFailedException` y `StaleStateException`. Los módulos los lanzan sin saber de HTTP y `ApiExceptionHandler`, en `app`, los traduce (400 y 409 `STALE_STATE`). El resto de módulos los reutilizará.
+- **Idempotencia real.** Guardar datos **idénticos** a los vigentes, con la versión vigente, no cambia nada: no sube la versión, no emite evento y cuenta como `unchanged`. Un reenvío con una versión ya vieja sigue siendo `409`: sin una clave de idempotencia no se puede distinguir de una edición ajena, y esa clave es trabajo futuro.
+- **Versión inicial 1.** El cliente envía `version: 0` para crear; el perfil guardado empieza en 1. La API responde `201` al crear y `200` al editar.
+- **La capacidad se pregunta a `auth` por su caso de uso** (`ResolveActorUseCase`) desde un adaptador de salida; `cv` pasó a depender de `auth` en el pom, sin ciclo.
+- **El evento lleva el `traceId`** de la petición (leído del `MDC` de SLF4J) y solo se emite si la cuenta tiene la capacidad de candidato.
+- **Se valida el carácter NUL**, que PostgreSQL no admite en un `text`: sin esa regla llegaría como un `500` en vez de un `400`.
 
 Cada sub-paso sale como una PR propia con su definición de hecho completa (OpenAPI anotado, política de límite de tasa, métrica y log con `traceId`, prueba de autorización y de CSRF).
 

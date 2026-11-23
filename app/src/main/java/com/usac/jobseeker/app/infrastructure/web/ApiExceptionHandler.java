@@ -1,7 +1,11 @@
 package com.usac.jobseeker.app.infrastructure.web;
 
 import com.usac.jobseeker.app.infrastructure.security.ErrorEnvelope;
+import com.usac.jobseeker.common.domain.error.StaleStateException;
+import com.usac.jobseeker.common.domain.error.ValidationFailedException;
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.List;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -39,6 +43,37 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     return ResponseEntity.status(status)
         .headers(headers)
         .body(ErrorEnvelope.body(servlet, code(status), message(status)));
+  }
+
+  /**
+   * Una regla del dominio no se cumple: 400 con el detalle por campo (`api-contract-overview.md`
+   * §6). Los módulos lanzan la excepción sin saber de HTTP.
+   */
+  @ExceptionHandler(ValidationFailedException.class)
+  ResponseEntity<Object> validationFailed(
+      ValidationFailedException exception, HttpServletRequest request) {
+    List<Map<String, String>> details =
+        exception.violations().stream()
+            .map(v -> Map.of("field", v.field(), "code", v.code()))
+            .toList();
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        .body(
+            ErrorEnvelope.body(
+                request, "VALIDATION_FAILED", "Hay datos que no son válidos.", details));
+  }
+
+  /**
+   * Otra edición se guardó antes (bloqueo optimista): 409. Se cuenta el conflicto sin datos del
+   * recurso; el cliente vuelve a leer y reintenta.
+   */
+  @ExceptionHandler(StaleStateException.class)
+  ResponseEntity<Object> staleState(HttpServletRequest request) {
+    return ResponseEntity.status(HttpStatus.CONFLICT)
+        .body(
+            ErrorEnvelope.body(
+                request,
+                "STALE_STATE",
+                "El recurso cambió mientras lo editabas; vuelve a cargarlo."));
   }
 
   /** Lo que nadie previó: 500 sin detalles; la causa queda en el registro con el `traceId`. */
