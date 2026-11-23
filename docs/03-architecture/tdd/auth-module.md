@@ -54,7 +54,7 @@ Los casos de uso de las demás funciones (`handleclavariswebhook`, el cierre de 
 | 4.2 | Cadena A: login OIDC con PKCE, `/app/home`, CSRF con HTMX, cabeceras, sesión en Redis con arranque tolerante | ✅ hecho (§8) |
 | 4.3 | Refresh token cifrado, cerrojo por sesión, clasificación y margen de 2 h, logout con revocación | ✅ hecho (§9) |
 | 4.4 | Cadena B: Bearer con validador de `aud` y sobre de error estándar | ✅ hecho (§10) |
-| 4.5 | Cadena C: receptor de webhooks con HMAC, deduplicación y cierre de sesiones | ✅ hecho (§11); sin validar contra Clavaris real |
+| 4.5 | Cadena C: receptor de webhooks con HMAC, deduplicación y cierre de sesiones | ✅ hecho (§11); validado contra Clavaris real (§11.5) |
 | 5 | Caso de uso plantilla `getmyaccount` con límite de tasa, OpenAPI validado, métrica de negocio, log estructurado y prueba de autorización | ✅ hecho (§12) |
 
 ## 6. Pruebas
@@ -214,7 +214,7 @@ Con `origin/master` de Clavaris (`9bb0cd66`) compilado en solo lectura, con Post
 
 **Un hallazgo de la validación.** Un token con el **último carácter** de la firma alterado seguía siendo aceptado. No es una debilidad: una firma RSA-2048 son 256 bytes y el último carácter en base64 solo aporta 2 bits de datos y 4 de relleno, así que cambiarlo deja los mismos bytes; con un carácter del medio, `401`. Quedó fijado en dos pruebas (`aTokenWithOneSignatureByteFlippedIsRejected` y la que documenta el relleno), y en el helper de pruebas con la advertencia correspondiente.
 
-**No se validó con Clavaris real** (sí con tokens RSA propios, en los bordes exactos): un token realmente caducado (se desmontó el entorno antes de que venciera el de la prueba), `nbf`, la rotación de claves (publicar un `kid` nuevo) y un token de otra organización con el mismo `client_id`.
+**No se validó con Clavaris real** (sí con tokens RSA propios, en los bordes exactos): `nbf`, la rotación de claves (publicar un `kid` nuevo) y un token de otra organización con el mismo `client_id`. Un token **realmente caducado** se validó después, el 22-nov-2026 (§12.7: `exp` hacía 678 s → `401 TOKEN_INVALID`).
 
 
 ## 11. Sub-paso 4.5: el receptor de webhooks de Clavaris
@@ -295,18 +295,98 @@ Perfil `mutation` (PIT 1.30.2, mutadores `STRONGER`) sobre las clases del 4.5, e
 
 Un sexto (la comprobación previa por `Content-Length` del filtro) era real y se cubrió con una prueba que falla si se lee el cuerpo; **no se volvió a pasar PIT** después de ese último test.
 
-### 11.5 Validación contra Clavaris real
+### 11.5 Validación contra Clavaris real (22-nov-2026)
 
-**No se validó contra un Clavaris real en el 4.5.** Registrar un endpoint exige una URL pública HTTPS (Clavaris rechaza `localhost`) y abrir un túnel público solo se hace a petición expresa. Lo que sí se comprobó: el formato de la firma, leído del código de Clavaris (`WebhookSignature.header`: `t=<epoch>,v1=<hex>` por secreto, HMAC-SHA256 sobre `<t>.<cuerpo>`), contra el cual el firmador de las pruebas es independiente; las cabeceras y la forma de las cargas, de las entregas reales del spike (19 y 20 de noviembre de 2026). **Queda por validar**: una entrega real de punta a punta, incluido el comportamiento de Clavaris ante nuestros 4xx/5xx y su reintento con retroceso.
+**Montaje.** Clavaris compilado en solo lectura desde `origin/master` (`2a33b2f2`), con su propio Postgres 17 y Redis 8.10; JobSeeker (`main`, `d515416`) con otros dos, todos desechables. Para que Clavaris aceptara la URL (exige HTTPS público y su comprobador anti-SSRF rechaza loopback y redes privadas, sin interruptor de configuración) se abrió un **Cloudflare Quick Tunnel** temporal (`cloudflared` 2026.11.1, binario verificado por checksum) hacia un **proxy mínimo** que solo reenvía `POST /api/v1/webhooks/clavaris` y responde 404 a todo lo demás: ni `/actuator/prometheus` ni el resto de la aplicación estuvieron expuestos, también comprobado por la URL pública. Al terminar se cerró el túnel (responde `530`), se destruyeron contenedores y secretos y el repositorio de Clavaris quedó sin cambios.
+
+| Qué | Resultado |
+|---|---|
+| Entregas reales por el túnel de `account.suspended`, `reactivated`, `deleted`, `refresh_token.reuse_detected`, `created` y `profile_updated` | ✅ todas `204`; latencia evento→`204` de la suspensión: **7,0 s**, túnel incluido |
+| Suspender cierra la sesión web | ✅ cookie vieja → `302`; la fila de la bandeja queda `PROCESSED`; reactivar **no** la restaura y un login nuevo funciona. Clavaris no emite tokens a una cuenta suspendida |
+| Dos sesiones de la misma cuenta (otro navegador) | ✅ ambas se cierran; la sesión de **otra** cuenta sigue viva |
+| Reutilizar un refresh token ya rotado | ✅ Clavaris responde `400`, emite `refresh_token.reuse_detected`, JobSeeker cierra las sesiones y el estado **no** cambia (sigue `ACTIVE`) |
+| Borrar la identidad | ✅ `DELETED` terminal; el **mismo token**, aún sin caducar en Clavaris, pasa de `200` a `403 ACCOUNT_UNAVAILABLE` |
+| Eventos con PII (`created`: correo; `profile_updated`: nombre y teléfono) | ✅ `204`, ninguna cuenta creada; ni el correo, ni el nombre, ni el teléfono aparecen en el log ni en ninguna tabla |
+| Ráfaga de 6 cambios de estado seguidos | ✅ 6 de 6 entregas `204`; estado final igual al de Clavaris; la marca aplicada es el `occurredAt` **de la carga** truncado a microsegundos (la carga trae nanosegundos; el `occurred_at` de la fila de Clavaris es otro instante, posterior) |
+| Reintentos ante `503` (2 fallos inyectados) | ✅ **Clavaris reintenta**: 3 intentos con el mismo `Clavaris-Event-Id` **y** `Delivery-Id`, espaciados +35 s y +51 s (30 s, 1 min… con *jitter*); JobSeeker lo aplicó **una vez** (una fila en la bandeja y una en `processed_events`); Clavaris lo da por `SUCCEEDED` en 3 intentos |
+| Secreto equivocado en JobSeeker | ✅ `401` sin efecto; Clavaris **reintenta** y, al restaurar el secreto correcto, la entrega se aplicó (`SUCCEEDED`, 2 intentos) |
+| Repetición de entregas reales capturadas | ✅ la antigua → `401` (fuera de tolerancia); la fresca repetida → `204` idempotente, sin fila nueva; cuerpo alterado, sin firma o con firma ajena → `401`; `POST` sin firma por el túnel → `401` |
+| Rotación real del secreto | ✅ Clavaris firma con **dos** `v1` durante la superposición; JobSeeker acepta con el secreto anterior, con solo el nuevo, y con uno equivocado rechaza sin efecto |
+
+**Higiene.** 0 líneas `ERROR` en el log de JobSeeker; ningún correo, secreto ni cuerpo de webhook; un único `WARN` (`ratelimit_unavailable`, provocado a propósito en §12.7).
+
+**Lo que enseñó, aparte de confirmar el diseño.**
+- Un `401` por secreto mal configurado **no es inocuo**: Clavaris lo trata como fallo y reintenta, así que un secreto equivocado produce reintentos hasta que desactive el endpoint (y los eventos se pierden). Refuerza la alerta de §11.6.
+- El orden de llegada coincidió con el de ocurrencia en la ráfaga secuencial; el desorden que vio el spike (ráfagas en paralelo) no se reprodujo, y la regla `(occurredAt, event_id)` sigue siendo la protección.
+
+**Sigue sin validarse con Clavaris real:** el tiempo real de desactivación con los umbrales **por defecto** de Clavaris (8 intentos y 5 fallos seguidos; en §11.7 se bajaron a 2 y 2 para poder observarlo), y el uso de un Bearer anterior a la suspensión. Los demás puntos que quedaban se validaron en una segunda sesión (§11.7).
 
 ### 11.6 Decisiones pendientes y límites conocidos
 
 - **Límite de tasa por IP** del receptor (ADR-0011): resuelto en el paso 5 (§12): política `webhook`, por IP, antes de verificar la firma.
 - **Conciliación**: no hay un recorrido que compare el espejo con Clavaris tras un hueco de eventos. El 4.3 (prueba de vida) lo cubre en la práctica; si se quiere más, es trabajo aparte.
-- **Vigilancia del endpoint**: Clavaris lo desactiva tras fallos repetidos y los eventos se pierden. Hace falta una alerta sobre la métrica `jobseeker_webhook_total` (ausencia de `applied` o exceso de `error`) cuando exista Alertmanager (ADR-0012).
-- **Estado de liveness de la sesión cerrada**: verificado con Clavaris real que quedaba huérfano (con un token cifrado y ya revocado y 8 h de TTL) y **corregido**: el consumidor lo borra junto con la sesión. Una prueba de integración comprueba que no queda ninguno y que el de otra cuenta sigue intacto.
-- **`account.banned`/`unbanned`**: tratados como `suspended`/`reactivated`. El espejo no distingue «baneada» de «suspendida»: si algún día importa la diferencia, `BANNED` exigiría ampliar la restricción `ck_accounts_identity_status` con una migración.
+- **Vigilancia del endpoint**: Clavaris lo desactiva tras fallos repetidos y los eventos se pierden. Hace falta una alerta sobre la métrica `jobseeker_webhook_total` (ausencia de `applied` o exceso de `error`) cuando exista Alertmanager (ADR-0012). Comprobado (§11.7): tras desactivarlo, los eventos se pierden sin aviso y el espejo queda desactualizado.
+- **Estado de liveness de la sesión cerrada**: verificado con Clavaris real que quedaba huérfano (con un token cifrado y ya revocado y 8 h de TTL) y **corregido** en #19: el consumidor lo borra junto con la sesión (detalle de la validación en §11.7). Una prueba de integración comprueba que no queda ninguno y que el de otra cuenta sigue intacto.
+- **`account.banned`/`unbanned`**: tratados como `suspended`/`reactivated`. El espejo no distingue «baneada» de «suspendida»: si algún día importa la diferencia, `BANNED` exigiría ampliar la restricción `ck_accounts_identity_status` con una migración. Corregido en #18; el hallazgo está en §11.7.
+- **Un Bearer ya emitido sobrevive a la suspensión** hasta su caducidad (≤ 5 min): `resolveactor` deja resolver a una identidad `SUSPENDED` a propósito, porque sus sesiones las cierra el webhook y Clavaris ya no emite tokens nuevos (validado: el flujo OIDC de una cuenta suspendida no devuelve token). No se probó con Clavaris real el uso de un Bearer anterior a la suspensión; sí que `DELETED` lo corta (§11.5).
 - **Cableado de beans** (`OutboxConfiguration`): 4 mutantes que devuelven nulo de un método `@Bean` no los distingue una prueba dirigida; los cubre el arranque del contexto.
+
+### 11.7 Segunda sesión de validación: los puntos que quedaban (22-nov-2026)
+
+Mismo montaje que §11.5 (Clavaris `2a33b2f2`, JobSeeker `d515416`, túnel temporal con proxy que solo reenvía el webhook, todo desmontado al terminar), más un **nginx real** delante de JobSeeker y los umbrales de Clavaris bajados por variables de entorno. **Aviso para quien repita esto:** los nombres son `CLAVARIS_WEBHOOK_DELIVERY_MAX_ATTEMPTS`, `CLAVARIS_WEBHOOK_ENDPOINT_AUTO_DISABLE_THRESHOLD` y `CLAVARIS_WEBHOOK_SECRET_ROTATION_OVERLAP` (la propiedad es `clavaris.webhook.*`). Sin el prefijo `CLAVARIS_` Clavaris **los ignora en silencio**: la primera vez la superposición siguió siendo de 24 h y los reintentos llegaron al intento 3 con «máximo 2».
+
+#### Estado de liveness y refresh token de una sesión cerrada por webhook
+
+| Qué | Resultado |
+|---|---|
+| Al iniciar sesión | un registro `jobseeker:liveness:<enlace>` por sesión (campos `renewed`, `rt` cifrado y `retryAfter`), con TTL de **8 h** (28 799 s, el límite absoluto) |
+| Tras cerrar la sesión por webhook (suspensión), **antes de #19** | ❌ **el registro huérfano seguía ahí** (28 793 s de TTL): `SessionInvalidationConsumer` borra la sesión pero no el registro de liveness, que solo borra el *logout* normal |
+| Tras `refresh_token.reuse_detected`, **antes de #19** | ❌ igual: el registro quedaba huérfano |
+| ¿Qué contiene? | el refresh token **cifrado** y, en todos los casos probados, **ya muerto**: Clavaris revoca **todos** los refresh tokens de la cuenta al suspender (0 vivos) y también al detectar la reutilización (0 vivos, incluido el de la sesión web) |
+
+**Hallazgo (severidad baja):** basura acotada por el TTL, inalcanzable (el enlace solo estaba en la sesión destruida) y con un token cifrado y revocado; no es una puerta abierta, pero cada sesión cerrada por webhook dejaba una clave de hasta 8 h. **Corregido en #19:** el consumidor lee el atributo de enlace de cada sesión y borra su registro de liveness **antes** que la sesión (si el borrado fallara a medias, el reintento aún encontraría el enlace); una prueba de integración comprueba que no queda ninguno y que el de otra cuenta sigue intacto.
+
+#### `account.banned`
+
+| Qué | Resultado |
+|---|---|
+| Carga real | idéntica a la de `suspended`: `accountId{value}`, `organizationId{value}`, `occurredAt`; solo identificadores |
+| Efecto en Clavaris | estado `BANNED` y revocación de tokens y sesiones (la misma cascada que suspender). Solo se puede banear desde el **panel de la plataforma** (sesión y CSRF), no desde la API de administración |
+| Qué hacía JobSeeker (antes de #18) | ❌ lo **ignoraba** (`204`, sin efecto): `identity_status` seguía `ACTIVE` y la sesión web seguía viva (`200`) |
+| Quién acaba cerrando la sesión | la **prueba de vida** del 4.3, a los **59 s** con la renovación a 1 min (con el valor por defecto de 10 min serían hasta ~10 min de acceso para una cuenta baneada) |
+| `account.unbanned` | `204`; Clavaris deja la cuenta `ACTIVE` |
+
+**Hallazgo (severidad media):** una cuenta baneada conservaba su sesión web hasta ~10 min. Como la carga es idéntica a la de `suspended`, tratarlo igual era seguro. **Corregido en #18:** `banned` cierra sesiones y se espeja como `SUSPENDED`, y `unbanned` vuelve a `ACTIVE`. El espejo no distingue «baneada» de «suspendida»: `BANNED` propio exigiría ampliar la restricción `ck_accounts_identity_status` con una migración y hoy no aporta nada.
+
+#### Expiración de la superposición del secreto
+
+✅ Con 90 s de superposición: dentro de ella, la entrega trae **dos** `v1` y la acepta un JobSeeker con el secreto viejo; pasados los 90 s trae **una sola** `v1` (la nueva), un JobSeeker con el secreto viejo responde `401` sin efecto, y al actualizar su secreto el **reintento** de Clavaris se aplica (`SUCCEEDED`). Consecuencia operativa: tras rotar hay una ventana (24 h por defecto) para actualizar `CLAVARIS_WEBHOOK_SECRET`; pasada, los webhooks se rechazan hasta corregirlo.
+
+#### Desactivación automática del endpoint
+
+| Qué | Resultado |
+|---|---|
+| Umbral | con máximo 2 intentos y umbral 2: el contador de fallos pasó de 0 a 1 (a los 38 s) y a 2 (a los 43 s) y Clavaris **desactivó el endpoint** (`active = false`, `auto_disabled_at`), con el aviso `event=webhook_endpoint_auto_disabled` en su log. Un fallo se cuenta cuando una entrega **agota todos sus intentos**. Con los valores por defecto (8 intentos, umbral 5) no se midió el tiempo |
+| Eventos mientras está apagado | ❌ **se pierden**: no se entregan nunca, ni siquiera tras reactivar. El espejo de JobSeeker queda **desactualizado** (`ACTIVE` mientras Clavaris la tiene `SUSPENDED`) |
+| ¿Quién cubre el hueco? | ✅ la **prueba de vida**: la sesión de la cuenta suspendida se cerró a los **63 s** (renovación de 1 min en la prueba). Es el respaldo previsto en ADR-0020, ahora comprobado |
+| Reactivar (`:activate`) | ✅ el contador vuelve a 0 y los eventos **nuevos** se entregan y se aplican |
+
+**Conclusión:** la desactivación automática no rompe la seguridad (la prueba de vida la cubre) pero deja el espejo desactualizado sin que nadie se entere. Refuerza dos pendientes: la **alerta** sobre `jobseeker_webhook_total` (ausencia de `applied`) y la **conciliación** del espejo tras un hueco.
+
+#### Detrás de un proxy inverso real (nginx, en dos frentes: HTTP y uno que simula TLS terminado)
+
+| Configuración de JobSeeker | Resultado |
+|---|---|
+| **La actual** (sin configurar proxy) | el login OIDC funciona por HTTP, pero ❌ ignora `X-Forwarded-*`: tras un balanceador que termina TLS el `redirect_uri` sale en **`http://`**. Y ❌ el límite por IP **no distingue clientes**: 12 clientes distintos compartieron el cubo `login` (10/min) del proxy y hubo 429 desde la 7.ª petición |
+| `server.forward-headers-strategy=native` + `server.tomcat.remoteip.internal-proxies=<regex del proxy>` | ✅ el `redirect_uri` respeta esquema, host y puerto; 12 clientes distintos → **0** 429; el mismo cliente se limita en la 11.ª; el login OIDC completo funciona a través de nginx |
+| Mismo ajuste, pero el par **no** coincide con `internal-proxies` | ✅ se ignoran las cabeceras: sin `X-Forwarded-For` (vuelve el cubo compartido), sin `X-Forwarded-Proto` y **sin inyección de `X-Forwarded-Host`** (`evil.test` no envenena el `redirect_uri`) |
+
+Detalles que importan al configurar:
+- Hay que enviar **`X-Forwarded-Port`** si el puerto público no es el estándar: sin él Tomcat vuelve al 80/443 y el `redirect_uri` pierde el puerto.
+- `internal-proxies` es una **expresión regular** sobre la IP del par. Su valor por defecto en Spring Boot cubre loopback y redes privadas completas: dejarlo así con `native` confiaría en cualquier host de esas redes. Debe acotarse a las direcciones del proxy.
+- `localhost` puede resolver a `::1` (IPv6): un `curl` a `localhost` llegó desde `::1`, que no coincide con `127.0.0.1`, y sus cabeceras se ignoraron.
+
+**No se cambió ninguna configuración por defecto:** la actual es **segura** (ignora todo lo reenviado) aunque inadecuada tras un proxy; qué proxy es de confianza lo decide la topología (ADR-0026). Cuando se fije, estas dos propiedades y `X-Forwarded-Port` son la receta validada.
 
 ## 12. Paso 5 del Sprint 0: el caso de uso plantilla y lo transversal
 
@@ -323,7 +403,7 @@ Criterio de salida del Sprint 0 (`roadmap-and-release-plan.md`): un caso de uso 
 | Límite de tasa | `app`, `infrastructure.ratelimit` | **Transversal**: una política por tipo de petición, no una anotación por endpoint (§12.2) |
 | OpenAPI | `@Tag`/`@Operation`/`@ApiResponse` en el controlador; documento único en `app` | §12.3 |
 | Métrica de negocio | puerto `UseCaseMetricsPort` en `common` | El caso de uso dice `count("get_my_account", "found")`; `app` lo traduce al contador `jobseeker_usecase_total{use_case,outcome}`. Una sola métrica para todos los casos de uso, con etiquetas de conjunto cerrado: añadir un caso de uso no obliga a tocar los paneles |
-| Log estructurado | el caso de uso, con `event=… clave=valor` y mensaje en español | El `traceId` lo añade el MDC; **nunca** lleva el identificador de la cuenta ni datos personales (BR-DATA-01) |
+| Log estructurado | el caso de uso, con `event=… clave=valor` y mensaje en español | El `traceId` lo añade el MDC. El mensaje no repite el identificador de la cuenta ni datos personales: el `accountId` por petición que piden la arquitectura de seguridad (§ de logs) y el modelo de amenazas contra el repudio debe aportarlo el contexto (MDC), una sola vez, y no cada caso de uso (hoy **no existe**, ver §12.6) |
 | Errores | `ApiExceptionHandler` (`app`) | Todo error de un controlador sale con el sobre estándar y sin detalles internos; 500 genérico con la causa solo en el registro |
 
 ### 12.2 Límite de tasa (ADR-0011)
@@ -333,7 +413,7 @@ Criterio de salida del Sprint 0 (`roadmap-and-release-plan.md`): un caso de uso 
 - **Dos puntos de la cadena.** Las políticas por IP corren **antes** de cualquier procesamiento (quien no sabe firmar no gasta ni la lectura del cuerpo); las de cuenta, después de resolver el actor, y una petición anónima que llegue ahí se limita por IP.
 - **Al excederlo:** `429`, sobre estándar con `RATE_LIMIT_EXCEEDED`, `Retry-After` (segundos, redondeado hacia arriba: un 0 invitaría a reintentar y fallar) y `X-RateLimit-Limit`/`X-RateLimit-Remaining`, también en las respuestas que sí pasan.
 - **Redis caído: se deja pasar** (decisión de este paso). La API Bearer no necesita Redis para nada más, y tumbarla por el límite de tasa sería peor que no limitar mientras dura la caída; los demás controles (firma, token, cuenta) siguen en pie. Queda medido (`jobseeker_ratelimit_total{outcome="unavailable"}`) y con un aviso como mucho cada 30 s. La conexión se abre en el primer uso y con un reintento espaciado, porque la aplicación debe arrancar con Redis caído (ADR-0020, regla 9).
-- **La clave por IP es la dirección del socket, no `X-Forwarded-For`**: esa cabecera la escribe cualquiera salvo que haya un proxy de confianza delante, y creerla permitiría evadir el límite cambiándola en cada petición. Cuando el ADR-0026 fije la topología habrá que decidir qué proxy es de confianza; hasta entonces, detrás de un proxy todas las peticiones compartirían una IP.
+- **La clave por IP es la dirección del socket, no `X-Forwarded-For`**: esa cabecera la escribe cualquiera salvo que haya un proxy de confianza delante, y creerla permitiría evadir el límite cambiándola en cada petición. Detrás de un proxy todas las peticiones comparten una IP (medido con nginx, §11.7). Cuando el ADR-0026 fije la topología habrá que decidir qué proxy es de confianza y activar `server.forward-headers-strategy=native` con `server.tomcat.remoteip.internal-proxies` acotado: la receta está validada en §11.7.
 
 ### 12.3 OpenAPI (ADR-0010)
 
@@ -368,9 +448,10 @@ Criterio de salida del Sprint 0 (`roadmap-and-release-plan.md`): un caso de uso 
 ### 12.6 Límites conocidos y decisiones abiertas
 
 - **Valores de los límites**: iniciales, a calibrar con tráfico real (ADR-0011). Tampoco hay política diferenciada para cuentas con ambas capacidades.
-- **`X-Forwarded-For`**: ver §12.2; depende del ADR-0026.
+- **`X-Forwarded-For`**: ver §12.2 y §11.7 (receta validada con nginx); depende del ADR-0026.
 - **Swagger UI en producción**: apagada. Si se quiere en staging, falta decidir su protección (hoy `permitAll` donde está encendida, solo en `dev`).
 - **Snapshot del spec versionado en el repositorio** (pregunta abierta del ADR-0010): no se hace todavía.
+- **`accountId` por petición en el log** (hueco previo, no de este paso): `security-architecture.md` y el modelo de amenazas (repudio) piden que los logs estructurados lleven `traceId` **y** `accountId`, pero el MDC solo tiene `traceId`. Hoy el identificador solo aparece en `event=login_succeeded` (4.2). Habría que ponerlo en el MDC desde `ActorFilter` y retirarlo al terminar la petición. Es un dato de identificación, no personal; **BR-DATA-01 trata datos de CV**, y mi comentario inicial en `GetMyAccountService` la citaba para otra cosa.
 - **Códigos de error genéricos** (`REQUEST_INVALID`, `RESOURCE_NOT_FOUND`…): los propios del dominio (`JOB_POSTING_NOT_FOUND`…) los pondrá cada módulo al tenerlos.
 - **Pruebas de mutación**: 
 
@@ -382,3 +463,22 @@ Perfil `mutation` (PIT, mutadores `STRONGER`) sobre las clases del paso 5, en do
 | `app` (límite de tasa, manejador de errores, métrica de negocio) | 115 | 114 + 1 cerrado después | **99 %** en la segunda pasada (90 %, 101 de 112, en la primera) |
 
 La primera pasada dejó 11 supervivientes, todos reales: que **no se reintenta la conexión dentro del margen de 5 s** (lo que protege la latencia con Redis caído), el espaciado de **un aviso cada 30 s**, la métrica de negocio sin cobertura directa y la construcción de la conexión (contraseña). Para probar el reloj sin esperar se inyectaron la conexión y el reloj del limitador. El último superviviente (el primer aviso con un reloj que arranca cerca de cero, porque `nanoTime` no tiene origen definido) se cubrió con un test **sin volver a pasar PIT**.
+
+### 12.7 Validación contra Clavaris real (22-nov-2026)
+
+Mismo montaje que §11.5 (Clavaris `2a33b2f2`, JobSeeker `d515416`, infraestructura aislada). Todo con **tokens reales** emitidos por Clavaris para dos clientes de una misma organización (JobSeeker y otra aplicación).
+
+| Qué | Resultado |
+|---|---|
+| `GET /api/v1/me` sin token | ✅ `401`, `WWW-Authenticate: Bearer`, `AUTHENTICATION_REQUIRED` |
+| Con el access token de JobSeeker | ✅ `200`; `id` == `sub` del token; capacidades `[CANDIDATE]` (cuenta aprovisionada en el primer uso); `X-RateLimit-Limit` 120 y `X-Trace-Id` presentes |
+| ID token del mismo cliente (misma firma, emisor y audiencia) | ✅ `401` |
+| Access token válido de **otra aplicación** de la organización (G6) | ✅ `401` |
+| Firma alterada, basura, token en la *query string* | ✅ `401` los tres |
+| **Token realmente caducado** (`exp` hacía 678 s) | ✅ `401 TOKEN_INVALID`, sin revelar el motivo |
+| Límite de tasa real (política `read` recortada a 5/min) | ✅ 5 × `200`, la 6.ª `429 RATE_LIMIT_EXCEEDED` con `Retry-After`, `X-RateLimit-Limit: 5` y `Remaining: 0`; **otra cuenta no se ve afectada**; el cubo vive en `ratelimit:read:<cuenta>` |
+| **Redis detenido** | ✅ la API sigue respondiendo `200` (fail-open), queda `event=ratelimit_unavailable` y la métrica `outcome=unavailable`, la aplicación sigue viva; al volver Redis el limitador **se recupera solo** y la 6.ª petición vuelve a ser `429` |
+| OpenAPI en el perfil `dev` | ✅ `/v3/api-docs` es OpenAPI 3.1, documenta `/api/v1/me` con `200, 401, 403, 404, 429`, incluye `ErrorEnvelope` y la seguridad `bearer`; Swagger UI responde `200` |
+| Métricas y log | ✅ `jobseeker_usecase_total{get_my_account,found}` y `jobseeker_ratelimit_total` suben; `event=account_viewed` lleva `traceId`; ni el `sub` ni el correo salen en esa línea |
+
+Las migraciones (incluida la de `identity_state`, con su excepción de squawk) se aplicaron limpias sobre Postgres 17 real.
