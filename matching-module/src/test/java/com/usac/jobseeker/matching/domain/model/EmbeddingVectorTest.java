@@ -40,7 +40,7 @@ class EmbeddingVectorTest {
 
   @Test
   void anEmptyVectorOrOneWithNonFiniteValuesIsRejected() {
-    assertThatThrownBy(() -> EmbeddingVector.of()).isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(EmbeddingVector::of).isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(() -> EmbeddingVector.of((float[]) null))
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(() -> EmbeddingVector.of(1f, Float.NaN))
