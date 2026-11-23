@@ -23,7 +23,7 @@ JobSeeker es **cliente** de Clavaris: nunca emite tokens ni guarda credenciales.
 | `AccountId`, `Capability`, `Actor` | `common`, `domain.model` | Los usan todos los módulos; un tipo compartido evita que cada uno dependa de `auth` (ARCH-04) |
 | Reglas de la cuenta, casos de uso, puertos | `auth` (`domain`, `application`) | Lógica de negocio, sin Spring salvo transacciones (ARCH-01, ARCH-02) |
 | Persistencia de `accounts` | `auth`, `infrastructure.adapter.out.persistence` | Adaptador JDBC que implementa los puertos |
-| Receptor de webhooks | `auth`, `infrastructure.adapter.in.web` | Es una entrada del módulo; se entrega en el sub-paso 4.5 |
+| Receptor de webhooks | `app`, cadena C (`infrastructure.security.webhook`) | Filtro de la cadena, no un controlador: la firma se verifica sobre el cuerpo crudo antes de cualquier otro procesamiento y las cadenas de seguridad son de `app` (ADR-0020). El caso de uso `handleclavariswebhook` sí es de `auth` (§11) |
 | Las tres cadenas de seguridad, el filtro de actor, la sesión en Redis, la renovación con cerrojo | `app`, `infrastructure.security` | Preocupación transversal del único desplegable (ADR-0026); no es lógica de negocio |
 
 ## 3. Casos de uso del módulo
@@ -42,7 +42,7 @@ Los casos de uso de las demás funciones (`handleclavariswebhook`, el cierre de 
 3. **Cuenta no aprovisionada** (`NOT_PROVISIONED`): el filtro la crea de forma perezosa; solo puede ocurrir si la sesión es anterior a la cuenta.
 4. **El registro de cliente OIDC se resuelve de forma perezosa.** `ClientRegistrations.fromIssuerLocation` consulta a Clavaris al arrancar y hace fallar el contexto si no responde; reiniciar JobSeeker durante una caída de Clavaris no debe impedirlo, porque las sesiones viven en Redis. Se resuelve en la primera petición que lo necesita, se guarda y se reintenta con espera si falla.
 5. **El refresh token no se pidió hasta el sub-paso 4.3.** El almacén por defecto de Spring lo guardaría en claro en la sesión de Redis, y el ADR-0020 exige cifrarlo y renovarlo con cerrojo. Con el almacén propio del 4.3 (§9) ya se solicita `offline_access`.
-6. **Las cadenas B y C nacieron cerradas.** Hasta implementarlas rechazaban todo: ninguna ruta quedaba abierta por omisión. La B se abrió en el 4.4 (§10); la C sigue cerrada hasta el 4.5.
+6. **Las cadenas B y C nacieron cerradas.** Hasta implementarlas rechazaban todo: ninguna ruta quedaba abierta por omisión. La B se abrió en el 4.4 (§10) y la C en el 4.5 (§11); sin secreto configurado la C vuelve a cerrarse (503).
 
 ## 5. Orden de entrega (paso 4 del Sprint 0)
 
@@ -52,7 +52,7 @@ Los casos de uso de las demás funciones (`handleclavariswebhook`, el cierre de 
 | 4.2 | Cadena A: login OIDC con PKCE, `/app/home`, CSRF con HTMX, cabeceras, sesión en Redis con arranque tolerante | ✅ hecho (§8) |
 | 4.3 | Refresh token cifrado, cerrojo por sesión, clasificación y margen de 2 h, logout con revocación | ✅ hecho (§9) |
 | 4.4 | Cadena B: Bearer con validador de `aud` y sobre de error estándar | ✅ hecho (§10) |
-| 4.5 | Cadena C: receptor de webhooks con HMAC, deduplicación y cierre de sesiones | pendiente |
+| 4.5 | Cadena C: receptor de webhooks con HMAC, deduplicación y cierre de sesiones | ✅ hecho (§11); sin validar contra Clavaris real |
 
 ## 6. Pruebas
 
@@ -213,3 +213,94 @@ Con `origin/master` de Clavaris (`9bb0cd66`) compilado en solo lectura, con Post
 
 **No se validó con Clavaris real** (sí con tokens RSA propios, en los bordes exactos): un token realmente caducado (se desmontó el entorno antes de que venciera el de la prueba), `nbf`, la rotación de claves (publicar un `kid` nuevo) y un token de otra organización con el mismo `client_id`.
 
+
+## 11. Sub-paso 4.5: el receptor de webhooks de Clavaris
+
+Cadena C del ADR-0020: `/api/v1/webhooks/clavaris`. Sin sesión, sin Bearer y sin CSRF; la autenticidad la da **solo** la firma `Clavaris-Signature`. Su función es una optimización: cerrar de inmediato las sesiones de una cuenta suspendida, borrada o con un refresh token reutilizado. **No es la fuente de verdad**: un webhook puede perderse (si Clavaris desactiva el endpoint tras fallos repetidos), así que la prueba de vida del 4.3 y el límite absoluto de 8 h siguen siendo la red de seguridad.
+
+### 11.1 Qué se construyó
+
+| Pieza | Dónde | Decisión |
+|---|---|---|
+| Verificador de firma | `app`, `security.webhook.WebhookSignatureVerifier` | HMAC-SHA256 sobre `"<t>.<cuerpo crudo>"`, comparación de tiempo constante contra **todos** los `v1` y **todos** los secretos (vigente y anterior), sin cortocircuito. La firma se comprueba **antes** que la vigencia. Tolerancia de `t` configurable (300 s, máx. 15 min) |
+| Filtro del receptor | `app`, `ClavarisWebhookFilter` | Filtro de la cadena y no controlador: la firma se verifica sobre los bytes exactos antes de cualquier otro procesamiento. Límite de cuerpo (256 KiB) comprobado por `Content-Length` y, sin él, con una lectura acotada |
+| Reducción a identificadores | `ClavarisWebhookParser` | Solo se leen `accountId` y `occurredAt`; correo, nombre y teléfono no salen de este método (ADR-0016, decisión 11). Nunca se registra el cuerpo |
+| Caso de uso | `auth`, `handleclavariswebhook` | Una **sola transacción**: marcar el evento como procesado, aplicar el efecto local y escribir en la bandeja lo que vive fuera de la base |
+| Espejo de la identidad | `auth`, `IdentityState` + columnas `identity_*` de `accounts` | Orden por la tupla `(occurredAt, event_id)`; `DELETED` terminal |
+| Bandeja de salida | `common` (puertos) + `app.infrastructure.outbox` | `OutboxStore` (publicar en la transacción del llamador, reclamar con `FOR UPDATE SKIP LOCKED`), `OutboxPoller` (reintentos con retroceso exponencial y jitter, `FAILED` al agotar intentos) y purga de retención |
+| Cierre de sesiones | `app`, `SessionInvalidationConsumer` | Borra, por el índice `PRINCIPAL_NAME_INDEX_NAME`, todas las sesiones de la cuenta en Redis |
+
+**Por qué el cierre de sesiones pasa por la bandeja y no se hace en la transacción del webhook.** Redis no participa en la transacción de Postgres, y ADR-0016 (decisión 11) prohíbe efectos externos desde el caso de uso o desde `afterCommit`. Con la bandeja, un Redis caído no retrasa ni pierde la aceptación del webhook: el sondeador reintenta, y el consumidor es idempotente.
+
+**La bandeja no existía.** Solo estaba la migración `V20261121100000`; el 4.5 construyó la parte mínima y reutilizable (puertos en `common`, escritura, sondeador y purga), y no un motor genérico. La purga conserva la bandeja procesada 7 días y `processed_events` 30 (ADR-0016, decisión 8).
+
+### 11.2 Reglas de comportamiento
+
+| Situación | Respuesta | Efecto |
+|---|---|---|
+| Firma ausente, mal formada, que no casa o fuera de tolerancia | `401 WEBHOOK_SIGNATURE_INVALID` | Ninguno |
+| Sin secreto configurado | `503 WEBHOOK_NOT_CONFIGURED` | Receptor cerrado: aceptar sin firma dejaría cerrar las sesiones de otro |
+| Cuerpo mayor que el límite | `413 PAYLOAD_TOO_LARGE` | Ninguno; no se lee entero |
+| Firmado pero ilegible, o sin `Clavaris-Event-Id` | `400 WEBHOOK_PAYLOAD_INVALID` | Ninguno: un 4xx evita que Clavaris insista en algo que no mejorará |
+| Método distinto de POST | `405` + `Allow: POST` | Ninguno |
+| Fallo al aplicar (base caída, bandeja caída) | `503 WEBHOOK_UNAVAILABLE` | **Nada**: ni el evento queda marcado ni el efecto; el reintento de Clavaris lo aplica una vez |
+| Entrega auténtica | `204` solo **después** de confirmar la transacción | Aplicado |
+| Misma entrega repetida | `204` | Una sola vez (`processed_events`) |
+| Tipo sin efecto, o cuenta que nunca inició sesión | `204` | Ninguno |
+
+**Eventos con efecto** (los cuatro verificados con entregas reales en el spike): `account.suspended`, `account.reactivated`, `account.deleted` y `refresh_token.reuse_detected`. Los demás tipos del catálogo se aceptan y se ignoran, porque cualquier código distinto de 2xx haría que Clavaris reintentara y acabara desactivando el endpoint. `account.banned`/`account.unbanned` parecen análogos pero su carga no se ha comprobado con una entrega real: no se tratan hasta verificarlo.
+
+**Orden.**
+- El espejo aplica un evento solo si su `(occurredAt, event_id)` es mayor que el del último aplicado; el UUID se compara **sin signo**, como Postgres (con signo, un empate se resolvería al revés en el dominio y en SQL).
+- `DELETED` es terminal y gana siempre, con la marca que traiga (en entregas reales `reuse_detected` llegó después de `deleted`).
+- **Cerrar sesiones no respeta el orden, a propósito**: un evento viejo que llega tarde igual cierra las sesiones. Una sesión cerrada de más obliga a iniciar sesión otra vez; una abierta de menos es un acceso que debía haberse cortado.
+- Una cuenta con identidad `DELETED` es rechazada por la resolución del actor (`IDENTITY_DELETED`, 403 `ACCOUNT_UNAVAILABLE`).
+
+**Deduplicación.** `INSERT … ON CONFLICT DO NOTHING` sobre `processed_events(consumer, event_id)` **dentro de la misma transacción** que el efecto. Un `SELECT` previo produjo duplicados bajo concurrencia en el spike (8 de 385); la restricción única no puede.
+
+### 11.3 Pruebas
+
+| Capa | Qué comprueba |
+|---|---|
+| Unidad, verificador | Firma calculada de forma **independiente** (`WebhookSigner`, escrito a partir del código de Clavaris, no compartido con el verificador); rotación con uno y dos `v1`; cuerpo alterado un byte; JSON reserializado (la firma es sobre bytes crudos); bordes exactos de la tolerancia; cabeceras mal formadas de varias formas |
+| Unidad, dominio | `IdentityState`: la propiedad **«cualquier orden de llegada deja el mismo estado»** con 300 rondas × 20 permutaciones y empates exactos, reentrega triplicada y `DELETED` en cualquier posición |
+| Contrato del puerto | `IdentityStateContract` corre contra un almacén en memoria y contra el adaptador JDBC con Postgres 17 real, incluida la concurrencia (200 eventos simultáneos, 16 hilos): si el SQL ordena distinto que el dominio, falla |
+| Caso de uso | Cada evento, repetido, desordenado, tipo ignorado, cuenta desconocida y el fallo de la bandeja que se propaga para revertir |
+| Filtro | Bordes del límite de cuerpo con y sin `Content-Length`; métricas por resultado |
+| Bandeja | Reintento y éxito posterior, `FAILED` al tope, un fallo no bloquea al resto del lote, `SKIP LOCKED` con 4 sondeadores simultáneos sin entrega doble, purga por retención |
+| Integración (23) | La cadena real con Postgres y Redis reales: entrega auténtica → espejo + bandeja + sesión cerrada tras el sondeo; sesión de **otra** cuenta intacta; rotación; 16 copias simultáneas → un solo efecto; evento viejo tardío; `DELETED` terminal; **rollback completo con bandeja caída y reintento que aplica una vez**; firma ausente, ajena, cuerpo alterado, repetición fuera de tolerancia, Bearer que no sustituye a la firma; 413; 400; 405; el cuerpo nunca se repite en la respuesta |
+| Cerrado por defecto | Sin secreto, toda entrega recibe 503 |
+
+### 11.4 Pruebas de mutación (PIT, perfil `mutation`, mutadores STRONGER)
+
+Perfil `mutation` (PIT 1.30.2, mutadores `STRONGER`) sobre las clases del 4.5, en dos pasadas: la primera encontró supervivientes reales y la segunda confirma que se cerraron.
+
+| Módulo | Mutantes | Eliminados | Resultado |
+|---|---|---|---|
+| `common` (puertos de la bandeja y de idempotencia) | 7 | 7 | **100 %** |
+| `auth-module` (dominio de identidad, caso de uso, adaptador JDBC) | 63 | 63 | **100 %** (en la primera pasada 60 de 66) |
+| `app` (verificador, filtro, parser, propiedades, bandeja, consumidor) | 166 | 160 + 1 cerrado después | **96 %** en la segunda pasada (82 % en la primera: 158 de 193) |
+
+**Qué enseñó la primera pasada.** 35 supervivientes en `app`, de tres clases:
+- *Condiciones redundantes* que una excepción posterior ya cubría (parser, propiedades, consumidor). No se añadieron tests inútiles: se **quitó la condición** y quedó un solo camino de error.
+- *Comportamiento real sin prueba*: el borde exacto del límite de cuerpo, la lectura acotada sin `Content-Length`, las métricas por resultado, un hex de 64 sin prefijo `v1=`, un timestamp de 12 dígitos, que un consumidor solo se llame para su tipo de evento. Se escribieron los tests.
+- *Aritmética sin sentido*: la versión del evento en la bandeja se calculaba con microsegundos a mano; pasó a ser `occurredAt.toEpochMilli()`.
+
+**Quedan 5 supervivientes, todos justificados:**
+- 4 en `OutboxConfiguration` (métodos `@Bean` que devuelven nulo): cableado, lo cubre el arranque del contexto.
+- 1 **equivalente** en `ClavarisWebhookParser.occurredAt` (`isNumber()` forzado a verdadero): `decimalValue()` sobre un nodo que no es número lanza y el `catch` lo convierte en el mismo resultado, un cuerpo rechazado; ninguna prueba puede distinguirlos.
+
+Un sexto (la comprobación previa por `Content-Length` del filtro) era real y se cubrió con una prueba que falla si se lee el cuerpo; **no se volvió a pasar PIT** después de ese último test.
+
+### 11.5 Validación contra Clavaris real
+
+**No se validó contra un Clavaris real en el 4.5.** Registrar un endpoint exige una URL pública HTTPS (Clavaris rechaza `localhost`) y abrir un túnel público solo se hace a petición expresa. Lo que sí se comprobó: el formato de la firma, leído del código de Clavaris (`WebhookSignature.header`: `t=<epoch>,v1=<hex>` por secreto, HMAC-SHA256 sobre `<t>.<cuerpo>`), contra el cual el firmador de las pruebas es independiente; las cabeceras y la forma de las cargas, de las entregas reales del spike (19 y 20 de noviembre de 2026). **Queda por validar**: una entrega real de punta a punta, incluido el comportamiento de Clavaris ante nuestros 4xx/5xx y su reintento con retroceso.
+
+### 11.6 Decisiones pendientes y límites conocidos
+
+- **Límite de tasa por IP** del receptor (ADR-0011): no está; llega con el paso 5 junto al resto de la infraestructura transversal. Mientras tanto la firma se verifica en tiempo constante y el cuerpo está acotado.
+- **Conciliación**: no hay un recorrido que compare el espejo con Clavaris tras un hueco de eventos. El 4.3 (prueba de vida) lo cubre en la práctica; si se quiere más, es trabajo aparte.
+- **Vigilancia del endpoint**: Clavaris lo desactiva tras fallos repetidos y los eventos se pierden. Hace falta una alerta sobre la métrica `jobseeker_webhook_total` (ausencia de `applied` o exceso de `error`) cuando exista Alertmanager (ADR-0012).
+- **Estado de liveness y refresh token almacenado** de la sesión cerrada: el cierre borra la sesión de Redis, pero **no se verificó** qué pasa con la entrada de liveness y el refresh token guardado de esa sesión (4.3). Hay que comprobar que no quedan huérfanos y, si quedan, borrarlos en el mismo consumidor.
+- **`account.banned`/`unbanned`**: sin tratar hasta verificar su carga.
+- **Cableado de beans** (`OutboxConfiguration`): 4 mutantes que devuelven nulo de un método `@Bean` no los distingue una prueba dirigida; los cubre el arranque del contexto.
