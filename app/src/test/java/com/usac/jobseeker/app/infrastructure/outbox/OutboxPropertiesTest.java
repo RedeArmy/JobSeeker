@@ -37,6 +37,8 @@ class OutboxPropertiesTest {
   void anAttemptBelowOneIsTreatedAsTheFirst() {
     assertThat(DEFAULTS.backoff(0, 1.0)).isEqualTo(Duration.ofSeconds(2));
     assertThat(DEFAULTS.backoff(-3, 1.0)).isEqualTo(Duration.ofSeconds(2));
+    // Sin la resta en `long`, `Integer.MIN_VALUE - 1` desborda y daría el retroceso máximo.
+    assertThat(DEFAULTS.backoff(Integer.MIN_VALUE, 1.0)).isEqualTo(Duration.ofSeconds(2));
   }
 
   @Test
