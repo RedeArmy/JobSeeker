@@ -133,10 +133,10 @@ class ProfessionalProfileControllerTest {
 
   @Test
   void aMissingVersionIsAValidationErrorBeforeReachingTheUseCase() {
-    assertThatThrownBy(
-            () ->
-                controller.saveMyProfile(
-                    principal(caller), new SaveProfessionalProfileRequest("Ana", null, null, null)))
+    Principal who = principal(caller);
+    var withoutVersion = new SaveProfessionalProfileRequest("Ana", null, null, null);
+
+    assertThatThrownBy(() -> controller.saveMyProfile(who, withoutVersion))
         .isInstanceOf(ValidationFailedException.class)
         .satisfies(
             e ->
@@ -153,11 +153,9 @@ class ProfessionalProfileControllerTest {
   @Test
   void theErrorsOfTheUseCaseReachTheGlobalHandlerUntouched() {
     failure = new StaleStateException();
+    Principal who = principal(caller);
+    var request = new SaveProfessionalProfileRequest("Ana", null, null, 5L);
 
-    assertThatThrownBy(
-            () ->
-                controller.saveMyProfile(
-                    principal(caller), new SaveProfessionalProfileRequest("Ana", null, null, 5L)))
-        .isSameAs(failure);
+    assertThatThrownBy(() -> controller.saveMyProfile(who, request)).isSameAs(failure);
   }
 }

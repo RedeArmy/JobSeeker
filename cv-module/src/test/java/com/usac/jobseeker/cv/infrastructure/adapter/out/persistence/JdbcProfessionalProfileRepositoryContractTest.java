@@ -65,17 +65,18 @@ class JdbcProfessionalProfileRepositoryContractTest extends ProfessionalProfileS
   void theDatabaseRefusesWhatTheDomainAlreadyRefuses() {
     AccountId account = new AccountId(UUID.randomUUID());
     accountExists(account);
+    var blankName = profileOf(account, "   ", null, null);
+    var longName = profileOf(account, "n".repeat(201), null, null);
+    var longHeadline = profileOf(account, "Ana", "h".repeat(201), null);
+    var longBio = profileOf(account, "Ana", null, "b".repeat(4001));
 
-    assertThatThrownBy(() -> repository.insertIfAbsent(profileOf(account, "   ", null, null)))
+    assertThatThrownBy(() -> repository.insertIfAbsent(blankName))
         .isInstanceOf(DataIntegrityViolationException.class);
-    assertThatThrownBy(
-            () -> repository.insertIfAbsent(profileOf(account, "n".repeat(201), null, null)))
+    assertThatThrownBy(() -> repository.insertIfAbsent(longName))
         .isInstanceOf(DataIntegrityViolationException.class);
-    assertThatThrownBy(
-            () -> repository.insertIfAbsent(profileOf(account, "Ana", "h".repeat(201), null)))
+    assertThatThrownBy(() -> repository.insertIfAbsent(longHeadline))
         .isInstanceOf(DataIntegrityViolationException.class);
-    assertThatThrownBy(
-            () -> repository.insertIfAbsent(profileOf(account, "Ana", null, "b".repeat(4001))))
+    assertThatThrownBy(() -> repository.insertIfAbsent(longBio))
         .isInstanceOf(DataIntegrityViolationException.class);
   }
 

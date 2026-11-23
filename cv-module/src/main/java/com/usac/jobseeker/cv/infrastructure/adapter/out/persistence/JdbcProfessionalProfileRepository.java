@@ -15,6 +15,11 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 public class JdbcProfessionalProfileRepository
     implements ProfessionalProfileReadPort, ProfessionalProfileStorePort {
 
+  // Nombres que se repiten entre las consultas, como parámetro y como columna.
+  private static final String ACCOUNT = "account";
+  private static final String HEADLINE = "headline";
+  private static final String VERSION = "version";
+
   private final JdbcClient jdbc;
 
   public JdbcProfessionalProfileRepository(JdbcClient jdbc) {
@@ -26,7 +31,7 @@ public class JdbcProfessionalProfileRepository
     return jdbc.sql(
             "select id, account_id, full_name, headline, bio, version, updated_at"
                 + " from professional_profiles where account_id = :account")
-        .param("account", accountId.value())
+        .param(ACCOUNT, accountId.value())
         .query(
             (rows, n) ->
                 new ProfessionalProfile(
@@ -34,9 +39,9 @@ public class JdbcProfessionalProfileRepository
                     new AccountId(rows.getObject("account_id", UUID.class)),
                     new ProfessionalIdentity(
                         rows.getString("full_name"),
-                        rows.getString("headline"),
+                        rows.getString(HEADLINE),
                         rows.getString("bio")),
-                    rows.getLong("version"),
+                    rows.getLong(VERSION),
                     rows.getObject("updated_at", OffsetDateTime.class).toInstant()))
         .optional();
   }
@@ -51,11 +56,11 @@ public class JdbcProfessionalProfileRepository
                     + " values (:id, :account, :name, :headline, :bio, :version, :updatedAt)"
                     + " on conflict (account_id) do nothing")
             .param("id", profile.id().value())
-            .param("account", profile.accountId().value())
+            .param(ACCOUNT, profile.accountId().value())
             .param("name", profile.identity().fullName())
-            .param("headline", profile.identity().headline())
+            .param(HEADLINE, profile.identity().headline())
             .param("bio", profile.identity().bio())
-            .param("version", profile.version())
+            .param(VERSION, profile.version())
             .param(
                 "updatedAt",
                 OffsetDateTime.ofInstant(profile.updatedAt(), java.time.ZoneOffset.UTC))
@@ -72,13 +77,13 @@ public class JdbcProfessionalProfileRepository
                     + " bio = :bio, version = :version, updated_at = :updatedAt"
                     + " where account_id = :account and version = :expected")
             .param("name", profile.identity().fullName())
-            .param("headline", profile.identity().headline())
+            .param(HEADLINE, profile.identity().headline())
             .param("bio", profile.identity().bio())
-            .param("version", profile.version())
+            .param(VERSION, profile.version())
             .param(
                 "updatedAt",
                 OffsetDateTime.ofInstant(profile.updatedAt(), java.time.ZoneOffset.UTC))
-            .param("account", profile.accountId().value())
+            .param(ACCOUNT, profile.accountId().value())
             .param("expected", expectedVersion)
             .update()
         == 1;

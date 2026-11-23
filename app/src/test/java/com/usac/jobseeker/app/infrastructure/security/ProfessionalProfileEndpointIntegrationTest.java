@@ -235,8 +235,9 @@ class ProfessionalProfileEndpointIntegrationTest {
             .andReturn();
 
     String response = result.getResponse().getContentAsString();
-    assertThat(response).contains("fullName", "headline", "bio", "REQUIRED", "TOO_LONG");
-    assertThat(response).doesNotContain("secreto-del-usuario", "xxxxxxxx");
+    assertThat(response)
+        .contains("fullName", "headline", "bio", "REQUIRED", "TOO_LONG")
+        .doesNotContain("secreto-del-usuario", "xxxxxxxx");
   }
 
   @Test
@@ -318,11 +319,11 @@ class ProfessionalProfileEndpointIntegrationTest {
         .singleElement()
         .satisfies(
             event -> {
-              assertThat(event.get("event_type")).isEqualTo("profile.updated");
-              assertThat(event.get("aggregate_version")).isEqualTo(1L);
+              assertThat(event)
+                  .containsEntry("event_type", "profile.updated")
+                  .containsEntry("aggregate_version", 1L)
+                  .containsEntry("trace_id", result.getResponse().getHeader("X-Trace-Id"));
               assertThat(event.get("payload").toString()).doesNotContain("Ana", "Dev", "biografía");
-              assertThat(event.get("trace_id"))
-                  .isEqualTo(result.getResponse().getHeader("X-Trace-Id"));
             });
   }
 

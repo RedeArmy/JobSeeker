@@ -39,14 +39,18 @@ class ErrorsTest {
     var exception = new ValidationFailedException(source);
     source.add(new FieldViolation("bio", "TOO_LONG"));
 
-    assertThat(exception.violations()).hasSize(1);
-    assertThatThrownBy(() -> exception.violations().add(new FieldViolation("a", "B")))
+    var violations = exception.violations();
+    var extra = new FieldViolation("a", "B");
+    assertThat(violations).hasSize(1);
+    assertThatThrownBy(() -> violations.add(extra))
         .isInstanceOf(UnsupportedOperationException.class);
   }
 
   @Test
   void anExceptionWithoutViolationsMakesNoSense() {
-    assertThatThrownBy(() -> new ValidationFailedException(List.of()))
+    List<FieldViolation> none = List.of();
+
+    assertThatThrownBy(() -> new ValidationFailedException(none))
         .isInstanceOf(IllegalArgumentException.class);
   }
 

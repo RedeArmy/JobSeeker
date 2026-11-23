@@ -240,30 +240,26 @@ class SaveProfessionalProfileServiceTest {
 
   @Test
   void everyCollaboratorIsRequired() {
+    Clock clock = Clock.systemUTC();
     assertThatThrownBy(
             () ->
                 new SaveProfessionalProfileService(
-                    null,
-                    id -> true,
-                    events::add,
-                    (a, b) -> {},
-                    Clock.systemUTC(),
-                    UUID::randomUUID))
+                    null, id -> true, events::add, (a, b) -> {}, clock, UUID::randomUUID))
         .isInstanceOf(NullPointerException.class);
     assertThatThrownBy(
             () ->
                 new SaveProfessionalProfileService(
-                    store, null, events::add, (a, b) -> {}, Clock.systemUTC(), UUID::randomUUID))
+                    store, null, events::add, (a, b) -> {}, clock, UUID::randomUUID))
         .isInstanceOf(NullPointerException.class);
     assertThatThrownBy(
             () ->
                 new SaveProfessionalProfileService(
-                    store, id -> true, null, (a, b) -> {}, Clock.systemUTC(), UUID::randomUUID))
+                    store, id -> true, null, (a, b) -> {}, clock, UUID::randomUUID))
         .isInstanceOf(NullPointerException.class);
     assertThatThrownBy(
             () ->
                 new SaveProfessionalProfileService(
-                    store, id -> true, events::add, null, Clock.systemUTC(), UUID::randomUUID))
+                    store, id -> true, events::add, null, clock, UUID::randomUUID))
         .isInstanceOf(NullPointerException.class);
     assertThatThrownBy(
             () ->
@@ -273,7 +269,7 @@ class SaveProfessionalProfileServiceTest {
     assertThatThrownBy(
             () ->
                 new SaveProfessionalProfileService(
-                    store, id -> true, events::add, (a, b) -> {}, Clock.systemUTC(), null))
+                    store, id -> true, events::add, (a, b) -> {}, clock, null))
         .isInstanceOf(NullPointerException.class);
   }
 }
