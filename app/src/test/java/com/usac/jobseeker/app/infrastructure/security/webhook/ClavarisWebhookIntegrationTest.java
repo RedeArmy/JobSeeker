@@ -8,6 +8,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 import com.usac.jobseeker.app.InfrastructureTestConfiguration;
 import com.usac.jobseeker.app.infrastructure.outbox.OutboxPoller;
+import com.usac.jobseeker.app.infrastructure.security.liveness.LivenessStore;
+import com.usac.jobseeker.app.infrastructure.security.liveness.VaultingAuthorizedClientRepository;
 import com.usac.jobseeker.common.application.outbox.DomainEventPublisherPort;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -63,6 +65,7 @@ class ClavarisWebhookIntegrationTest {
   @Autowired private JdbcTemplate jdbc;
   @Autowired private OutboxPoller poller;
   @Autowired private RedisIndexedSessionRepository sessions;
+  @Autowired private LivenessStore liveness;
   @MockitoSpyBean private DomainEventPublisherPort publisher;
 
   private UUID account;
@@ -164,6 +167,32 @@ class ClavarisWebhookIntegrationTest {
             jdbc.queryForObject(
                 "select status from outbox_events where aggregate_id = ?", String.class, account))
         .isEqualTo("PROCESSED");
+  }
+
+  @Test
+  void closingTheSessionsAlsoDeletesTheirLivenessRecordsAndLeavesOtherAccountsAlone()
+      throws Exception {
+    String link = liveness.begin("refresh-token-de-prueba", Instant.now());
+    var mine = sessions.createSession();
+    mine.setAttribute(
+        FindByIndexNameSessionRepository.PRINCIPAL_NAME_INDEX_NAME, account.toString());
+    mine.setAttribute(VaultingAuthorizedClientRepository.LINK_ATTRIBUTE, link);
+    sessions.save(mine);
+    String otherLink = liveness.begin("refresh-token-de-otra-cuenta", Instant.now());
+    var other = sessions.createSession();
+    other.setAttribute(
+        FindByIndexNameSessionRepository.PRINCIPAL_NAME_INDEX_NAME, UUID.randomUUID().toString());
+    other.setAttribute(VaultingAuthorizedClientRepository.LINK_ATTRIBUTE, otherLink);
+    sessions.save(other);
+    assertThat(liveness.find(link)).as("antes del cierre existe").isPresent();
+
+    send("account.suspended", UUID.randomUUID(), Instant.now());
+    poller.pollOnce();
+
+    assertThat(sessions.findById(mine.getId())).isNull();
+    assertThat(liveness.find(link)).as("sin registro huérfano").isEmpty();
+    assertThat(sessions.findById(other.getId())).isNotNull();
+    assertThat(liveness.find(otherLink)).as("el de otra cuenta sigue").isPresent();
   }
 
   @Test

@@ -1,5 +1,6 @@
 package com.usac.jobseeker.app.infrastructure.security;
 
+import com.usac.jobseeker.app.infrastructure.security.liveness.LivenessStore;
 import com.usac.jobseeker.app.infrastructure.security.webhook.SessionInvalidationConsumer;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.ObjectProvider;
@@ -38,8 +39,9 @@ class DistributedSessionConfiguration {
 
   // Consumidor de la bandeja que cierra las sesiones de una cuenta (webhooks de Clavaris, 4.5).
   @Bean
-  SessionInvalidationConsumer sessionInvalidationConsumer(RedisIndexedSessionRepository sessions) {
-    return new SessionInvalidationConsumer(sessions);
+  SessionInvalidationConsumer sessionInvalidationConsumer(
+      RedisIndexedSessionRepository sessions, LivenessStore liveness) {
+    return new SessionInvalidationConsumer(sessions, liveness);
   }
 
   @Bean
