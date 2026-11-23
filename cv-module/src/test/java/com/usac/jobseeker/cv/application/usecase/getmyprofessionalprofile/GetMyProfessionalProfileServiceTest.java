@@ -8,6 +8,7 @@ import com.usac.jobseeker.cv.application.usecase.saveprofessionalprofile.InMemor
 import com.usac.jobseeker.cv.domain.model.ProfessionalIdentity;
 import com.usac.jobseeker.cv.domain.model.ProfessionalProfile;
 import com.usac.jobseeker.cv.domain.model.ProfessionalProfileId;
+import com.usac.jobseeker.cv.domain.model.ProfileCollections;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -19,9 +20,12 @@ class GetMyProfessionalProfileServiceTest {
   private final AccountId account = new AccountId(UUID.randomUUID());
   private final InMemoryProfessionalProfiles store = new InMemoryProfessionalProfiles();
   private final List<String> metrics = new ArrayList<>();
+  private ProfileCollections collections = ProfileCollections.empty();
   private final GetMyProfessionalProfileService service =
       new GetMyProfessionalProfileService(
-          store, (useCase, outcome) -> metrics.add(useCase + ":" + outcome));
+          store,
+          profileId -> collections,
+          (useCase, outcome) -> metrics.add(useCase + ":" + outcome));
 
   @Test
   void anAccountThatNeverCreatedItsProfileGetsNothingAndIsNotAnError() {
@@ -41,8 +45,31 @@ class GetMyProfessionalProfileServiceTest {
     var view = service.execute(new GetMyProfessionalProfileQuery(account)).orElseThrow();
 
     assertThat(view)
-        .isEqualTo(new ProfessionalProfileView(id.value(), "Ana López", "Dev", "Bio", 4, updated));
+        .isEqualTo(
+            new ProfessionalProfileView(
+                id.value(), "Ana López", "Dev", "Bio", 4, updated, ProfileCollections.empty()));
     assertThat(metrics).containsExactly("get_my_professional_profile:found");
+  }
+
+  @Test
+  void theViewCarriesTheFourCollectionsOfThatProfile() {
+    var id = new ProfessionalProfileId(UUID.randomUUID());
+    var item =
+        com.usac.jobseeker.cv.domain.model.Experience.of(
+            new com.usac.jobseeker.cv.domain.model.ProfileItemId(UUID.randomUUID()),
+            "Acme",
+            "Dev",
+            java.time.LocalDate.of(2020, 1, 1),
+            null,
+            null);
+    collections = new ProfileCollections(List.of(item), List.of(), List.of(), List.of());
+    store.insertIfAbsent(
+        ProfessionalProfile.create(
+            id, account, ProfessionalIdentity.of("Ana", null, null), Instant.now()));
+
+    var view = service.execute(new GetMyProfessionalProfileQuery(account)).orElseThrow();
+
+    assertThat(view.collections().experiences()).containsExactly(item);
   }
 
   @Test
@@ -62,9 +89,12 @@ class GetMyProfessionalProfileServiceTest {
   void theQueryAndTheCollaboratorsAreRequired() {
     assertThatThrownBy(() -> new GetMyProfessionalProfileQuery(null))
         .isInstanceOf(NullPointerException.class);
-    assertThatThrownBy(() -> new GetMyProfessionalProfileService(null, (a, b) -> {}))
+    assertThatThrownBy(
+            () -> new GetMyProfessionalProfileService(null, id -> collections, (a, b) -> {}))
         .isInstanceOf(NullPointerException.class);
-    assertThatThrownBy(() -> new GetMyProfessionalProfileService(store, null))
+    assertThatThrownBy(() -> new GetMyProfessionalProfileService(store, null, (a, b) -> {}))
+        .isInstanceOf(NullPointerException.class);
+    assertThatThrownBy(() -> new GetMyProfessionalProfileService(store, id -> collections, null))
         .isInstanceOf(NullPointerException.class);
   }
 }

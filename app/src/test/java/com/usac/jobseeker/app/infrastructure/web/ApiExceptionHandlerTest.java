@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.usac.jobseeker.common.domain.error.FieldViolation;
+import com.usac.jobseeker.common.domain.error.NotFoundException;
 import com.usac.jobseeker.common.domain.error.StaleStateException;
 import com.usac.jobseeker.common.domain.error.ValidationFailedException;
 import java.util.List;
@@ -47,6 +48,11 @@ class ApiExceptionHandlerTest {
       throw new ValidationFailedException(
           List.of(
               new FieldViolation("fullName", "REQUIRED"), new FieldViolation("bio", "TOO_LONG")));
+    }
+
+    @GetMapping("/absent")
+    String absent() {
+      throw new NotFoundException();
     }
 
     @GetMapping("/stale")
@@ -142,6 +148,20 @@ class ApiExceptionHandlerTest {
   @Test
   void anOrdinaryErrorCarriesNoDetailsField() throws Exception {
     mvc.perform(get("/missing")).andExpect(jsonPath("$.error.details").doesNotExist());
+  }
+
+  @Test
+  void aNotFoundIsA404WithTheGenericCodeAndNoDetailOfTheResource() throws Exception {
+    String body =
+        mvc.perform(get("/absent").requestAttr(TRACE_ATTRIBUTE, "traza-de-prueba"))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error.code").value("RESOURCE_NOT_FOUND"))
+            .andExpect(jsonPath("$.error.traceId").value("traza-de-prueba"))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    assertThat(body).doesNotContain("existe para");
   }
 
   @Test

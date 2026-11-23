@@ -55,6 +55,11 @@ class ErrorsTest {
   }
 
   @Test
+  void aNotFoundCarriesNoIdentifierOfTheResource() {
+    assertThat(new NotFoundException().getMessage()).isEqualTo("El recurso no existe");
+  }
+
+  @Test
   void theStaleStateCarriesNoDataOfTheResource() {
     assertThat(new StaleStateException().getMessage())
         .isEqualTo("El recurso cambió desde que se leyó");

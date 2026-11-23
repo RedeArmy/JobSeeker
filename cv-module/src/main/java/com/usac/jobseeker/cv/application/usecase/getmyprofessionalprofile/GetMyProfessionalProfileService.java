@@ -18,11 +18,15 @@ public class GetMyProfessionalProfileService implements GetMyProfessionalProfile
   private static final String USE_CASE = "get_my_professional_profile";
 
   private final ProfessionalProfileReadPort profiles;
+  private final ProfileCollectionsReadPort collections;
   private final UseCaseMetricsPort metrics;
 
   public GetMyProfessionalProfileService(
-      ProfessionalProfileReadPort profiles, UseCaseMetricsPort metrics) {
+      ProfessionalProfileReadPort profiles,
+      ProfileCollectionsReadPort collections,
+      UseCaseMetricsPort metrics) {
     this.profiles = Objects.requireNonNull(profiles, "profiles");
+    this.collections = Objects.requireNonNull(collections, "collections");
     this.metrics = Objects.requireNonNull(metrics, "metrics");
   }
 
@@ -30,7 +34,9 @@ public class GetMyProfessionalProfileService implements GetMyProfessionalProfile
   @Transactional(readOnly = true)
   public Optional<ProfessionalProfileView> execute(GetMyProfessionalProfileQuery query) {
     Optional<ProfessionalProfileView> view =
-        profiles.findByAccountId(query.accountId()).map(ProfessionalProfileView::of);
+        profiles
+            .findByAccountId(query.accountId())
+            .map(p -> ProfessionalProfileView.of(p, collections.findByProfileId(p.id())));
     String outcome = view.isPresent() ? "found" : "not_created";
     metrics.count(USE_CASE, outcome);
     LOG.info(

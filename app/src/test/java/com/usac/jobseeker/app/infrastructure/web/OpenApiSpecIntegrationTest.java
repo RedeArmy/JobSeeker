@@ -73,6 +73,38 @@ class OpenApiSpecIntegrationTest {
   }
 
   @Test
+  void everyOperationOfTheFourProfileCollectionsDocumentsTheSharedErrorResponses()
+      throws Exception {
+    OpenAPI spec = new OpenAPIV3Parser().readContents(export(), null, null).getOpenAPI();
+    String base = "/api/v1/me/professional-profile/";
+
+    for (String collection :
+        java.util.List.of("experiences", "education", "certifications", "projects")) {
+      var add = spec.getPaths().get(base + collection).getPost();
+      var replace = spec.getPaths().get(base + collection + "/{id}").getPut();
+      var remove = spec.getPaths().get(base + collection + "/{id}").getDelete();
+      assertThat(add.getResponses())
+          .as("alta de " + collection)
+          .containsKeys("201", "400", "401", "403", "404", "409", "429");
+      assertThat(replace.getResponses())
+          .as("reemplazo de " + collection)
+          .containsKeys("200", "400", "401", "403", "404", "409", "429");
+      assertThat(remove.getResponses())
+          .as("baja de " + collection)
+          .containsKeys("200", "400", "401", "403", "404", "409", "429");
+      for (var operation : java.util.List.of(add, replace, remove)) {
+        assertThat(operation.getTags()).containsExactly("cv");
+        assertThat(operation.getSecurity()).isNotEmpty();
+        // La anotación compuesta debe apuntar al sobre estándar, no copiar su forma.
+        var errorContent = operation.getResponses().get("409").getContent();
+        assertThat(errorContent.values())
+            .singleElement()
+            .satisfies(media -> assertThat(media.getSchema().get$ref()).endsWith("ErrorEnvelope"));
+      }
+    }
+  }
+
+  @Test
   void theSpecIsASingleDocumentForTheWholeDeployable() throws Exception {
     OpenAPI spec = new OpenAPIV3Parser().readContents(export(), null, null).getOpenAPI();
 

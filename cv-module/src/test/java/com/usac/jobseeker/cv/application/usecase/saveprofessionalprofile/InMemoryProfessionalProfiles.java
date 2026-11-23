@@ -33,6 +33,16 @@ public class InMemoryProfessionalProfiles
     return true;
   }
 
+  /** Una copia del estado, para que una prueba pueda simular la reversión de una transacción. */
+  public Map<AccountId, ProfessionalProfile> snapshot() {
+    return new HashMap<>(byAccount);
+  }
+
+  public void restore(Map<AccountId, ProfessionalProfile> state) {
+    byAccount.clear();
+    byAccount.putAll(state);
+  }
+
   public int size() {
     return byAccount.size();
   }

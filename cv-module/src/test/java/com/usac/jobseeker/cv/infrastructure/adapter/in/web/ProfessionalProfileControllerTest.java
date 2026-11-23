@@ -9,6 +9,7 @@ import com.usac.jobseeker.cv.application.usecase.getmyprofessionalprofile.GetMyP
 import com.usac.jobseeker.cv.application.usecase.getmyprofessionalprofile.ProfessionalProfileView;
 import com.usac.jobseeker.cv.application.usecase.saveprofessionalprofile.SaveProfessionalProfileCommand;
 import com.usac.jobseeker.cv.application.usecase.saveprofessionalprofile.SaveProfessionalProfileResult;
+import com.usac.jobseeker.cv.domain.model.ProfileCollections;
 import java.security.Principal;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -53,7 +54,8 @@ class ProfessionalProfileControllerTest {
         "Dev",
         "Bio",
         version,
-        Instant.parse("2026-11-23T10:00:00Z"));
+        Instant.parse("2026-11-23T10:00:00Z"),
+        ProfileCollections.empty());
   }
 
   @Test
@@ -90,7 +92,11 @@ class ProfessionalProfileControllerTest {
                 "Dev",
                 "Bio",
                 4,
-                "2026-11-23T10:00:00Z"));
+                "2026-11-23T10:00:00Z",
+                java.util.List.of(),
+                java.util.List.of(),
+                java.util.List.of(),
+                java.util.List.of()));
   }
 
   @Test

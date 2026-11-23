@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Mi perfil profesional · JobSeeker</title>
+  <!-- ADR-0020: el token CSRF viaja en una <meta>; HTMX lo adjunta a cada petición (hx-headers). -->
+  <meta name="_csrf" th:content="${_csrf.token}"/>
+  <meta name="_csrf_header" th:content="${_csrf.headerName}"/>
+  <!-- HTMX sin eval y sin estilos en línea, para mantener una CSP sin 'unsafe-inline'. Un 422 (datos no
+       válidos) solo reemplaza la zona de errores, sin tocar lo que la persona tecleó; un 409 o un 404
+       (versión vieja o elemento ya inexistente) recarga todo el contenido. -->
+  <meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false,"includeIndicatorStyles":false,"responseHandling":[{"code":"204","swap":false},{"code":"422","swap":true,"error":false,"target":"#profile-errors","swapOverride":"outerHTML"},{"code":"409","swap":true,"error":false},{"code":"404","swap":true,"error":false},{"code":"[23]..","swap":true},{"code":"[45]..","swap":false,"error":true}]}'/>
+  <link rel="stylesheet" th:href="@{/css/app.css}"/>
+  <script th:src="@{/js/htmx.min.js}"></script>
+</head>
+<body th:attr="hx-headers=|{&quot;${_csrf.headerName}&quot;: &quot;${_csrf.token}&quot;}|">
+<main>
+  <p><a th:href="@{/app/home}">Inicio</a></p>
+  <h1>Mi perfil profesional</h1>
+
+  <!-- `content` y `errors` son también los fragmentos que HTMX pide por separado. -->
+  <div id="profile-content" th:fragment="content">
+
+    <div id="profile-errors" th:fragment="errors" role="alert" aria-live="polite">
+      <p class="notice" th:if="${notice != null}" th:text="${notice}">aviso</p>
+      <ul class="errors" th:if="${errors != null and !errors.isEmpty()}">
+        <li th:each="message : ${errors}" th:text="${message}">error</li>
+      </ul>
+    </div>
+
+    <!-- Identidad: la primera vez crea el perfil (versión 0), después lo edita. -->
+    <section>
+      <h2>Datos básicos</h2>
+      <p th:unless="${profile.created()}">Aún no has creado tu perfil. Empieza con tu nombre; después podrás añadir tu experiencia, formación, certificaciones y proyectos.</p>
+      <form th:attr="hx-put=@{/app/profile/identity}" hx-target="#profile-content" hx-swap="outerHTML">
+        <input type="hidden" name="version" th:value="${profile.version()}"/>
+        <label>Nombre completo <input type="text" name="fullName" maxlength="200" required th:value="${profile.fullName()}"/></label>
+        <label>Titular profesional <input type="text" name="headline" maxlength="200" th:value="${profile.headline()}"/></label>
+        <label>Biografía <textarea name="bio" rows="4" maxlength="4000" th:text="${profile.bio()}"></textarea></label>
+        <button type="submit" th:text="${profile.created() ? 'Guardar' : 'Crear mi perfil'}">Guardar</button>
+      </form>
+    </section>
+
+    <th:block th:if="${profile.created()}">
+
+      <!-- Experiencia laboral -->
+      <section>
+        <h2>Experiencia laboral</h2>
+        <details th:each="e : ${profile.experiences()}">
+          <summary><span th:text="${e.company()}">Empresa</span> · <span th:text="${e.title()}">Puesto</span>
+            (<span th:text="${e.startDate()}">2022-03-01</span> – <span th:text="${e.endDate() != null ? e.endDate() : 'actual'}">actual</span>)</summary>
+          <form th:attr="hx-put=@{/app/profile/experiences/{id}(id=${e.id()})}" hx-target="#profile-content" hx-swap="outerHTML">
+            <input type="hidden" name="version" th:value="${profile.version()}"/>
+            <label>Empresa <input type="text" name="company" maxlength="200" required th:value="${e.company()}"/></label>
+            <label>Puesto <input type="text" name="title" maxlength="200" required th:value="${e.title()}"/></label>
+            <label>Inicio <input type="date" name="startDate" required th:value="${e.startDate()}"/></label>
+            <label>Fin (vacío si es el actual) <input type="date" name="endDate" th:value="${e.endDate()}"/></label>
+            <label>Descripción <textarea name="description" rows="3" maxlength="4000" th:text="${e.description()}"></textarea></label>
+            <button type="submit">Guardar cambios</button>
+          </form>
+          <button type="button" class="danger" hx-confirm="¿Quitar esta experiencia?" hx-target="#profile-content" hx-swap="outerHTML"
+                  th:attr="hx-delete=@{/app/profile/experiences/{id}(id=${e.id()})}, hx-vals=|{&quot;version&quot;: ${profile.version()}}|">Quitar</button>
+        </details>
+        <details>
+          <summary>Añadir experiencia</summary>
+          <form th:attr="hx-post=@{/app/profile/experiences}" hx-target="#profile-content" hx-swap="outerHTML">
+            <input type="hidden" name="version" th:value="${profile.version()}"/>
+            <label>Empresa <input type="text" name="company" maxlength="200" required/></label>
+            <label>Puesto <input type="text" name="title" maxlength="200" required/></label>
+            <label>Inicio <input type="date" name="startDate" required/></label>
+            <label>Fin (vacío si es el actual) <input type="date" name="endDate"/></label>
+            <label>Descripción <textarea name="description" rows="3" maxlength="4000"></textarea></label>
+            <button type="submit">Añadir</button>
+          </form>
+        </details>
+      </section>
+
+      <!-- Formación académica -->
+      <section>
+        <h2>Formación académica</h2>
+        <details th:each="s : ${profile.education()}">
+          <summary><span th:text="${s.degree()}">Título</span> · <span th:text="${s.institution()}">Institución</span>
+            (<span th:text="${s.completionDate() != null ? s.completionDate() : 'en curso'}">en curso</span>)</summary>
+          <form th:attr="hx-put=@{/app/profile/education/{id}(id=${s.id()})}" hx-target="#profile-content" hx-swap="outerHTML">
+            <input type="hidden" name="version" th:value="${profile.version()}"/>
+            <label>Institución <input type="text" name="institution" maxlength="200" required th:value="${s.institution()}"/></label>
+            <label>Título <input type="text" name="degree" maxlength="200" required th:value="${s.degree()}"/></label>
+            <label>Nivel
+              <select name="level">
+                <option value="">Sin indicar</option>
+                <option th:each="l : ${T(com.usac.jobseeker.cv.domain.model.EducationLevel).values()}" th:value="${l}" th:selected="${s.level() == l}" th:text="${T(com.usac.jobseeker.cv.infrastructure.adapter.in.web.ProfileLabels).level(l)}">Licenciatura o grado</option>
+              </select>
+            </label>
+            <label>Finalización (vacío si está en curso) <input type="date" name="completionDate" th:value="${s.completionDate()}"/></label>
+            <button type="submit">Guardar cambios</button>
+          </form>
+          <button type="button" class="danger" hx-confirm="¿Quitar esta formación?" hx-target="#profile-content" hx-swap="outerHTML"
+                  th:attr="hx-delete=@{/app/profile/education/{id}(id=${s.id()})}, hx-vals=|{&quot;version&quot;: ${profile.version()}}|">Quitar</button>
+        </details>
+        <details>
+          <summary>Añadir formación</summary>
+          <form th:attr="hx-post=@{/app/profile/education}" hx-target="#profile-content" hx-swap="outerHTML">
+            <input type="hidden" name="version" th:value="${profile.version()}"/>
+            <label>Institución <input type="text" name="institution" maxlength="200" required/></label>
+            <label>Título <input type="text" name="degree" maxlength="200" required/></label>
+            <label>Nivel
+              <select name="level">
+                <option value="">Sin indicar</option>
+                <option th:each="l : ${T(com.usac.jobseeker.cv.domain.model.EducationLevel).values()}" th:value="${l}" th:text="${T(com.usac.jobseeker.cv.infrastructure.adapter.in.web.ProfileLabels).level(l)}">Licenciatura o grado</option>
+              </select>
+            </label>
+            <label>Finalización (vacío si está en curso) <input type="date" name="completionDate"/></label>
+            <button type="submit">Añadir</button>
+          </form>
+        </details>
+      </section>
+
+      <!-- Certificaciones -->
+      <section>
+        <h2>Certificaciones</h2>
+        <details th:each="c : ${profile.certifications()}">
+          <summary><span th:text="${c.name()}">Nombre</span> · <span th:text="${c.issuingOrganization()}">Emisor</span></summary>
+          <form th:attr="hx-put=@{/app/profile/certifications/{id}(id=${c.id()})}" hx-target="#profile-content" hx-swap="outerHTML">
+            <input type="hidden" name="version" th:value="${profile.version()}"/>
+            <label>Nombre <input type="text" name="name" maxlength="200" required th:value="${c.name()}"/></label>
+            <label>Organización emisora <input type="text" name="issuingOrganization" maxlength="200" required th:value="${c.issuingOrganization()}"/></label>
+            <label>Emisión <input type="date" name="issueDate" th:value="${c.issueDate()}"/></label>
+            <label>Expiración (vacío si no expira) <input type="date" name="expirationDate" th:value="${c.expirationDate()}"/></label>
+            <label>Enlace de la credencial <input type="url" name="credentialUrl" maxlength="2000" th:value="${c.credentialUrl()}"/></label>
+            <button type="submit">Guardar cambios</button>
+          </form>
+          <button type="button" class="danger" hx-confirm="¿Quitar esta certificación?" hx-target="#profile-content" hx-swap="outerHTML"
+                  th:attr="hx-delete=@{/app/profile/certifications/{id}(id=${c.id()})}, hx-vals=|{&quot;version&quot;: ${profile.version()}}|">Quitar</button>
+        </details>
+        <details>
+          <summary>Añadir certificación</summary>
+          <form th:attr="hx-post=@{/app/profile/certifications}" hx-target="#profile-content" hx-swap="outerHTML">
+            <input type="hidden" name="version" th:value="${profile.version()}"/>
+            <label>Nombre <input type="text" name="name" maxlength="200" required/></label>
+            <label>Organización emisora <input type="text" name="issuingOrganization" maxlength="200" required/></label>
+            <label>Emisión <input type="date" name="issueDate"/></label>
+            <label>Expiración (vacío si no expira) <input type="date" name="expirationDate"/></label>
+            <label>Enlace de la credencial <input type="url" name="credentialUrl" maxlength="2000"/></label>
+            <button type="submit">Añadir</button>
+          </form>
+        </details>
+      </section>
+
+      <!-- Proyectos -->
+      <section>
+        <h2>Proyectos</h2>
+        <details th:each="p : ${profile.projects()}">
+          <summary><span th:text="${p.name()}">Nombre</span> · <span th:text="${p.type() == T(com.usac.jobseeker.cv.domain.model.ProjectType).WORK ? 'laboral' : 'personal'}">personal</span></summary>
+          <form th:attr="hx-put=@{/app/profile/projects/{id}(id=${p.id()})}" hx-target="#profile-content" hx-swap="outerHTML">
+            <input type="hidden" name="version" th:value="${profile.version()}"/>
+            <label>Nombre <input type="text" name="name" maxlength="200" required th:value="${p.name()}"/></label>
+            <label>Tipo
+              <select name="type" required>
+                <option value="WORK" th:selected="${p.type() == T(com.usac.jobseeker.cv.domain.model.ProjectType).WORK}">Laboral</option>
+                <option value="PERSONAL" th:selected="${p.type() == T(com.usac.jobseeker.cv.domain.model.ProjectType).PERSONAL}">Personal</option>
+              </select>
+            </label>
+            <label>Rol <input type="text" name="role" maxlength="200" th:value="${p.role()}"/></label>
+            <label>Inicio <input type="date" name="startDate" th:value="${p.startDate()}"/></label>
+            <label>Fin (vacío si está en curso) <input type="date" name="endDate" th:value="${p.endDate()}"/></label>
+            <label>Enlace <input type="url" name="url" maxlength="2000" th:value="${p.url()}"/></label>
+            <label>Descripción <textarea name="description" rows="3" maxlength="4000" th:text="${p.description()}"></textarea></label>
+            <button type="submit">Guardar cambios</button>
+          </form>
+          <button type="button" class="danger" hx-confirm="¿Quitar este proyecto?" hx-target="#profile-content" hx-swap="outerHTML"
+                  th:attr="hx-delete=@{/app/profile/projects/{id}(id=${p.id()})}, hx-vals=|{&quot;version&quot;: ${profile.version()}}|">Quitar</button>
+        </details>
+        <details>
+          <summary>Añadir proyecto</summary>
+          <form th:attr="hx-post=@{/app/profile/projects}" hx-target="#profile-content" hx-swap="outerHTML">
+            <input type="hidden" name="version" th:value="${profile.version()}"/>
+            <label>Nombre <input type="text" name="name" maxlength="200" required/></label>
+            <label>Tipo
+              <select name="type" required>
+                <option value="WORK">Laboral</option>
+                <option value="PERSONAL" selected>Personal</option>
+              </select>
+            </label>
+            <label>Rol <input type="text" name="role" maxlength="200"/></label>
+            <label>Inicio <input type="date" name="startDate"/></label>
+            <label>Fin (vacío si está en curso) <input type="date" name="endDate"/></label>
+            <label>Enlace <input type="url" name="url" maxlength="2000"/></label>
+            <label>Descripción <textarea name="description" rows="3" maxlength="4000"></textarea></label>
+            <button type="submit">Añadir</button>
+          </form>
+        </details>
+      </section>
+
+    </th:block>
+  </div>
+</main>
+</body>
+</html>

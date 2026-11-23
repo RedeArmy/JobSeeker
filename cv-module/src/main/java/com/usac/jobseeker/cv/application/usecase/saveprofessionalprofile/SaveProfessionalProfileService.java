@@ -6,10 +6,12 @@ import com.usac.jobseeker.common.application.outbox.OutboxEvent;
 import com.usac.jobseeker.common.domain.error.StaleStateException;
 import com.usac.jobseeker.common.domain.error.ValidationFailedException;
 import com.usac.jobseeker.cv.application.usecase.getmyprofessionalprofile.ProfessionalProfileView;
+import com.usac.jobseeker.cv.application.usecase.getmyprofessionalprofile.ProfileCollectionsReadPort;
 import com.usac.jobseeker.cv.domain.event.ProfileUpdated;
 import com.usac.jobseeker.cv.domain.model.ProfessionalIdentity;
 import com.usac.jobseeker.cv.domain.model.ProfessionalProfile;
 import com.usac.jobseeker.cv.domain.model.ProfessionalProfileId;
+import com.usac.jobseeker.cv.domain.model.ProfileCollections;
 import java.time.Clock;
 import java.util.Objects;
 import java.util.Optional;
@@ -33,6 +35,7 @@ public class SaveProfessionalProfileService implements SaveProfessionalProfileUs
   private static final String TRACE_ID_KEY = "traceId";
 
   private final ProfessionalProfileStorePort profiles;
+  private final ProfileCollectionsReadPort collections;
   private final CandidateCapabilityPort capabilities;
   private final DomainEventPublisherPort events;
   private final UseCaseMetricsPort metrics;
@@ -41,12 +44,14 @@ public class SaveProfessionalProfileService implements SaveProfessionalProfileUs
 
   public SaveProfessionalProfileService(
       ProfessionalProfileStorePort profiles,
+      ProfileCollectionsReadPort collections,
       CandidateCapabilityPort capabilities,
       DomainEventPublisherPort events,
       UseCaseMetricsPort metrics,
       Clock clock,
       Supplier<UUID> ids) {
     this.profiles = Objects.requireNonNull(profiles, "profiles");
+    this.collections = Objects.requireNonNull(collections, "collections");
     this.capabilities = Objects.requireNonNull(capabilities, "capabilities");
     this.events = Objects.requireNonNull(events, "events");
     this.metrics = Objects.requireNonNull(metrics, "metrics");
@@ -74,7 +79,11 @@ public class SaveProfessionalProfileService implements SaveProfessionalProfileUs
     String outcome = current.isPresent() ? "updated" : "created";
     metrics.count(USE_CASE, outcome);
     LOG.info("event=professional_profile_saved outcome={} Perfil profesional guardado", outcome);
-    return new SaveProfessionalProfileResult(ProfessionalProfileView.of(saved), current.isEmpty());
+    // Un perfil recién creado no tiene colecciones: se evita una lectura que sabemos vacía.
+    ProfileCollections items =
+        current.isEmpty() ? ProfileCollections.empty() : collections.findByProfileId(saved.id());
+    return new SaveProfessionalProfileResult(
+        ProfessionalProfileView.of(saved, items), current.isEmpty());
   }
 
   // Guardar lo mismo que ya está, con la versión vigente, no cambia nada: no sube la versión ni
@@ -88,7 +97,8 @@ public class SaveProfessionalProfileService implements SaveProfessionalProfileUs
   private SaveProfessionalProfileResult unchanged(ProfessionalProfile current) {
     metrics.count(USE_CASE, "unchanged");
     LOG.info("event=professional_profile_saved outcome=unchanged Perfil profesional sin cambios");
-    return new SaveProfessionalProfileResult(ProfessionalProfileView.of(current), false);
+    return new SaveProfessionalProfileResult(
+        ProfessionalProfileView.of(current, collections.findByProfileId(current.id())), false);
   }
 
   private ProfessionalIdentity validated(SaveProfessionalProfileCommand command) {
