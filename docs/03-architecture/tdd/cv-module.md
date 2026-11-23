@@ -160,7 +160,7 @@ Las pruebas de la migración (la de «publicadas inmutables» y el análisis de 
 | Sub-paso | Entrega | Depende de |
 |---|---|---|
 | 1 | ✅ **Hecho (23-nov-2026).** Migración de `professional_profiles` (solo la raíz), `ProfessionalProfile` con sus reglas, `getmyprofessionalprofile` y `saveprofessionalprofile`, adaptador JDBC y el controlador JSON. **Es la rebanada plantilla del módulo**: lleva todas las transversales. Detalle y desvíos de este documento en §10.1 | — |
-| 2 | Las tablas hijas y las cuatro colecciones (`manage*`), y **las pantallas HTMX del perfil** (nota en §10.1) | 1 |
+| 2 | ✅ **Hecho (24-nov-2026).** Las tablas hijas, las cuatro colecciones (`manage*`) y **las pantallas HTMX del perfil**. Detalle y desvíos de este documento en §10.2 | 1 |
 | 3 | `CandidateProfile`: moneda y periodo (M1), `get`/`save`, habilidades, idiomas, autorizaciones | 1 |
 | 4 | Descubribilidad, disponibilidad y lista de exclusión, con sus eventos | 3 |
 | 5 | `getprofilesnapshot` y los eventos conectados a la bandeja; prueba de contrato con `matching` | 3, TDD de `matching` |
@@ -179,6 +179,21 @@ Se construyó lo descrito en §4 para `getmyprofessionalprofile` y `saveprofessi
 - **La capacidad se pregunta a `auth` por su caso de uso** (`ResolveActorUseCase`) desde un adaptador de salida; `cv` pasó a depender de `auth` en el pom, sin ciclo.
 - **El evento lleva el `traceId`** de la petición (leído del `MDC` de SLF4J) y solo se emite si la cuenta tiene la capacidad de candidato.
 - **Se valida el carácter NUL**, que PostgreSQL no admite en un `text`: sin esa regla llegaría como un `500` en vez de un `400`.
+
+### 10.2 Sub-paso 2: qué se construyó y en qué se desvió de este documento
+
+Se construyó lo descrito en §4 para `manageexperiences`, `manageeducation`, `managecertifications` y `manageprojects`, con la migración de sus cuatro tablas, la API JSON (§6) y la pantalla `/app/profile`. Decisiones que la primera versión de este documento no tenía:
+
+- **Un coordinador común, `ProfileChange`.** Las cuatro colecciones comparten una regla que debe ser idéntica: comprobar la versión del perfil, avanzarla, escribir el elemento, publicar el evento, contar el resultado y devolver el perfil completo. Se escribe una vez y los cuatro servicios quedan en lo propio de cada colección (construir y validar el elemento). Una sola batería de pruebas, parametrizada, recorre las cuatro para que una diferencia entre ellas no pase desapercibida.
+- **Editar un elemento avanza la versión del perfil**, como dice la decisión 3, y se avanza **antes** de escribir el elemento: esa escritura toma el bloqueo de la fila y, si otra edición ya la avanzó, falla sin tocar nada. Si el elemento no existe, la transacción revierte también el avance; la prueba de extremo a extremo lo comprueba contra Postgres, porque un doble en memoria no puede.
+- **Toda operación devuelve el perfil completo** con su versión nueva, así el cliente nunca queda con una versión vieja para la edición siguiente. El borrado envía la versión como parámetro de consulta (`?version=`), porque un `DELETE` con cuerpo no es fiable.
+- **Un elemento ajeno responde igual que uno inexistente: 404.** Para eso se añadió `NotFoundException` a `common`, con su traducción a `RESOURCE_NOT_FOUND`: confirmar que un identificador ajeno es válido ya sería una fuga (BR-ACCT-04). Un perfil aún sin crear tampoco tiene nada que editar y responde 404.
+- **Máximo de 50 elementos por colección** (`TOO_MANY`, 400), que el diseño no fijaba: acota el abuso y el tamaño de la respuesta.
+- **Reglas de los datos.** Las fechas deben estar entre 1900 y 2100 (atrapa años mal tecleados) y el fin no puede ser anterior al inicio. Los enlaces solo pueden ser `http` o `https` con servidor: `javascript:`, `data:`, `ftp:` y los relativos se rechazan, porque el perfil los muestra como un enlace en el que otra persona pulsa. La base de datos repite estas reglas con restricciones `CHECK`: es la última defensa, no la única.
+- **El nivel académico muestra etiquetas en español** (`Licenciatura o grado`), no el código interno que usan la API y las reglas de elegibilidad.
+- **Pantalla HTMX.** Una operación devuelve el fragmento con el perfil completo, que sustituye al anterior. Un error de validación responde **422 con solo la zona de errores**, para que la persona no pierda lo que acaba de teclear; una versión vieja (409) o un elemento que ya no existe (404) recargan todo el contenido con un aviso. La página cumple la política de seguridad de contenido sin estilos ni scripts en línea, y lo que la persona escribe se escapa. Las trece rutas que mutan quedan cubiertas por la prueba que recorre todas las de `/app/**` exigiendo el token CSRF, sin tocarla.
+
+**Pendiente de este sub-paso, no implementado:** el orden manual de los elementos (hoy se ordenan por fecha, lo vigente primero) y una vista pública del perfil para otro usuario, que dependen de los TDD de `ats` y de `matching`.
 
 Cada sub-paso sale como una PR propia con su definición de hecho completa (OpenAPI anotado, política de límite de tasa, métrica y log con `traceId`, prueba de autorización y de CSRF).
 
