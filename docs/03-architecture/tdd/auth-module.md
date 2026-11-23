@@ -32,6 +32,8 @@ JobSeeker es **cliente** de Clavaris: nunca emite tokens ni guarda credenciales.
 |---|---|---|
 | `provisionaccount` | Primer login: crea la cuenta local con la capacidad de candidato si no existe (BR-ACCT-09). Idempotente: un segundo login no cambia nada | `AccountProvisioningPort` |
 | `resolveactor` | Reconstruye el `Actor` desde la base local en cada petición; rechaza `PENDING_DELETION` y `ANONYMIZED` (ADR-0020, resolución de identidad) | `ActorLookupPort` |
+| `handleclavariswebhook` | Aplica un webhook de Clavaris ya verificado (§11) | `IdentityStatePort`, `ProcessedEventsPort`, `DomainEventPublisherPort` |
+| `getmyaccount` | Devuelve al llamador su propia cuenta (identificador y capacidades): `GET /api/v1/me`. Es el **caso de uso plantilla** del paso 5 del Sprint 0 (§12): no añade reglas de negocio, así que el esfuerzo va a lo transversal | `MyAccountPort` |
 
 Los casos de uso de las demás funciones (`handleclavariswebhook`, el cierre de sesiones de una cuenta, la solicitud de la capacidad de reclutador) se nombran y se crean en el sub-paso que los implementa, no antes (reglas del proyecto, §7.1).
 
@@ -53,6 +55,7 @@ Los casos de uso de las demás funciones (`handleclavariswebhook`, el cierre de 
 | 4.3 | Refresh token cifrado, cerrojo por sesión, clasificación y margen de 2 h, logout con revocación | ✅ hecho (§9) |
 | 4.4 | Cadena B: Bearer con validador de `aud` y sobre de error estándar | ✅ hecho (§10) |
 | 4.5 | Cadena C: receptor de webhooks con HMAC, deduplicación y cierre de sesiones | ✅ hecho (§11); sin validar contra Clavaris real |
+| 5 | Caso de uso plantilla `getmyaccount` con límite de tasa, OpenAPI validado, métrica de negocio, log estructurado y prueba de autorización | ✅ hecho (§12) |
 
 ## 6. Pruebas
 
@@ -298,9 +301,84 @@ Un sexto (la comprobación previa por `Content-Length` del filtro) era real y se
 
 ### 11.6 Decisiones pendientes y límites conocidos
 
-- **Límite de tasa por IP** del receptor (ADR-0011): no está; llega con el paso 5 junto al resto de la infraestructura transversal. Mientras tanto la firma se verifica en tiempo constante y el cuerpo está acotado.
+- **Límite de tasa por IP** del receptor (ADR-0011): resuelto en el paso 5 (§12): política `webhook`, por IP, antes de verificar la firma.
 - **Conciliación**: no hay un recorrido que compare el espejo con Clavaris tras un hueco de eventos. El 4.3 (prueba de vida) lo cubre en la práctica; si se quiere más, es trabajo aparte.
 - **Vigilancia del endpoint**: Clavaris lo desactiva tras fallos repetidos y los eventos se pierden. Hace falta una alerta sobre la métrica `jobseeker_webhook_total` (ausencia de `applied` o exceso de `error`) cuando exista Alertmanager (ADR-0012).
 - **Estado de liveness y refresh token almacenado** de la sesión cerrada: el cierre borra la sesión de Redis, pero **no se verificó** qué pasa con la entrada de liveness y el refresh token guardado de esa sesión (4.3). Hay que comprobar que no quedan huérfanos y, si quedan, borrarlos en el mismo consumidor.
 - **`account.banned`/`unbanned`**: sin tratar hasta verificar su carga.
 - **Cableado de beans** (`OutboxConfiguration`): 4 mutantes que devuelven nulo de un método `@Bean` no los distingue una prueba dirigida; los cubre el arranque del contexto.
+
+## 12. Paso 5 del Sprint 0: el caso de uso plantilla y lo transversal
+
+Criterio de salida del Sprint 0 (`roadmap-and-release-plan.md`): un caso de uso completo de punta a punta con límite de tasa, OpenAPI anotado y validado, métrica de negocio, log estructurado y prueba de autorización, que sirva de plantilla. El elegido es **`getmyaccount`** (`GET /api/v1/me`): devuelve a quien llama su propia cuenta. Se escogió a propósito porque **no añade reglas de negocio ni datos nuevos** (lee lo que `resolveactor` ya resuelve): todo el esfuerzo va a lo transversal, que es lo que debe quedar bien hecho una sola vez.
+
+### 12.1 Dónde vive cada cosa
+
+| Preocupación | Dónde | Cómo |
+|---|---|---|
+| Caso de uso | `auth`, `application/usecase/getmyaccount` | `GetMyAccountQuery` → `GetMyAccountUseCase` → `Optional<MyAccountView>`; puerto de salida `MyAccountPort`; el bean se declara en `infrastructure.config`, sin estereotipos en `application` |
+| Endpoint | `auth`, `infrastructure/adapter/in/web` (ARCH-08) | `MyAccountController`: delgado, sin lógica. La identidad sale del token (`Principal`), nunca de un parámetro, así nadie puede pedir la cuenta de otro (BR-ACCT-04) |
+| Contrato público | `MyAccountResponse` | Un DTO propio con `@Schema` en términos de negocio; el modelo de dominio nunca sale tal cual |
+| Autenticación y cuenta activa | cadena B + `ActorFilter` | Ya resueltas: el controlador solo ve peticiones con Bearer válido y una cuenta que puede actuar |
+| Límite de tasa | `app`, `infrastructure.ratelimit` | **Transversal**: una política por tipo de petición, no una anotación por endpoint (§12.2) |
+| OpenAPI | `@Tag`/`@Operation`/`@ApiResponse` en el controlador; documento único en `app` | §12.3 |
+| Métrica de negocio | puerto `UseCaseMetricsPort` en `common` | El caso de uso dice `record("get_my_account", "found")`; `app` lo traduce al contador `jobseeker_usecase_total{use_case,outcome}`. Una sola métrica para todos los casos de uso, con etiquetas de conjunto cerrado: añadir un caso de uso no obliga a tocar los paneles |
+| Log estructurado | el caso de uso, con `event=… clave=valor` y mensaje en español | El `traceId` lo añade el MDC; **nunca** lleva el identificador de la cuenta ni datos personales (BR-DATA-01) |
+| Errores | `ApiExceptionHandler` (`app`) | Todo error de un controlador sale con el sobre estándar y sin detalles internos; 500 genérico con la causa solo en el registro |
+
+### 12.2 Límite de tasa (ADR-0011)
+
+- **Bucket4j sobre Redis**, token bucket, con clave `ratelimit:{política}:{cuenta|ip}`. Los límites están en `application.yml` (`jobseeker.ratelimit.policies.*`: ráfaga, reposición y clave) y se pueden ajustar sin redesplegar código.
+- **Cuatro políticas, asignadas por ruta** (`RateLimitRules`): `login` (inicio y *callback* OIDC, por IP), `webhook` (por IP), `write` (POST/PUT/PATCH/DELETE, por cuenta) y `read` (GET/HEAD/OPTIONS, por cuenta). Un endpoint nuevo queda limitado sin que nadie se acuerde de pedirlo; lo único que decide es si es de lectura o escritura. Faltar una política **impide arrancar**. Los sondeos de salud, Prometheus y los recursos estáticos no se limitan.
+- **Dos puntos de la cadena.** Las políticas por IP corren **antes** de cualquier procesamiento (quien no sabe firmar no gasta ni la lectura del cuerpo); las de cuenta, después de resolver el actor, y una petición anónima que llegue ahí se limita por IP.
+- **Al excederlo:** `429`, sobre estándar con `RATE_LIMIT_EXCEEDED`, `Retry-After` (segundos, redondeado hacia arriba: un 0 invitaría a reintentar y fallar) y `X-RateLimit-Limit`/`X-RateLimit-Remaining`, también en las respuestas que sí pasan.
+- **Redis caído: se deja pasar** (decisión de este paso). La API Bearer no necesita Redis para nada más, y tumbarla por el límite de tasa sería peor que no limitar mientras dura la caída; los demás controles (firma, token, cuenta) siguen en pie. Queda medido (`jobseeker_ratelimit_total{outcome="unavailable"}`) y con un aviso como mucho cada 30 s. La conexión se abre en el primer uso y con un reintento espaciado, porque la aplicación debe arrancar con Redis caído (ADR-0020, regla 9).
+- **La clave por IP es la dirección del socket, no `X-Forwarded-For`**: esa cabecera la escribe cualquiera salvo que haya un proxy de confianza delante, y creerla permitiría evadir el límite cambiándola en cada petición. Cuando el ADR-0026 fije la topología habrá que decidir qué proxy es de confianza; hasta entonces, detrás de un proxy todas las peticiones compartirían una IP.
+
+### 12.3 OpenAPI (ADR-0010)
+
+- **springdoc 3.2.0, code-first, un único documento** para todo el desplegable, con un `@Tag` por módulo. La información, el esquema de seguridad `bearer` y el sobre `ErrorEnvelope` están en `OpenApiConfiguration`.
+- **No se sirve por defecto.** Describe toda la superficie de ataque, y el ADR exige que nunca sea público en producción: `springdoc.api-docs.enabled` y `swagger-ui.enabled` son `false` y solo el perfil `dev` los enciende. Un test comprueba que sin tocar nada ni el spec ni la UI responden.
+- **Validación en el build, no en un paso aparte.** Un test exporta el spec de la aplicación real, lo valida con el parser de OpenAPI (sin mensajes de error, versión 3.1) y le aplica las reglas del proyecto (`OpenApiRules`): toda ruta bajo `/api/v1`, `summary`, etiqueta de módulo, requisito de seguridad, 401 y 429 documentados, y **todo error 4xx/5xx con el sobre `ErrorEnvelope`**. Las reglas tienen su propia prueba negativa: parten de un spec correcto y rompen una cosa por vez, para demostrar que de verdad rechazan.
+- Esto responde a la pregunta abierta del ADR-0010 sobre el linter: se adopta un conjunto **propio, ejecutado como prueba** y no Spectral, porque las reglas que importan (sobre de error, versionado, una etiqueta por módulo) son convenciones de este proyecto que ningún ruleset de la comunidad conoce, y así no se añade una herramienta ni un runtime de Node al CI. Si más adelante se quiere Spectral, se suma sin quitar esto.
+
+### 12.4 Pruebas
+
+| Capa | Qué comprueba |
+|---|---|
+| Caso de uso | La cuenta devuelta, que cada llamador solo ve la suya, cuenta inexistente, la métrica registrada sin identificadores y que el resultado es inmutable |
+| Controlador | La identidad es el `sub` del token y nada más, orden estable de capacidades, 404 |
+| Límite: propiedades y rutas | Política faltante impide arrancar, validaciones, cada ruta recibe su política y las operativas quedan exentas |
+| Límite: filtro | En qué punto actúa cada política, la clave (cuenta o IP), `X-Forwarded-For` ignorado, cabeceras y 429 |
+| Límite: Redis real | Cuenta atrás, cubos independientes por clave y por política, clave en el espacio de nombres documentado, **200 intentos simultáneos conceden exactamente la capacidad** y Redis caído deja pasar y lo cuenta |
+| Cadena completa (`/api/v1/me`) | Tokens RSA reales, Postgres y Redis reales: la cuenta propia, aprovisionamiento en el primer uso, nadie ve la de otro aunque lo intente por parámetro o cabecera, 401 sin token o con audiencia ajena, 403 en eliminación o con identidad borrada, **429 con el sobre y `Retry-After` sin afectar a otras cuentas**, la métrica de negocio y el log con el `traceId` y sin el identificador |
+| IP | Webhook y login limitados por dirección, incluso con firmas válidas, y la inundación de firmas falsas se corta **antes** de verificarlas |
+| OpenAPI | Spec válido 3.1, reglas del proyecto sobre el spec real, reglas probadas en negativo y spec no servido por defecto |
+| Errores | 500 sin detalle interno, estado conservado con código genérico, 405 y 404 con sobre |
+
+### 12.5 Receta para un endpoint nuevo
+
+1. Nombrar el caso de uso en el TDD de su módulo (no se crea una carpeta de `usecase/` sin que esté escrito).
+2. `application/usecase/<nombre>`: consulta o comando, interfaz del caso de uso, puerto de salida y servicio; el servicio recibe `UseCaseMetricsPort` y registra su resultado.
+3. `infrastructure/adapter/in/web`: controlador delgado, DTO propio con `@Schema`, `@Tag` del módulo, `@Operation` y un `@ApiResponse` por cada código posible, **incluidos 401 y 429**, con el sobre `ErrorEnvelope` en los errores.
+4. Registrar el bean en `infrastructure.config`.
+5. Nada más para el límite de tasa: la política se asigna por método. Si el endpoint necesita otra, se añade a `jobseeker.ratelimit.policies` y una regla en `RateLimitRules`.
+6. Pruebas: caso de uso con almacén en memoria, controlador, y una de la cadena completa que incluya la autorización (qué pasa con otra cuenta, con una cuenta en eliminación y sin token). El test de OpenAPI ya fallará si falta una anotación.
+
+### 12.6 Límites conocidos y decisiones abiertas
+
+- **Valores de los límites**: iniciales, a calibrar con tráfico real (ADR-0011). Tampoco hay política diferenciada para cuentas con ambas capacidades.
+- **`X-Forwarded-For`**: ver §12.2; depende del ADR-0026.
+- **Swagger UI en producción**: apagada. Si se quiere en staging, falta decidir su protección (hoy `permitAll` donde está encendida, solo en `dev`).
+- **Snapshot del spec versionado en el repositorio** (pregunta abierta del ADR-0010): no se hace todavía.
+- **Códigos de error genéricos** (`REQUEST_INVALID`, `RESOURCE_NOT_FOUND`…): los propios del dominio (`JOB_POSTING_NOT_FOUND`…) los pondrá cada módulo al tenerlos.
+- **Pruebas de mutación**: 
+
+Perfil `mutation` (PIT, mutadores `STRONGER`) sobre las clases del paso 5, en dos pasadas:
+
+| Módulo | Mutantes | Eliminados | Resultado |
+|---|---|---|---|
+| `auth-module` (`getmyaccount` y su controlador) | 8 | 8 | **100 %** |
+| `app` (límite de tasa, manejador de errores, métrica de negocio) | 115 | 114 + 1 cerrado después | **99 %** en la segunda pasada (90 %, 101 de 112, en la primera) |
+
+La primera pasada dejó 11 supervivientes, todos reales: que **no se reintenta la conexión dentro del margen de 5 s** (lo que protege la latencia con Redis caído), el espaciado de **un aviso cada 30 s**, la métrica de negocio sin cobertura directa y la construcción de la conexión (contraseña). Para probar el reloj sin esperar se inyectaron la conexión y el reloj del limitador. El último superviviente (el primer aviso con un reloj que arranca cerca de cero, porque `nanoTime` no tiene origen definido) se cubrió con un test **sin volver a pasar PIT**.
