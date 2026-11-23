@@ -35,6 +35,15 @@ public record ProfessionalProfile(
     return new ProfessionalProfile(id, accountId, identity, FIRST_VERSION, now);
   }
 
+  /**
+   * La siguiente versión del perfil sin cambiar su identidad: la usa quien edita un elemento de una
+   * colección, porque cualquier edición del perfil, de la raíz o de un hijo, incrementa la versión
+   * (así dos pestañas que editan a la vez no se pisan en silencio).
+   */
+  public ProfessionalProfile touched(Instant now) {
+    return new ProfessionalProfile(id, accountId, identity, version + 1, now);
+  }
+
   /** La siguiente versión del perfil con la identidad nueva; el original no cambia. */
   public ProfessionalProfile edit(ProfessionalIdentity newIdentity, Instant now) {
     return new ProfessionalProfile(id, accountId, newIdentity, version + 1, now);

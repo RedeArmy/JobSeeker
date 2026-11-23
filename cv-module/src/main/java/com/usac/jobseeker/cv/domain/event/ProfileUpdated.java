@@ -17,6 +17,13 @@ public final class ProfileUpdated {
   /** Cambió el nombre, el titular o la biografía. */
   public static final String CHANGE_IDENTITY = "identity";
 
+  /** Cambió un elemento de una de las colecciones del perfil. */
+  public static final String CHANGE_EXPERIENCE = "experience";
+
+  public static final String CHANGE_EDUCATION = "education";
+  public static final String CHANGE_CERTIFICATION = "certification";
+  public static final String CHANGE_PROJECT = "project";
+
   private ProfileUpdated() {}
 
   /** El JSON de la carga; todo son UUID, un número y un valor fijo, sin nada que escapar. */
