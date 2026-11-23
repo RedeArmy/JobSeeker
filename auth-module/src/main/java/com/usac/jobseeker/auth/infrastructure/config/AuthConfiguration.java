@@ -1,5 +1,7 @@
 package com.usac.jobseeker.auth.infrastructure.config;
 
+import com.usac.jobseeker.auth.application.usecase.getmyaccount.GetMyAccountService;
+import com.usac.jobseeker.auth.application.usecase.getmyaccount.GetMyAccountUseCase;
 import com.usac.jobseeker.auth.application.usecase.handleclavariswebhook.HandleClavarisWebhookService;
 import com.usac.jobseeker.auth.application.usecase.handleclavariswebhook.HandleClavarisWebhookUseCase;
 import com.usac.jobseeker.auth.application.usecase.provisionaccount.ProvisionAccountService;
@@ -9,6 +11,7 @@ import com.usac.jobseeker.auth.application.usecase.resolveactor.ResolveActorUseC
 import com.usac.jobseeker.auth.infrastructure.adapter.out.persistence.JdbcAccountRepository;
 import com.usac.jobseeker.auth.infrastructure.adapter.out.persistence.JdbcIdentityStateRepository;
 import com.usac.jobseeker.common.application.idempotency.ProcessedEventsPort;
+import com.usac.jobseeker.common.application.observability.UseCaseMetricsPort;
 import com.usac.jobseeker.common.application.outbox.DomainEventPublisherPort;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -41,6 +44,12 @@ class AuthConfiguration {
       JdbcIdentityStateRepository identity,
       DomainEventPublisherPort publisher) {
     return new HandleClavarisWebhookService(processedEvents, identity, publisher);
+  }
+
+  @Bean
+  GetMyAccountUseCase getMyAccountUseCase(
+      JdbcAccountRepository repository, UseCaseMetricsPort metrics) {
+    return new GetMyAccountService(repository, metrics);
   }
 
   @Bean

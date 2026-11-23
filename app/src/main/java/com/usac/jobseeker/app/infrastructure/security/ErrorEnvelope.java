@@ -25,14 +25,19 @@ public final class ErrorEnvelope {
       String code,
       String message)
       throws IOException {
+    response.setStatus(status);
+    response.setContentType("application/json");
+    response.setCharacterEncoding("UTF-8");
+    response.getWriter().write(JSON.writeValueAsString(body(request, code, message)));
+  }
+
+  /** El cuerpo del sobre, para quien lo devuelve como objeto (p. ej. el manejador global). */
+  public static Map<String, Object> body(HttpServletRequest request, String code, String message) {
     Map<String, Object> error = new LinkedHashMap<>();
     error.put("code", code);
     error.put("message", message);
     error.put("traceId", TraceIdFilter.traceId(request));
     error.put("timestamp", Instant.now().toString());
-    response.setStatus(status);
-    response.setContentType("application/json");
-    response.setCharacterEncoding("UTF-8");
-    response.getWriter().write(JSON.writeValueAsString(Map.of("error", error)));
+    return Map.of("error", error);
   }
 }

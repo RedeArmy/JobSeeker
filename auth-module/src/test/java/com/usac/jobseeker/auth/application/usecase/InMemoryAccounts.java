@@ -1,5 +1,6 @@
 package com.usac.jobseeker.auth.application.usecase;
 
+import com.usac.jobseeker.auth.application.usecase.getmyaccount.MyAccountPort;
 import com.usac.jobseeker.auth.application.usecase.provisionaccount.AccountProvisioningPort;
 import com.usac.jobseeker.auth.application.usecase.resolveactor.ActorLookupPort;
 import com.usac.jobseeker.auth.domain.model.Account;
@@ -12,7 +13,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /** Almacén en memoria para probar los casos de uso sin Spring ni base de datos. */
-public class InMemoryAccounts implements AccountProvisioningPort, ActorLookupPort {
+public class InMemoryAccounts implements AccountProvisioningPort, ActorLookupPort, MyAccountPort {
 
   private final Map<AccountId, Account> accounts = new ConcurrentHashMap<>();
 

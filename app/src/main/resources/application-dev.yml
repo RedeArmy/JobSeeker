@@ -4,3 +4,10 @@ spring:
     url: jdbc:postgresql://${DB_DEV_HOST}:${DB_DEV_PORT}/${DB_DEV_NAME}
     username: ${DB_DEV_USER}
     password: ${DB_DEV_PASSWORD}
+
+# Documentación de la API visible solo en desarrollo (ADR-0010).
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true

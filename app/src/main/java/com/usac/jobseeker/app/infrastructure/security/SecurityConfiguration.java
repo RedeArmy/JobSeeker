@@ -1,5 +1,6 @@
 package com.usac.jobseeker.app.infrastructure.security;
 
+import com.usac.jobseeker.app.infrastructure.ratelimit.RateLimitFilters;
 import com.usac.jobseeker.app.infrastructure.security.api.ApiAvailabilityFilter;
 import com.usac.jobseeker.app.infrastructure.security.api.ApiConfiguration;
 import com.usac.jobseeker.app.infrastructure.security.api.BearerAuthenticationEntryPoint;
@@ -19,6 +20,7 @@ import java.time.Clock;
 import java.util.List;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
@@ -74,6 +76,10 @@ import org.springframework.web.cors.CorsConfigurationSource;
 })
 class SecurityConfiguration {
 
+  private static final String[] DOCS_PATHS = {
+    "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**"
+  };
+
   private static final String LOGIN_PATH =
       "/oauth2/authorization/" + LazyClavarisClientRegistrationRepository.REGISTRATION_ID;
 
@@ -104,12 +110,15 @@ class SecurityConfiguration {
       HandleClavarisWebhookUseCase handleWebhook,
       WebhookProperties webhook,
       MeterRegistry meters,
-      Clock clock) {
+      Clock clock,
+      RateLimitFilters rateLimits) {
     // La autenticidad la da solo la firma HMAC del filtro, que además responde: no hay sesión,
     // Bearer ni CSRF. El filtro no es un bean para que no se registre también fuera de esta cadena.
     ClavarisWebhookFilter filter = new ClavarisWebhookFilter(handleWebhook, webhook, meters, clock);
     http.addFilterBefore(filter, AuthorizationFilter.class);
-    return closedStatelessChain(http, "/api/v1/webhooks/clavaris");
+    // Límite por IP antes que nada: quien no sabe firmar no gasta ni la lectura del cuerpo.
+    http.addFilterBefore(rateLimits.beforeAuthentication(), ClavarisWebhookFilter.class);
+    return closedStatelessChain(http, ClavarisWebhookFilter.PATH);
   }
 
   /**
@@ -125,7 +134,8 @@ class SecurityConfiguration {
       @Qualifier(ApiConfiguration.CORS_SOURCE) CorsConfigurationSource cors,
       ProvisionAccountUseCase provisionAccount,
       ResolveActorUseCase resolveActor,
-      ClavarisProperties clavaris) {
+      ClavarisProperties clavaris,
+      RateLimitFilters rateLimits) {
     // Los Bearer no traen autoridades de negocio: las capacidades las decide la cuenta local
     // (NFR-SEC-03, BR-ACCT-04), así que no se convierten los `scope` en roles.
     JwtAuthenticationConverter noAuthorities = new JwtAuthenticationConverter();
@@ -154,7 +164,9 @@ class SecurityConfiguration {
         .addFilterAfter(
             new ActorFilter(
                 resolveActor, provisionAccount, JwtAuthenticationToken.class::isInstance, Set.of()),
-            BearerTokenAuthenticationFilter.class);
+            BearerTokenAuthenticationFilter.class)
+        // Límite por cuenta: ya se sabe quién llama (ADR-0011).
+        .addFilterAfter(rateLimits.afterAuthentication(), ActorFilter.class);
     return http.build();
   }
 
@@ -185,7 +197,9 @@ class SecurityConfiguration {
       OAuth2AuthorizedClientRepository authorizedClients,
       LivenessCoordinator liveness,
       LivenessStore livenessStore,
-      RefreshTokenClient refreshTokens) {
+      RefreshTokenClient refreshTokens,
+      RateLimitFilters rateLimits,
+      @Value("${springdoc.api-docs.enabled:false}") boolean apiDocsEnabled) {
     // PKCE (S256) explícito: no se depende de un valor por defecto de la biblioteca (ADR-0020,
     // regla 10).
     DefaultOAuth2AuthorizationRequestResolver authorizationRequests =
@@ -200,18 +214,24 @@ class SecurityConfiguration {
     logoutSuccess.setDefaultTargetUrl("/");
 
     http.authorizeHttpRequests(
-            a ->
-                a.requestMatchers("/actuator/health/**", "/actuator/info", "/actuator/prometheus")
-                    .permitAll()
-                    .requestMatchers("/css/**", "/js/**", "/favicon.ico", "/error")
-                    .permitAll()
-                    .requestMatchers("/")
-                    .permitAll()
-                    .requestMatchers("/app/**")
-                    .authenticated()
-                    // Lo no declarado se rechaza: una ruta nueva exige decidir su acceso.
-                    .anyRequest()
-                    .denyAll())
+            a -> {
+              // El spec solo se sirve donde springdoc está encendido (dev, ADR-0010); apagado la
+              // ruta no existe y, además, cae en `denyAll`.
+              if (apiDocsEnabled) {
+                a.requestMatchers(DOCS_PATHS).permitAll();
+              }
+              a.requestMatchers("/actuator/health/**", "/actuator/info", "/actuator/prometheus")
+                  .permitAll()
+                  .requestMatchers("/css/**", "/js/**", "/favicon.ico", "/error")
+                  .permitAll()
+                  .requestMatchers("/")
+                  .permitAll()
+                  .requestMatchers("/app/**")
+                  .authenticated()
+                  // Lo no declarado se rechaza: una ruta nueva exige decidir su acceso.
+                  .anyRequest()
+                  .denyAll();
+            })
         .oauth2Login(
             login ->
                 login
@@ -233,6 +253,8 @@ class SecurityConfiguration {
         .addFilterBefore(
             new AbsoluteSessionTimeoutFilter(session.absoluteTimeout(), clock),
             SecurityContextHolderFilter.class)
+        // Límite por IP del inicio y el callback del login, antes de tocar nada más (ADR-0011).
+        .addFilterBefore(rateLimits.beforeAuthentication(), AbsoluteSessionTimeoutFilter.class)
         // Antes del redirect a Clavaris: sin registro (Clavaris caído o sin configurar) responde
         // 503 y no 500.
         .addFilterBefore(
@@ -248,7 +270,8 @@ class SecurityConfiguration {
                 provisionAccount,
                 OAuth2AuthenticationToken.class::isInstance,
                 Set.of("/app/logout")),
-            AnonymousAuthenticationFilter.class);
+            AnonymousAuthenticationFilter.class)
+        .addFilterAfter(rateLimits.afterAuthentication(), ActorFilter.class);
     return http.build();
   }
 
