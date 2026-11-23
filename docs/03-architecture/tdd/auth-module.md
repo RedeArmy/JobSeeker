@@ -231,7 +231,7 @@ Cadena C del ADR-0020: `/api/v1/webhooks/clavaris`. Sin sesión, sin Bearer y si
 | Caso de uso | `auth`, `handleclavariswebhook` | Una **sola transacción**: marcar el evento como procesado, aplicar el efecto local y escribir en la bandeja lo que vive fuera de la base |
 | Espejo de la identidad | `auth`, `IdentityState` + columnas `identity_*` de `accounts` | Orden por la tupla `(occurredAt, event_id)`; `DELETED` terminal |
 | Bandeja de salida | `common` (puertos) + `app.infrastructure.outbox` | `OutboxStore` (publicar en la transacción del llamador, reclamar con `FOR UPDATE SKIP LOCKED`), `OutboxPoller` (reintentos con retroceso exponencial y jitter, `FAILED` al agotar intentos) y purga de retención |
-| Cierre de sesiones | `app`, `SessionInvalidationConsumer` | Borra, por el índice `PRINCIPAL_NAME_INDEX_NAME`, todas las sesiones de la cuenta en Redis |
+| Cierre de sesiones | `app`, `SessionInvalidationConsumer` | Borra, por el índice `PRINCIPAL_NAME_INDEX_NAME`, todas las sesiones de la cuenta en Redis **y el registro de liveness de cada una** (refresh token cifrado y su estado), este último **antes** que la sesión: el enlace vive solo en ella, y si el borrado fallara a medias el reintento aún lo encontraría. Sin esto cada sesión cerrada por webhook dejaba un registro huérfano 8 h |
 
 **Por qué el cierre de sesiones pasa por la bandeja y no se hace en la transacción del webhook.** Redis no participa en la transacción de Postgres, y ADR-0016 (decisión 11) prohíbe efectos externos desde el caso de uso o desde `afterCommit`. Con la bandeja, un Redis caído no retrasa ni pierde la aceptación del webhook: el sondeador reintenta, y el consumidor es idempotente.
 
@@ -304,7 +304,7 @@ Un sexto (la comprobación previa por `Content-Length` del filtro) era real y se
 - **Límite de tasa por IP** del receptor (ADR-0011): resuelto en el paso 5 (§12): política `webhook`, por IP, antes de verificar la firma.
 - **Conciliación**: no hay un recorrido que compare el espejo con Clavaris tras un hueco de eventos. El 4.3 (prueba de vida) lo cubre en la práctica; si se quiere más, es trabajo aparte.
 - **Vigilancia del endpoint**: Clavaris lo desactiva tras fallos repetidos y los eventos se pierden. Hace falta una alerta sobre la métrica `jobseeker_webhook_total` (ausencia de `applied` o exceso de `error`) cuando exista Alertmanager (ADR-0012).
-- **Estado de liveness y refresh token almacenado** de la sesión cerrada: el cierre borra la sesión de Redis, pero **no se verificó** qué pasa con la entrada de liveness y el refresh token guardado de esa sesión (4.3). Hay que comprobar que no quedan huérfanos y, si quedan, borrarlos en el mismo consumidor.
+- **Estado de liveness de la sesión cerrada**: verificado con Clavaris real que quedaba huérfano (con un token cifrado y ya revocado y 8 h de TTL) y **corregido**: el consumidor lo borra junto con la sesión. Una prueba de integración comprueba que no queda ninguno y que el de otra cuenta sigue intacto.
 - **`account.banned`/`unbanned`**: tratados como `suspended`/`reactivated`. El espejo no distingue «baneada» de «suspendida»: si algún día importa la diferencia, `BANNED` exigiría ampliar la restricción `ck_accounts_identity_status` con una migración.
 - **Cableado de beans** (`OutboxConfiguration`): 4 mutantes que devuelven nulo de un método `@Bean` no los distingue una prueba dirigida; los cubre el arranque del contexto.
 
