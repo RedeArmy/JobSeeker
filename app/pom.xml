@@ -65,6 +65,16 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>
+        <!-- ADR-0010: OpenAPI generado del código (code-first), un solo documento para todo el desplegable. -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+        </dependency>
+        <!-- ADR-0011: límite de tasa con cubos de fichas guardados en Redis. -->
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j_jdk17-lettuce</artifactId>
+        </dependency>
         <!-- ADR-0012: métricas y salud. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -118,6 +128,11 @@
             <scope>runtime</scope>
         </dependency>
 
+        <dependency>
+            <groupId>io.swagger.parser.v3</groupId>
+            <artifactId>swagger-parser</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

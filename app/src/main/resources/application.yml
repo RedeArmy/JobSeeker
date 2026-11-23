@@ -66,11 +66,34 @@ jobseeker:
       fail-open-enabled: ${LIVENESS_FAIL_OPEN_ENABLED:true}
       retry-once-within-grace: ${LIVENESS_RETRY_ONCE_WITHIN_GRACE:false}
 
+  # Límite de tasa (ADR-0011): token bucket en Redis. Valores iniciales a calibrar con tráfico real; el
+  # nombre de cada política lo asigna `RateLimitRules`. `capacity` es la ráfaga; se reponen
+  # `refill-tokens` cada `refill-period`.
+  ratelimit:
+    enabled: true
+    policies:
+      # Inicio y callback del flujo OIDC, por IP (mitiga fuerza bruta; el formulario vive en Clavaris).
+      login: {capacity: 10, refill-tokens: 10, refill-period: 1m, key: IP}
+      # Receptor de webhooks, por IP: Clavaris reintenta en ráfagas, y así se acota a quien no lo es.
+      webhook: {capacity: 120, refill-tokens: 120, refill-period: 1m, key: IP}
+      # Mutaciones por cuenta: moderado.
+      write: {capacity: 30, refill-tokens: 30, refill-period: 1m, key: ACCOUNT}
+      # Lecturas por cuenta: más permisivo.
+      read: {capacity: 120, refill-tokens: 120, refill-period: 1m, key: ACCOUNT}
+
   # Bandeja de salida (ADR-0016): sondeo, reintentos con retroceso y tope de intentos.
   outbox:
     poll-interval: ${OUTBOX_POLL_INTERVAL_MILLIS:1000}ms
     batch-size: ${OUTBOX_BATCH_SIZE:50}
     max-attempts: ${OUTBOX_MAX_ATTEMPTS:10}
+
+# OpenAPI (ADR-0010). Apagado por defecto: el spec describe toda la superficie de ataque y no debe
+# estar público en producción. El perfil `dev` lo enciende; Swagger UI se activa con el mismo interruptor.
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
 
 management:
   endpoints:

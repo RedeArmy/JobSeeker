@@ -10,7 +10,7 @@ import org.testcontainers.utility.DockerImageName;
  * JVM y Testcontainers lo retira al terminar. Cada prueba usa enlaces nuevos, así que compartirlo
  * no las acopla.
  */
-final class SharedRedis {
+public final class SharedRedis {
 
   private static final GenericContainer<?> REDIS =
       new GenericContainer<>(DockerImageName.parse("redis:8.10.3-alpine")).withExposedPorts(6379);
@@ -18,7 +18,19 @@ final class SharedRedis {
 
   private SharedRedis() {}
 
-  static synchronized StringRedisTemplate template() {
+  /** Anfitrión del contenedor, ya arrancado por `template()`. */
+  public static String host() {
+    template();
+    return REDIS.getHost();
+  }
+
+  /** Puerto publicado del contenedor, ya arrancado por `template()`. */
+  public static int port() {
+    template();
+    return REDIS.getMappedPort(6379);
+  }
+
+  public static synchronized StringRedisTemplate template() {
     if (template == null) {
       REDIS.start();
       LettuceConnectionFactory factory =
