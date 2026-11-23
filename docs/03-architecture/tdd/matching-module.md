@@ -3,7 +3,7 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | 🟡 En revisión — **depende de ADR-0017 y ADR-0019, que están propuestos y no aprobados** |
+| **Estado** | 🟡 En revisión — depende de ADR-0017 y ADR-0019, **aprobados con condiciones el 23-nov-2026**; sus controles de aceptación (C1 a C5 y D1 a D4) entran en el orden de entrega |
 | **Versión** | 1.0 |
 | **Fecha** | 23-nov-2026 |
 | **Documentos relacionados** | ADR-0017 (diseño del motor), ADR-0018 (embeddings), ADR-0019 (taxonomía), ADR-0016 (bandeja de salida), ADR-0003, `03-lld.md` §2, `02-hld-system-design.md` §4 y §5, `tdd/cv-module.md` §7, BR-MATCH-01 a 10, BR-VIS-01 a 08, BR-ELIG-06, BR-CAND-07, NFR-PERF-01, 04 y 07, NFR-AVAIL-02 |
@@ -133,6 +133,8 @@ El desglose lleva `completeness`, `α` y la marca de **no calibrado** mientras n
 | 6 | `suggestcandidatesforjob` y el índice HNSW parcial | 3, D1 |
 | 7 | `snapshotapplicationprofile` y `migratealgorithmversion` | postulación mínima de `ats` |
 | — | Normalización de habilidades en el cálculo | ADR-0019 aprobado y el caso de uso de `cv` |
+
+**Controles de aceptación de los ADR aprobados con condiciones**, que este orden debe cumplir: C1 (*recall* de la recuperación) en el sub-paso 6; C2 (calibración y evaluación separadas por vacante) y C5 (umbral contrafactual) en el arnés; C3 (declarar un dato que coincide nunca baja el puntaje) en el sub-paso 1; C4 (frescura medida con Ollama real) en el sub-paso 4; D1 a D4 de la taxonomía, con su sub-paso en `cv`.
 
 El **arnés de evaluación** corre en paralelo desde el sub-paso 2 y debe estar antes de calibrar `α` y los parámetros del sub-paso 5.
 
