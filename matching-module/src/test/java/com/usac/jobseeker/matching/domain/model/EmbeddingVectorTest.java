@@ -86,7 +86,9 @@ class EmbeddingVectorTest {
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(() -> new EntityEmbedding(vector, "m", "corto", false, NOW))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> new EntityEmbedding(vector, "m", "A".repeat(64), false, NOW))
+    String uppercaseHash = "A".repeat(64);
+
+    assertThatThrownBy(() -> new EntityEmbedding(vector, "m", uppercaseHash, false, NOW))
         .isInstanceOf(IllegalArgumentException.class);
   }
 

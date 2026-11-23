@@ -231,32 +231,37 @@ class JdbcEmbeddingRepositoryTest {
   void theDatabaseRefusesAVectorWithoutItsModelAndAModelWithoutItsVector() {
     CandidateProfileId id = profile();
 
-    assertThatThrownBy(
-            () ->
-                jdbc.sql(
-                        "insert into profile_embeddings (candidate_profile_id, embedding)"
-                            + " values (:id, cast(:v as vector))")
-                    .param("id", id.value())
-                    .param("v", JdbcEmbeddingRepository.toLiteral(vector(1f)))
-                    .update())
-        .isInstanceOf(DataAccessException.class);
-    assertThatThrownBy(
-            () ->
-                jdbc.sql(
-                        "insert into profile_embeddings (candidate_profile_id, embedding_model)"
-                            + " values (:id, 'm')")
-                    .param("id", id.value())
-                    .update())
-        .isInstanceOf(DataAccessException.class);
+    assertThatThrownBy(() -> insertVectorWithoutModel(id)).isInstanceOf(DataAccessException.class);
+    assertThatThrownBy(() -> insertModelWithoutVector(id)).isInstanceOf(DataAccessException.class);
+  }
+
+  private void insertVectorWithoutModel(CandidateProfileId id) {
+    jdbc.sql(
+            "insert into profile_embeddings (candidate_profile_id, embedding)"
+                + " values (:id, cast(:v as vector))")
+        .param("id", id.value())
+        .param("v", JdbcEmbeddingRepository.toLiteral(vector(1f)))
+        .update();
+  }
+
+  private void insertModelWithoutVector(CandidateProfileId id) {
+    jdbc.sql(
+            "insert into profile_embeddings (candidate_profile_id, embedding_model)"
+                + " values (:id, 'm')")
+        .param("id", id.value())
+        .update();
   }
 
   @Test
   void aVectorOfTheWrongSizeIsRefusedBecauseTheColumnHasAFixedDimension() {
     var tiny = new EntityEmbedding(EmbeddingVector.of(1f, 2f, 3f), MODEL, HASH, false, NOW);
 
-    assertThatThrownBy(() -> repository.saveProfileEmbedding(profile(), true, tiny))
+    CandidateProfileId profileId = profile();
+    JobPostingId jobId = job();
+
+    assertThatThrownBy(() -> repository.saveProfileEmbedding(profileId, true, tiny))
         .isInstanceOf(DataAccessException.class);
-    assertThatThrownBy(() -> repository.saveJobEmbedding(job(), true, tiny))
+    assertThatThrownBy(() -> repository.saveJobEmbedding(jobId, true, tiny))
         .isInstanceOf(DataAccessException.class);
   }
 
