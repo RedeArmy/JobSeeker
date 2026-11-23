@@ -4,7 +4,7 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | 🟡 En revisión |
-| **Versión** | 1.1 — embeddings versionados (ADR-0018): §3, §4.4, §4.6, §4.7, §5 y nueva §5.1 |
+| **Versión** | 1.2 — perfil de candidato (TDD de `cv`, 23-nov-2026): moneda y periodo del salario, `candidate_skills`, versión de los agregados, catálogos cerrados; 1.1 — embeddings versionados (ADR-0018): §3, §4.4, §4.6, §4.7, §5 y nueva §5.1 |
 | **Fecha** | Agosto 2026 · actualizado en noviembre 2026 |
 | **Documentos relacionados** | Domain Model, Business Rules, Integration Design, ADR-0018 |
 
@@ -76,6 +76,7 @@ erDiagram
         string headline
         text bio
         string profile_photo_url
+        bigint version
         timestamptz updated_at
     }
     CANDIDATE_PROFILES {
@@ -98,6 +99,9 @@ erDiagram
         boolean relocation_willingness
         numeric salary_expectation_min
         numeric salary_expectation_max
+        string salary_currency
+        string salary_period
+        bigint version
         timestamptz updated_at
     }
     RECRUITER_PROFILES {
@@ -147,8 +151,10 @@ erDiagram
     CANDIDATE_SKILLS {
         uuid id PK
         uuid candidate_profile_id FK
-        string skill_name
-        string proficiency
+        uuid skill_id "sin FK hasta el ADR-0019"
+        string raw_name
+        int proficiency
+        string source
     }
     JOB_POSTINGS {
         uuid id PK
@@ -159,6 +165,8 @@ erDiagram
         string country
         numeric salary_min
         numeric salary_max
+        string salary_currency
+        string salary_period
         vector embedding "vector(1024), dimension del modelo vigente"
         string embedding_model
         int embedding_dim
@@ -332,7 +340,8 @@ CHECK `(is_candidate_enabled OR is_recruiter_enabled)` — toda cuenta debe tene
 | headline | varchar | NULL | Titular profesional (p. ej. "Senior Backend Engineer", "Tech Recruiter @ Acme") |
 | bio | text | NULL | Biografía / "acerca de" |
 | profile_photo_url | varchar | NULL | Foto de perfil |
-| updated_at | timestamptz | NOT NULL DEFAULT now() | Dispara recálculo de score cuando la cuenta tiene capacidad de candidato habilitada (BR-MATCH-03, BR-ACCT-06) |
+| version | bigint | NOT NULL DEFAULT 0 | Bloqueo optimista: dos ediciones simultáneas no se pisan, la segunda recibe `409 STALE_STATE`. Editar una fila hija incrementa la versión de la raíz (`tdd/cv-module.md` §5) |
+| updated_at | timestamptz | NOT NULL DEFAULT now() | Fecha de la última edición. El recálculo del score lo dispara el **evento** `ProfileUpdatedEvent` por la bandeja de salida (ADR-0016), no esta columna, y solo si la cuenta tiene capacidad de candidato habilitada (BR-MATCH-03, BR-ACCT-06) |
 
 **Anonimización (BR-DATA-05, ADR-0013):** al ejecutarse `AnonymizeExpiredAccountDeletionsUseCase`, `full_name` → placeholder genérico ("Candidato eliminado"), `bio`/`headline`/`profile_photo_url` → `NULL`. Las filas hijas (`experiences`, `education_entries`, `certifications`, `projects`) se eliminan físicamente — a diferencia de `Application`/`CompatibilityScore`, no hay un tercero con interés legítimo en conservar el detalle de la experiencia laboral de alguien que pidió ser olvidado.
 
@@ -357,7 +366,7 @@ CHECK `(is_candidate_enabled OR is_recruiter_enabled)` — toda cuenta debe tene
 | projects.id | uuid | PK | Identificador |
 | projects.professional_profile_id | uuid | FK → professional_profiles.id | Perfil profesional dueño |
 | projects.name / description | — | NOT NULL el nombre | Proyecto realizado |
-| projects.type | varchar | NOT NULL, CHECK IN ('LABORAL','PERSONAL') | Distingue proyecto laboral de personal, tal como lo pidió el negocio |
+| projects.type | varchar | NOT NULL, CHECK IN ('WORK','PERSONAL') | Distingue proyecto laboral de personal, tal como lo pidió el negocio |
 | projects.role | varchar | NULL | Rol desempeñado en el proyecto |
 | projects.start_date / end_date | date | `end_date` NULL = en curso | Vigencia del proyecto |
 | projects.url | varchar | NULL | Enlace al proyecto (repositorio, demo, portafolio) |
@@ -382,13 +391,18 @@ CHECK `(is_candidate_enabled OR is_recruiter_enabled)` — toda cuenta debe tene
 | discoverable | boolean | NOT NULL DEFAULT true | Controla si el perfil es elegible para sugerencia de candidatos a reclutadores sin postulación previa (BR-VIS-04); opt-out del candidato (BR-DATA-03) |
 | availability_status | varchar | NOT NULL DEFAULT 'UNSET', CHECK IN ('OPEN_TO_WORK','NOT_LOOKING','UNSET') | Señal de intención de cambio (BR-CAND-04); prioriza el orden de sugerencia (BR-MATCH-07) pero nunca es input del cálculo de `overall_score` |
 | country_of_residence | varchar | NULL | País del candidato, evaluado por reglas de elegibilidad de tipo `COUNTRY_OF_RESIDENCE` (BR-ELIG-01) |
-| desired_modality | varchar | NULL | Modalidad de trabajo buscada por el candidato (remoto/híbrido/presencial), evaluada por reglas de tipo `MODALITY` |
-| preferred_work_schedule | varchar | NULL | Jornada/disponibilidad preferida (p. ej. tiempo completo, medio tiempo, fines de semana), evaluada por reglas de tipo `AVAILABILITY_SCHEDULE` |
+| desired_modality | varchar | NULL, CHECK IN ('REMOTE','HYBRID','ONSITE') | Modalidad de trabajo buscada por el candidato, evaluada por reglas de tipo `MODALITY` |
+| preferred_work_schedule | varchar | NULL, CHECK IN ('FULL_TIME','PART_TIME','WEEKENDS') | Jornada/disponibilidad preferida, evaluada por reglas de tipo `AVAILABILITY_SCHEDULE` |
 | relocation_willingness | boolean | NOT NULL DEFAULT false | Disposición del candidato a reubicarse, evaluada por reglas de tipo `RELOCATION_WILLINGNESS` |
-| salary_expectation_min / salary_expectation_max | numeric | NULL | Rango de expectativa salarial del candidato, evaluado por reglas de tipo `SALARY_EXPECTATION` |
-| updated_at | timestamptz | NOT NULL | Dispara recálculo de score (BR-MATCH-03) |
+| salary_expectation_min / salary_expectation_max | numeric | NULL, CHECK (min <= max) | Rango de expectativa salarial del candidato, evaluado por reglas de tipo `SALARY_EXPECTATION`. Un solo valor se guarda con `min = max` |
+| salary_currency | char(3) | NULL, CHECK (~ '^[A-Z]{3}$') | Moneda ISO 4217 del rango (BR-CAND-07). Obligatoria si hay `min` o `max`, y viceversa: la restricción `ck_cp_salary_complete` exige que moneda, periodo y al menos un importe estén todos presentes o todos ausentes |
+| salary_period | varchar | NULL, CHECK IN ('MONTH','YEAR') | Periodo al que se refiere el importe; sin él «3 000» no se puede comparar con una vacante anual (BR-MATCH-10) |
+| version | bigint | NOT NULL DEFAULT 0 | Bloqueo optimista, igual que en `professional_profiles` (§4.2) |
+| updated_at | timestamptz | NOT NULL DEFAULT now() | Fecha de la última edición. El recálculo (BR-MATCH-03) lo dispara el **evento** `ProfileUpdatedEvent` por la bandeja de salida (ADR-0016), no esta columna |
 
 > Nota: `full_name` ya no vive aquí — se lee de `professional_profiles` vía `account_id` (BR-ACCT-02/06, ADR-0008). `country_of_residence`, `desired_modality`, `preferred_work_schedule`, `relocation_willingness` y `salary_expectation_min/max` son datos de **elegibilidad** (BR-ELIG-01), evaluados por `EligibilityRule` — nunca son input directo de `compatibility_scores.overall_score` (BR-ELIG-06), aunque se solapen conceptualmente con dimensiones del scoring ponderado (ubicación/modalidad, salario) que sí son input del score (ver pregunta abierta en `domain-model.md` §8 sobre si es el mismo dato leído por ambos módulos o una proyección propia de `job`).
+
+**Restricciones de coherencia:** `ck_cp_salary_complete` (moneda, periodo y al menos un importe: todos o ninguno) y la ya citada `ck_cp_embedding_complete`. Toda restricción nueva sobre una tabla con filas se añade con `NOT VALID` y se valida después (ADR-0027, squawk).
 
 **Anonimización (BR-DATA-05, ADR-0013):** `contact_email`/`contact_phone`/`raw_cv_text` y **todo el bloque `embedding*`** (`embedding`, `embedding_model`, `embedding_dim`, `embedding_content_hash`, `embedding_computed_at`; la restricción exige anularlas a la vez) → `NULL`; `discoverable` → `false` (forzado, para que un perfil anonimizado nunca vuelva a aparecer en sugerencias); el resto de columnas (elegibilidad, disponibilidad) se conservan sin identificar a la persona — son datos de preferencia, no PII directa, y mantenerlos no permite reidentificar a nadie por sí solos. `candidate_work_authorizations`/`candidate_languages` se eliminan físicamente (mismo criterio que las tablas hijas de `professional_profiles`).
 
@@ -416,7 +430,9 @@ Deliberadamente **no** incluye ninguna columna de las orientadas a búsqueda de 
 | description | text | NOT NULL | Descripción (BR-JOB-02) |
 | modality | varchar | NULL | Presencial/remoto/híbrido |
 | country | varchar | NULL | País donde se ubica la vacante; base por defecto para evaluar reglas de elegibilidad de tipo `WORK_AUTHORIZATION` cuando la regla no especifica un país distinto en `criteria` |
-| salary_min / salary_max | numeric | NULL | Rango salarial (dimensión de matching) |
+| salary_min / salary_max | numeric | NULL, CHECK (min <= max) | Rango salarial (dimensión de matching) |
+| salary_currency | char(3) | NULL, CHECK (~ '^[A-Z]{3}$') | Moneda ISO 4217 del rango (BR-JOB-21). Obligatoria si hay `salary_min` o `salary_max`, y viceversa: la restricción `ck_jp_salary_complete` exige que moneda, periodo y al menos un importe estén todos presentes o todos ausentes |
+| salary_period | varchar | NULL, CHECK IN ('MONTH','YEAR') | Periodo del importe; sin él un importe no se puede comparar con la expectativa del candidato (BR-MATCH-10) |
 | embedding | vector(1024) | NULL | Embedding de la descripción (representación canónica de la vacante), generado con el modelo vigente de ADR-0018. Misma regla de dimensión fija que `candidate_profiles.embedding` |
 | embedding_model / embedding_dim / embedding_content_hash / embedding_truncated / embedding_computed_at | varchar / integer / char(64) / boolean / timestamptz | mismas reglas | Idénticas a `candidate_profiles` (§4.4), con la restricción `ck_jp_embedding_complete` |
 | status | varchar | NOT NULL DEFAULT 'DRAFT', CHECK IN ('DRAFT','PUBLISHED','CLOSED','ARCHIVED','DELETED') | Máquina de estados del ciclo de vida (BR-JOB-03, BR-JOB-06 a 11; ver diagrama en `domain-model.md` §4.1). Reemplaza el modelo binario `OPEN`/`CLOSED` original |
@@ -473,7 +489,7 @@ Restricción de unicidad `(candidate_profile_id, job_posting_id)` sobre postulac
 | excluded_account_id | uuid | FK → accounts.id | Cuenta excluida (BR-CAND-05) — **cualquier rol**, reclutador u otro candidato; sin CHECK de rol, la exclusión es por identidad de cuenta, no por rol. Granularidad por cuenta individual, no por empresa (ver pregunta abierta en `domain-model.md` §8) |
 | created_at | timestamptz | NOT NULL DEFAULT now() | Auditoría de cuándo se agregó la exclusión |
 
-Restricción de unicidad `(candidate_profile_id, excluded_account_id)` — un candidato excluye a una misma cuenta una sola vez. Esta tabla **no** tiene relación con `applications` ni con `compatibility_scores` (BR-CAND-06): su único efecto es filtrar la visibilidad de `availability_status` (BR-VIS-06) y el boost de ranking en sugerencias (BR-MATCH-09) — este último únicamente aplica cuando la cuenta excluida actúa como reclutador, dado que la sugerencia (BR-MATCH-06) es un flujo inherentemente impulsado por reclutadores.
+Restricción de unicidad `(candidate_profile_id, excluded_account_id)` — un candidato excluye a una misma cuenta una sola vez. **Anonimización (BR-DATA-05):** al anonimizar al candidato se eliminan sus filas (es una relación entre personas); si lo anonimizado es la cuenta *excluida*, la fila se conserva, porque no contiene datos de esa persona. Esta tabla **no** tiene relación con `applications` ni con `compatibility_scores` (BR-CAND-06): su único efecto es filtrar la visibilidad de `availability_status` (BR-VIS-06) y el boost de ranking en sugerencias (BR-MATCH-09) — este último únicamente aplica cuando la cuenta excluida actúa como reclutador, dado que la sugerencia (BR-MATCH-06) es un flujo inherentemente impulsado por reclutadores.
 
 ### 4.11 `eligibility_rules` (contexto `job`)
 
@@ -489,7 +505,7 @@ Restricción de unicidad `(candidate_profile_id, excluded_account_id)` — un ca
 
 > Nota: no hay columna `operator` separada — el operador de comparación (pertenece-a-lista, mayor-o-igual-que, rango, etc.) está implícito en la semántica de cada `rule_type` y se interpreta en la capa de aplicación (`job-module`), no en el esquema. Ver pregunta abierta sobre validación de forma de `criteria`.
 
-### 4.12 `candidate_work_authorizations` y `candidate_languages` (contexto `cv`)
+### 4.12 `candidate_work_authorizations`, `candidate_languages` y `candidate_skills` (contexto `cv`)
 
 | Columna | Tipo | Restricciones | Descripción |
 |---|---|---|---|
@@ -499,9 +515,23 @@ Restricción de unicidad `(candidate_profile_id, excluded_account_id)` — un ca
 | candidate_languages.id | uuid | PK | Identificador |
 | candidate_languages.candidate_profile_id | uuid | FK → candidate_profiles.id | Candidato |
 | candidate_languages.language | varchar | NOT NULL | Código de idioma (p. ej. `en`, `es`) |
-| candidate_languages.proficiency | varchar | NOT NULL | Nivel de dominio (p. ej. escala MCER: A1–C2); evaluado por reglas de tipo `LANGUAGE_PROFICIENCY`. También es insumo potencial de la dimensión "soft skills/idiomas" del scoring ponderado (BR-MATCH-01), ver pregunta abierta en `domain-model.md` §8 |
+| candidate_languages.proficiency | varchar | NOT NULL, CHECK IN ('A1','A2','B1','B2','C1','C2','NATIVE') | Nivel de dominio (escala MCER más `NATIVE`); evaluado por reglas de tipo `LANGUAGE_PROFICIENCY`. También es insumo potencial de la dimensión "soft skills/idiomas" del scoring ponderado (BR-MATCH-01), ver pregunta abierta en `domain-model.md` §8 |
 
 Restricción de unicidad `(candidate_profile_id, country)` en `candidate_work_authorizations` y `(candidate_profile_id, language)` en `candidate_languages`.
+
+| Columna | Tipo | Restricciones | Descripción |
+|---|---|---|---|
+| candidate_skills.id | uuid | PK | Identificador |
+| candidate_skills.candidate_profile_id | uuid | FK → candidate_profiles.id | Candidato |
+| candidate_skills.raw_name | text | NOT NULL | Nombre de la habilidad tal como la declara el candidato (texto libre en la Ola 1; ADR-0019 sigue sin escribirse) |
+| candidate_skills.skill_id | uuid | NULL, **sin FK por ahora** | Habilidad normalizada contra la taxonomía. Existe desde el principio para que el ADR-0019 no tenga que reescribir la tabla: cuando se cree `skills`, una migración de expansión añade la FK y rellena la columna |
+| candidate_skills.proficiency | smallint | NULL, CHECK BETWEEN 1 AND 4 | Nivel declarado: 1 básico, 2 intermedio, 3 avanzado, 4 experto (el significado vive en la aplicación, no en el esquema) |
+| candidate_skills.source | varchar | NOT NULL DEFAULT 'DECLARED', CHECK IN ('DECLARED','PARSED_CONFIRMED') | Origen: escrita por el candidato, o extraída de un CV y confirmada por él. Nunca se guarda una habilidad extraída sin confirmar (el análisis de CV llega con el ADR-0021) |
+
+Restricción de unicidad: índice único sobre `(candidate_profile_id, lower(btrim(raw_name)))`, para que «Java» y « java » no sean dos habilidades; cuando exista la taxonomía se añade `(candidate_profile_id, skill_id)` parcial `WHERE skill_id IS NOT NULL`. Definición tomada de `03-lld.md` §4, que ya la había diseñado (hallazgo F4 de la revisión de noviembre) pero nunca llegó a este documento.
+
+**Anonimización (BR-DATA-05):** las habilidades se conservan; no identifican a nadie por sí solas y el candidato anonimizado ya no es descubrible ni tiene embedding.
+
 
 ### 4.13 `candidate_invitations` (contexto `job`)
 
@@ -656,11 +686,11 @@ Tamaños: tabla ≈ 110 MB en total (los vectores van a TOAST) y índice HNSW de
 
 - ¿Cómo se mapean en Hibernate los dos slots de embedding durante un cambio de modelo (`@Array(length = …)` es estático por entidad)? Hay que decidir si el mapeo del slot siguiente vive en una entidad aparte o en la misma durante la fase de expansión, y probarlo en el *walking skeleton* (`@Array(length = 768)` con `ddl-auto=validate` ya se verificó para un único slot, `07-spike-bibliotecas-java-25.md`).
 - Recall con un corpus **real** de miles de perfiles distintos: se midió con vectores reales pero sobre corpus semisintéticos (cota optimista, §5.1). Falta repetirlo con los datos de la cohorte o con el corpus del protocolo de 300 pares, con filtros más selectivos que el país.
-- ¿Se requiere una tabla de catálogo de habilidades (`skills_catalog`) normalizada, o `candidate_skills.skill_name` permanece como texto libre en el MVP? (ver pregunta equivalente en `domain-model.md`)
+- **[Resuelta 23-nov-2026: texto libre en la Ola 1 con `skill_id` ya previsto, §4.12; la taxonomía la decide el ADR-0019]** ¿Se requiere una tabla de catálogo de habilidades (`skills_catalog`) normalizada, o `candidate_skills.skill_name` permanece como texto libre en el MVP? (ver pregunta equivalente en `domain-model.md`)
 - ¿El histórico completo de `compatibility_scores` se conserva indefinidamente o se define una política de retención/purga?
 - ¿`applications.status` usa un conjunto fijo de valores (enum a nivel de aplicación) o una tabla de catálogo `application_statuses` para permitir configurarlos por reclutador?
 - ¿La consulta de candidatos sugeridos (BR-MATCH-06) pagina/limita resultados por un top-N configurable, y ese N es el mismo para toda vacante o configurable por reclutador?
-- ¿`country` (en `job_postings` y `candidate_profiles.country_of_residence`) se valida contra un catálogo normalizado (tabla `countries` con código ISO-3166) o permanece como texto libre validado solo en la capa de presentación en el MVP?
+- **[Resuelta 23-nov-2026: se valida en la aplicación contra ISO 3166-1 alfa-2, sin tabla de catálogo; `tdd/cv-module.md` §3.1]** ¿`country` (en `job_postings` y `candidate_profiles.country_of_residence`) se valida contra un catálogo normalizado (tabla `countries` con código ISO-3166) o permanece como texto libre validado solo en la capa de presentación en el MVP?
 - ¿`eligibility_rules.criteria` (jsonb) se valida con un JSON Schema por `rule_type` a nivel de aplicación antes de persistir, para evitar filas con estructura inconsistente que rompan la evaluación en tiempo de postulación?
 - ¿El listado de vacantes filtrado por elegibilidad (BR-ELIG-04) se cachea en Redis por candidato (mismo mecanismo que `score:{cv_hash}:{job_hash}`), invalidado por `JobEligibilityRuleChangedEvent`/`ProfileUpdatedEvent`, o se calcula en cada consulta dado que es una comparación barata (sin llamada a Ollama)?
 - ¿`candidate_invitations` necesita una columna de estado (p. ej. `status` revocada/activa) para soportar revocación (BR-ELIG-13), o el MVP la trata como un registro inmutable que solo se elimina (DELETE) si se revoca?
@@ -669,8 +699,8 @@ Tamaños: tabla ≈ 110 MB en total (los vectores van a TOAST) y índice HNSW de
 - ¿El batch de transiciones programadas (`ExecuteScheduledJobPostingTransitionsUseCase`) se unifica con el batch de archivado en un mismo proceso periódico, dado que ambos recorren `job_postings`/entidades hijas por tiempo vencido, o se mantienen como dos casos de uso independientes en `application/usecase/` de `job-module`?
 - ¿Dónde se almacenan físicamente los archivos de `answer_value` para preguntas `FILE_UPLOAD` (cover letter, etc.) — sistema de archivos local, bucket compatible S3, o el mismo mecanismo que use `cv-module` para el CV cargado del candidato (BR-CAND-01)? `answer_value` solo guarda la referencia (`fileUrl`/`fileName`), no el binario.
 - ¿`application_questions.options` (jsonb) se valida con una constraint `CHECK` que exija no-vacío cuando `type` sea `SINGLE_CHOICE`/`MULTIPLE_CHOICE`, o esa validación queda exclusivamente en la capa de aplicación (mismo criterio que `eligibility_rules.criteria`, ADR-0007)?
-- ¿Qué ocurre con `candidate_profiles`/`recruiter_profiles` si la cuenta deshabilita esa capacidad — se conservan (`is_candidate_enabled`/`is_recruiter_enabled` en `false` pero la fila permanece, permitiendo reactivar sin perder datos) o requieren su propio soft-delete, análogo a `job_postings.deleted_at` (BR-JOB-09)? `professional_profiles` en cualquier caso permanece mientras exista al menos una capacidad habilitada (CHECK de `accounts`).
-- ¿`professional_profiles.updated_at` dispara `ProfileUpdatedEvent` incluso cuando la cuenta **no** tiene `is_candidate_enabled` (p. ej. solo tiene capacidad de reclutador)? La emisión debería quedar condicionada a esa capacidad para no generar recálculos de score inexistentes (ver fila del evento en `domain-model.md` §6).
+- **[Resuelta 23-nov-2026: la fila se conserva y deja de ser descubrible; `tdd/cv-module.md` §5]** ¿Qué ocurre con `candidate_profiles`/`recruiter_profiles` si la cuenta deshabilita esa capacidad — se conservan (`is_candidate_enabled`/`is_recruiter_enabled` en `false` pero la fila permanece, permitiendo reactivar sin perder datos) o requieren su propio soft-delete, análogo a `job_postings.deleted_at` (BR-JOB-09)? `professional_profiles` en cualquier caso permanece mientras exista al menos una capacidad habilitada (CHECK de `accounts`).
+- **[Resuelta 23-nov-2026: el disparo es el evento, condicionado a la capacidad de candidato; §4.2]** ¿`professional_profiles.updated_at` dispara `ProfileUpdatedEvent` incluso cuando la cuenta **no** tiene `is_candidate_enabled` (p. ej. solo tiene capacidad de reclutador)? La emisión debería quedar condicionada a esa capacidad para no generar recálculos de score inexistentes (ver fila del evento en `domain-model.md` §6).
 - ¿`applications.candidate_profile_id` necesita distinguir, en algún reporte o vista, si el candidato postulante también tiene capacidad de reclutador (BR-ACCT-01), o es una distinción puramente interna sin relevancia para el pipeline del reclutador receptor?
 - ¿Cada request de JobSeeker consulta `userinfo` de Clavaris en vivo (más simple, más latencia) o se cachea el perfil básico (nombre, email) por la duración del access token (15 min, menos llamadas, riesgo de mostrar un dato ligeramente desactualizado si cambia a mitad de sesión)?
 - `accountDeletionGracePeriodDays` (ADR-0013) — ¿dónde vive esta constante? Mismo patrón de pregunta ya abierto para `archivalDelayDays` (¿`application.yml` o tabla de configuración editable?).
