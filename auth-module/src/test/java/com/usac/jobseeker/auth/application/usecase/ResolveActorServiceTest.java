@@ -8,6 +8,7 @@ import com.usac.jobseeker.auth.application.usecase.resolveactor.ResolveActorQuer
 import com.usac.jobseeker.auth.application.usecase.resolveactor.ResolveActorService;
 import com.usac.jobseeker.auth.domain.model.Account;
 import com.usac.jobseeker.auth.domain.model.DeletionStatus;
+import com.usac.jobseeker.auth.domain.model.IdentityStatus;
 import com.usac.jobseeker.common.domain.model.AccountId;
 import com.usac.jobseeker.common.domain.model.Capability;
 import java.util.Set;
@@ -48,6 +49,28 @@ class ResolveActorServiceTest {
 
     assertThat(service.execute(new ResolveActorQuery(id)))
         .isEqualTo(new ActorResolution.Rejected(Reason.PENDING_DELETION));
+  }
+
+  @Test
+  void anAccountWhoseIdentityWasDeletedInClavarisIsRejectedEvenIfItsOwnStatusIsActive() {
+    AccountId id = new AccountId(UUID.randomUUID());
+    accounts.put(
+        new Account(
+            id, Set.of(Capability.CANDIDATE), DeletionStatus.ACTIVE, IdentityStatus.DELETED));
+
+    assertThat(service.execute(new ResolveActorQuery(id)))
+        .isEqualTo(new ActorResolution.Rejected(Reason.IDENTITY_DELETED));
+  }
+
+  @Test
+  void aSuspendedIdentityStillResolvesBecauseItsSessionsAreClosedByTheWebhookNotHere() {
+    AccountId id = new AccountId(UUID.randomUUID());
+    accounts.put(
+        new Account(
+            id, Set.of(Capability.CANDIDATE), DeletionStatus.ACTIVE, IdentityStatus.SUSPENDED));
+
+    assertThat(service.execute(new ResolveActorQuery(id)))
+        .isInstanceOf(ActorResolution.Resolved.class);
   }
 
   @Test

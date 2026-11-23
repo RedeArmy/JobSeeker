@@ -147,6 +147,17 @@ class ActorFilterTest {
   }
 
   @Test
+  void aDeletedIdentityIsRejectedWith403AndTheUnavailableCode() throws Exception {
+    first = new ActorResolution.Rejected(Reason.IDENTITY_DELETED);
+
+    run();
+
+    assertThat(response.getStatus()).isEqualTo(403);
+    assertThat(response.getContentAsString()).contains("ACCOUNT_UNAVAILABLE");
+    assertThat(chain.getRequest()).isNull();
+  }
+
+  @Test
   void anAnonymizedAccountIsRejectedWith403AndTheUnavailableCode() throws Exception {
     first = new ActorResolution.Rejected(Reason.ANONYMIZED);
 

@@ -8,8 +8,12 @@ import com.usac.jobseeker.app.infrastructure.security.liveness.LivenessFilter;
 import com.usac.jobseeker.app.infrastructure.security.liveness.LivenessStore;
 import com.usac.jobseeker.app.infrastructure.security.liveness.RefreshTokenClient;
 import com.usac.jobseeker.app.infrastructure.security.liveness.RevokingLogoutHandler;
+import com.usac.jobseeker.app.infrastructure.security.webhook.ClavarisWebhookFilter;
+import com.usac.jobseeker.app.infrastructure.security.webhook.WebhookProperties;
+import com.usac.jobseeker.auth.application.usecase.handleclavariswebhook.HandleClavarisWebhookUseCase;
 import com.usac.jobseeker.auth.application.usecase.provisionaccount.ProvisionAccountUseCase;
 import com.usac.jobseeker.auth.application.usecase.resolveactor.ResolveActorUseCase;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.util.List;
@@ -40,6 +44,7 @@ import org.springframework.security.oauth2.server.resource.web.authentication.Be
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 import org.springframework.security.web.context.SecurityContextHolderFilter;
@@ -62,7 +67,11 @@ import org.springframework.web.cors.CorsConfigurationSource;
  * válido.
  */
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties({ClavarisProperties.class, SessionProperties.class})
+@EnableConfigurationProperties({
+  ClavarisProperties.class,
+  SessionProperties.class,
+  WebhookProperties.class
+})
 class SecurityConfiguration {
 
   private static final String LOGIN_PATH =
@@ -90,7 +99,16 @@ class SecurityConfiguration {
 
   @Bean
   @Order(1)
-  SecurityFilterChain webhookChain(HttpSecurity http) {
+  SecurityFilterChain webhookChain(
+      HttpSecurity http,
+      HandleClavarisWebhookUseCase handleWebhook,
+      WebhookProperties webhook,
+      MeterRegistry meters,
+      Clock clock) {
+    // La autenticidad la da solo la firma HMAC del filtro, que además responde: no hay sesión,
+    // Bearer ni CSRF. El filtro no es un bean para que no se registre también fuera de esta cadena.
+    ClavarisWebhookFilter filter = new ClavarisWebhookFilter(handleWebhook, webhook, meters, clock);
+    http.addFilterBefore(filter, AuthorizationFilter.class);
     return closedStatelessChain(http, "/api/v1/webhooks/clavaris");
   }
 

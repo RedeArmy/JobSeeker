@@ -17,6 +17,8 @@ public sealed interface ActorResolution {
     /** En periodo de gracia de eliminación (BR-DATA-04). */
     PENDING_DELETION,
     /** Ya anonimizada (BR-DATA-05). */
-    ANONYMIZED
+    ANONYMIZED,
+    /** La identidad se borró en Clavaris (webhook `account.deleted`, ADR-0020); no vuelve. */
+    IDENTITY_DELETED
   }
 }

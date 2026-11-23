@@ -1,6 +1,7 @@
 package com.usac.jobseeker.auth.application.usecase.resolveactor;
 
 import com.usac.jobseeker.auth.domain.model.Account;
+import com.usac.jobseeker.auth.domain.model.IdentityStatus;
 import java.util.Objects;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +24,11 @@ public class ResolveActorService implements ResolveActorUseCase {
   }
 
   private static ActorResolution resolve(Account account) {
+    // Una identidad borrada en Clavaris no vuelve (terminal), así que no puede quedar obsoleta como
+    // una suspensión a la que se le perdió la reactivación: es la única que cierra el paso.
+    if (account.identityStatus() == IdentityStatus.DELETED) {
+      return new ActorResolution.Rejected(ActorResolution.Reason.IDENTITY_DELETED);
+    }
     return switch (account.deletionStatus()) {
       case ACTIVE -> new ActorResolution.Resolved(account.toActor());
       case PENDING_DELETION ->

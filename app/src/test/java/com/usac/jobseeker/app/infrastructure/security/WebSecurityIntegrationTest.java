@@ -182,15 +182,17 @@ class WebSecurityIntegrationTest {
   }
 
   @Test
-  void theApiRequiresABearerAndTheWebhookChainIsStillClosed() throws Exception {
+  void theApiRequiresABearerAndTheWebhookChainIsClosedWithoutASecret() throws Exception {
     // La cadena de la API se prueba a fondo en ApiBearerChainIntegrationTest; aquí solo que la web
-    // y la API siguen siendo superficies distintas y que la de webhooks sigue cerrada hasta el 4.5.
+    // y la API siguen siendo superficies distintas y que la de webhooks, sin secreto configurado,
+    // responde 503 (la firma se prueba en
+    // ClavarisWebhookIntegrationTest).
     mvc.perform(get("/api/v1/anything"))
         .andExpect(status().isUnauthorized())
         .andExpect(header().string("WWW-Authenticate", "Bearer"))
         .andExpect(jsonPath("$.error.code").value("AUTHENTICATION_REQUIRED"));
     mvc.perform(post("/api/v1/webhooks/clavaris").content("{}"))
-        .andExpect(status().isUnauthorized());
+        .andExpect(status().isServiceUnavailable());
   }
 
   @Test

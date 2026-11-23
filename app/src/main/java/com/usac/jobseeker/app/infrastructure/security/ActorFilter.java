@@ -91,7 +91,7 @@ final class ActorFilter extends OncePerRequestFilter {
               403,
               "ACCOUNT_PENDING_DELETION",
               "La cuenta está en periodo de eliminación.");
-      case ANONYMIZED, NOT_PROVISIONED ->
+      case ANONYMIZED, NOT_PROVISIONED, IDENTITY_DELETED ->
           ErrorEnvelope.write(
               request, response, 403, "ACCOUNT_UNAVAILABLE", "La cuenta no está disponible.");
     }
