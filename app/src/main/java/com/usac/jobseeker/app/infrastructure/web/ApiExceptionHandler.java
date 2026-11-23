@@ -1,6 +1,7 @@
 package com.usac.jobseeker.app.infrastructure.web;
 
 import com.usac.jobseeker.app.infrastructure.security.ErrorEnvelope;
+import com.usac.jobseeker.common.domain.error.NotFoundException;
 import com.usac.jobseeker.common.domain.error.StaleStateException;
 import com.usac.jobseeker.common.domain.error.ValidationFailedException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -74,6 +75,17 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                 request,
                 "STALE_STATE",
                 "El recurso cambió mientras lo editabas; vuelve a cargarlo."));
+  }
+
+  /**
+   * El recurso no existe para quien lo pide, o no es suyo: 404 en ambos casos, para no confirmar
+   * que un identificador ajeno es válido (BR-ACCT-04).
+   */
+  @ExceptionHandler(NotFoundException.class)
+  ResponseEntity<Object> notFound(HttpServletRequest request) {
+    HttpStatus status = HttpStatus.NOT_FOUND;
+    return ResponseEntity.status(status)
+        .body(ErrorEnvelope.body(request, code(status), message(status)));
   }
 
   /** Lo que nadie previó: 500 sin detalles; la causa queda en el registro con el `traceId`. */
