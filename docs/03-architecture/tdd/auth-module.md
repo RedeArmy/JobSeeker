@@ -319,13 +319,13 @@ Un sexto (la comprobación previa por `Content-Length` del filtro) era real y se
 - Un `401` por secreto mal configurado **no es inocuo**: Clavaris lo trata como fallo y reintenta, así que un secreto equivocado produce reintentos hasta que desactive el endpoint (y los eventos se pierden). Refuerza la alerta de §11.6.
 - El orden de llegada coincidió con el de ocurrencia en la ráfaga secuencial; el desorden que vio el spike (ráfagas en paralelo) no se reprodujo, y la regla `(occurredAt, event_id)` sigue siendo la protección.
 
-**Sigue sin validarse con Clavaris real:** el tiempo real de desactivación con los umbrales **por defecto** de Clavaris (8 intentos y 5 fallos seguidos; en §11.7 se bajaron a 2 y 2 para poder observarlo), y el uso de un Bearer anterior a la suspensión. Los demás puntos que quedaban se validaron en una segunda sesión (§11.7).
+**Sigue sin validarse con Clavaris real:** el uso de un Bearer anterior a la suspensión. Los demás puntos que quedaban se validaron en una segunda sesión (§11.7) y el tiempo de desactivación con los umbrales **por defecto** de Clavaris (8 intentos y 5 fallos seguidos) se midió en una tercera (§11.8).
 
 ### 11.6 Decisiones pendientes y límites conocidos
 
 - **Límite de tasa por IP** del receptor (ADR-0011): resuelto en el paso 5 (§12): política `webhook`, por IP, antes de verificar la firma.
 - **Conciliación**: no hay un recorrido que compare el espejo con Clavaris tras un hueco de eventos. El 4.3 (prueba de vida) lo cubre en la práctica; si se quiere más, es trabajo aparte.
-- **Vigilancia del endpoint**: Clavaris lo desactiva tras fallos repetidos y los eventos se pierden. Hace falta una alerta sobre la métrica `jobseeker_webhook_total` (ausencia de `applied` o exceso de `error`) cuando exista Alertmanager (ADR-0012). Comprobado (§11.7): tras desactivarlo, los eventos se pierden sin aviso y el espejo queda desactualizado.
+- **Vigilancia del endpoint**: Clavaris lo desactiva tras fallos repetidos y los eventos se pierden. Hace falta una alerta sobre la métrica `jobseeker_webhook_total` (ausencia de `applied` o exceso de `error`) cuando exista Alertmanager (ADR-0012). Comprobado (§11.7): tras desactivarlo, los eventos se pierden sin aviso y el espejo queda desactualizado. Con los valores por defecto de Clavaris tarda **69 min** en desactivarlo (§11.8): durante más de una hora un endpoint caído sigue figurando como activo.
 - **Estado de liveness de la sesión cerrada**: verificado con Clavaris real que quedaba huérfano (con un token cifrado y ya revocado y 8 h de TTL) y **corregido** en #19: el consumidor lo borra junto con la sesión (detalle de la validación en §11.7). Una prueba de integración comprueba que no queda ninguno y que el de otra cuenta sigue intacto.
 - **`account.banned`/`unbanned`**: tratados como `suspended`/`reactivated`. El espejo no distingue «baneada» de «suspendida»: si algún día importa la diferencia, `BANNED` exigiría ampliar la restricción `ck_accounts_identity_status` con una migración. Corregido en #18; el hallazgo está en §11.7.
 - **Un Bearer ya emitido sobrevive a la suspensión** hasta su caducidad (≤ 5 min): `resolveactor` deja resolver a una identidad `SUSPENDED` a propósito, porque sus sesiones las cierra el webhook y Clavaris ya no emite tokens nuevos (validado: el flujo OIDC de una cuenta suspendida no devuelve token). No se probó con Clavaris real el uso de un Bearer anterior a la suspensión; sí que `DELETED` lo corta (§11.5).
@@ -366,7 +366,7 @@ Mismo montaje que §11.5 (Clavaris `2a33b2f2`, JobSeeker `d515416`, túnel tempo
 
 | Qué | Resultado |
 |---|---|
-| Umbral | con máximo 2 intentos y umbral 2: el contador de fallos pasó de 0 a 1 (a los 38 s) y a 2 (a los 43 s) y Clavaris **desactivó el endpoint** (`active = false`, `auto_disabled_at`), con el aviso `event=webhook_endpoint_auto_disabled` en su log. Un fallo se cuenta cuando una entrega **agota todos sus intentos**. Con los valores por defecto (8 intentos, umbral 5) no se midió el tiempo |
+| Umbral | con máximo 2 intentos y umbral 2: el contador de fallos pasó de 0 a 1 (a los 38 s) y a 2 (a los 43 s) y Clavaris **desactivó el endpoint** (`active = false`, `auto_disabled_at`), con el aviso `event=webhook_endpoint_auto_disabled` en su log. Un fallo se cuenta cuando una entrega **agota todos sus intentos**. Con los valores por defecto (8 intentos, umbral 5) el tiempo se midió después: §11.8 |
 | Eventos mientras está apagado | ❌ **se pierden**: no se entregan nunca, ni siquiera tras reactivar. El espejo de JobSeeker queda **desactualizado** (`ACTIVE` mientras Clavaris la tiene `SUSPENDED`) |
 | ¿Quién cubre el hueco? | ✅ la **prueba de vida**: la sesión de la cuenta suspendida se cerró a los **63 s** (renovación de 1 min en la prueba). Es el respaldo previsto en ADR-0020, ahora comprobado |
 | Reactivar (`:activate`) | ✅ el contador vuelve a 0 y los eventos **nuevos** se entregan y se aplican |
@@ -387,6 +387,48 @@ Detalles que importan al configurar:
 - `localhost` puede resolver a `::1` (IPv6): un `curl` a `localhost` llegó desde `::1`, que no coincide con `127.0.0.1`, y sus cabeceras se ignoraron.
 
 **No se cambió ninguna configuración por defecto:** la actual es **segura** (ignora todo lo reenviado) aunque inadecuada tras un proxy; qué proxy es de confianza lo decide la topología (ADR-0026). Cuando se fije, estas dos propiedades y `X-Forwarded-Port` son la receta validada.
+
+### 11.8 Tercera sesión de validación: umbrales por defecto y revalidación de #18 y #19 (23-nov-2026)
+
+Mismo montaje que §11.5 (Clavaris `2a33b2f2`, túnel temporal con proxy que solo reenvía el webhook, todo desmontado al terminar), con JobSeeker `1940ef1` y los umbrales de Clavaris **por defecto** (sin las variables de §11.7).
+
+#### Desactivación automática con los umbrales por defecto
+
+Se dejó un endpoint que responde `503` a todo y se generaron 12 eventos a la vez. Clavaris lo **desactivó a los 69,4 min** (4 167 s).
+
+| Qué | Resultado |
+|---|---|
+| Entregas que agotaron los 8 intentos (min desde el inicio) | 58,7, 60,2, 65,1, 68,6, **69,4** y 70,7; la 5.ª, la que cruza el umbral, cae en el min 69,4 |
+| Separación entre intentos de una entrega (s) | 37, 73, 106, 233, 439, 946 y 2 065, frente a los 30, 60, 120, 240, 480, 960 y 1 920 teóricos (backoff que se duplica con tope de 1 h; el desvío es *jitter* más el ciclo de despacho de 5 s) |
+| Llamadas reales al endpoint que falla | 89 en 12 entregas (máximo 8 por entrega) |
+| Fallos seguidos mientras tanto | 0 hasta el min 58,7 (la primera entrega agotada); el contador solo sube cuando una entrega **agota** sus 8 intentos, no por intento fallido |
+| Tras la desactivación | quedaron 6 entregas en el 7.º intento, y se registró 1 llamada más a las 01:42:44 (hora local), el instante de la desactivación; no se observó qué pasó después con las 6 pendientes |
+
+**Conclusión:** con los valores por defecto un endpoint caído sigue figurando como **activo más de una hora** y los eventos solo se pierden después. Ningún intento, ni siquiera los 8 de cada entrega, avisa a JobSeeker: la única señal es la ausencia de `applied` en `jobseeker_webhook_total`. Refuerza la alerta de §11.6 y deja claro que el respaldo real durante esa hora es la prueba de vida (§9), no los webhooks.
+
+**Para quien repita la medición:** el vigía comparaba contra `"f"` y la consulta devuelve `true`/`false`; no detectó el cambio y la desactivación se vio al mirar a mano. El dato fiable es `webhook_endpoints.auto_disabled_at` en la base de Clavaris.
+
+#### Revalidación de #18 (baneo) contra Clavaris real
+
+| Qué | Resultado |
+|---|---|
+| Sesión web tras banear | cerrada a los **5,5 s**, con la renovación de liveness en su valor por defecto de 10 min (antes del arreglo: 59 s con renovación de 1 min, hasta ~10 min por defecto) |
+
+#### Revalidación de #19 (registro de liveness) contra Clavaris real
+
+Con dos sesiones (dos dispositivos) de la misma cuenta, en cada causa de cierre:
+
+| Causa | Sesiones cerradas a los | Registros de liveness huérfanos | Cookies |
+|---|---|---|---|
+| Suspensión | 6,4 s | 0 | las dos → `302` |
+| Refresh token reutilizado | 12,0 s | 0 | las dos → `302` |
+| Borrado de la cuenta | 8,8 s | 0 | las dos → `302` |
+
+Tras las tres, el total de registros de liveness volvió al inicial.
+
+#### `accountId` en el log (#21)
+
+96 peticiones autenticadas concurrentes de 8 cuentas a `GET /api/v1/me`, intercaladas con 96 anónimas. En el log real de JobSeeker, **las 96** llevan `accountId` igual al `sub` de su token (0 distintos, 0 ausentes). Las peticiones anónimas no generan ninguna línea con su `traceId`, así que esta prueba **no** demuestra por sí sola que el identificador no se filtre a otra petición del mismo hilo; eso lo garantiza el `finally` de `ActorFilter`, cubierto por una prueba unitaria que lo comprueba también cuando la cadena lanza una excepción.
 
 ## 12. Paso 5 del Sprint 0: el caso de uso plantilla y lo transversal
 
@@ -451,7 +493,7 @@ Criterio de salida del Sprint 0 (`roadmap-and-release-plan.md`): un caso de uso 
 - **`X-Forwarded-For`**: ver §12.2 y §11.7 (receta validada con nginx); depende del ADR-0026.
 - **Swagger UI en producción**: apagada. Si se quiere en staging, falta decidir su protección (hoy `permitAll` donde está encendida, solo en `dev`).
 - **Snapshot del spec versionado en el repositorio** (pregunta abierta del ADR-0010): no se hace todavía.
-- **`accountId` por petición en el log**: resuelto. `security-architecture.md` y el modelo de amenazas (repudio) lo piden y no existía: `ActorFilter` lo pone en el MDC en cuanto toma el `sub` de un token ya validado (antes de resolver el actor, para que cubra también el aprovisionamiento y el rechazo) y lo retira siempre en un `finally`, porque el hilo se reutiliza. Es un identificador, no un dato personal (BR-DATA-01 trata datos de CV). Solo lo llevan las peticiones autenticadas: las del receptor de webhooks no tienen cuenta que identificar, y `event=login_succeeded` (4.2) lo sigue llevando en su mensaje porque ocurre antes de que corra el filtro.
+- **`accountId` por petición en el log**: resuelto. `security-architecture.md` y el modelo de amenazas (repudio) lo piden y no existía: `ActorFilter` lo pone en el MDC en cuanto toma el `sub` de un token ya validado (antes de resolver el actor, para que cubra también el aprovisionamiento y el rechazo) y lo retira siempre en un `finally`, porque el hilo se reutiliza. Es un identificador, no un dato personal (BR-DATA-01 trata datos de CV). Solo lo llevan las peticiones autenticadas: las del receptor de webhooks no tienen cuenta que identificar, y `event=login_succeeded` (4.2) lo sigue llevando en su mensaje porque ocurre antes de que corra el filtro. Validado contra Clavaris real en §11.8.
 - **Códigos de error genéricos** (`REQUEST_INVALID`, `RESOURCE_NOT_FOUND`…): los propios del dominio (`JOB_POSTING_NOT_FOUND`…) los pondrá cada módulo al tenerlos.
 - **Pruebas de mutación**: 
 
