@@ -167,6 +167,30 @@ class ClavarisWebhookIntegrationTest {
   }
 
   @Test
+  void anAuthenticBanClosesTheSessionsThroughTheOutboxLikeASuspension() throws Exception {
+    String session = openSession();
+
+    MvcResult result = send("account.banned", UUID.randomUUID(), Instant.now());
+
+    assertThat(result.getResponse().getStatus()).isEqualTo(204);
+    assertThat(identityStatus()).isEqualTo("SUSPENDED");
+    assertThat(outboxRows()).isOne();
+    poller.pollOnce();
+    assertThat(sessions.findById(session)).isNull();
+  }
+
+  @Test
+  void anUnbanRestoresTheStatusAndLeavesNothingToClose() throws Exception {
+    Instant now = Instant.now();
+    send("account.banned", UUID.randomUUID(), now);
+
+    send("account.unbanned", UUID.randomUUID(), now.plusSeconds(5));
+
+    assertThat(identityStatus()).isEqualTo("ACTIVE");
+    assertThat(outboxRows()).as("solo el baneo pidió cerrar sesiones").isOne();
+  }
+
+  @Test
   void aSessionOfAnotherAccountIsNotTouched() throws Exception {
     UUID other = UUID.randomUUID();
     var session = sessions.createSession();
