@@ -1,5 +1,6 @@
 package com.usac.jobseeker.auth.infrastructure.adapter.out.persistence;
 
+import com.usac.jobseeker.auth.application.usecase.getmyaccount.MyAccountPort;
 import com.usac.jobseeker.auth.application.usecase.provisionaccount.AccountProvisioningPort;
 import com.usac.jobseeker.auth.application.usecase.resolveactor.ActorLookupPort;
 import com.usac.jobseeker.auth.domain.model.Account;
@@ -16,7 +17,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * Adaptador JDBC de la tabla `accounts` (data-model.md §4.1); implementa los puertos de los dos
  * casos de uso.
  */
-public class JdbcAccountRepository implements AccountProvisioningPort, ActorLookupPort {
+public class JdbcAccountRepository
+    implements AccountProvisioningPort, ActorLookupPort, MyAccountPort {
 
   private final JdbcClient jdbc;
 

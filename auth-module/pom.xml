@@ -35,6 +35,21 @@
             <groupId>org.springframework</groupId>
             <artifactId>spring-context</artifactId>
         </dependency>
+        <!-- Log estructurado de los casos de uso (ADR-0012): solo la API, el motor lo pone `app`. -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+        <!-- Adaptador de entrada web (ARCH-08: los controladores viven en infrastructure.adapter.in.web) y las
+             anotaciones de OpenAPI que lo documentan (ADR-0010); el generador (springdoc) vive solo en `app`. -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.swagger.core.v3</groupId>
+            <artifactId>swagger-annotations-jakarta</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>org.junit.jupiter</groupId>
