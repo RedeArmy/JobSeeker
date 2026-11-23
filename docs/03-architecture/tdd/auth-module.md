@@ -251,7 +251,7 @@ Cadena C del ADR-0020: `/api/v1/webhooks/clavaris`. Sin sesión, sin Bearer y si
 | Misma entrega repetida | `204` | Una sola vez (`processed_events`) |
 | Tipo sin efecto, o cuenta que nunca inició sesión | `204` | Ninguno |
 
-**Eventos con efecto** (los cuatro verificados con entregas reales en el spike): `account.suspended`, `account.reactivated`, `account.deleted` y `refresh_token.reuse_detected`. Los demás tipos del catálogo se aceptan y se ignoran, porque cualquier código distinto de 2xx haría que Clavaris reintentara y acabara desactivando el endpoint. `account.banned`/`account.unbanned` parecen análogos pero su carga no se ha comprobado con una entrega real: no se tratan hasta verificarlo.
+**Eventos con efecto** (todos verificados con entregas reales): `account.suspended`, `account.reactivated`, `account.deleted`, `refresh_token.reuse_detected`, `account.banned` y `account.unbanned`. Un baneo se espeja como `SUSPENDED` y cierra las sesiones, y un `unbanned` vuelve a `ACTIVE`: llevan la misma carga que suspender y reactivar y Clavaris les aplica la misma cascada de revocación. Antes de tratarlo, una cuenta baneada conservaba su sesión web hasta que la prueba de vida la cerraba (59 s con renovación de 1 min; hasta ~10 min con el valor por defecto). Los demás tipos del catálogo se aceptan y se ignoran, porque cualquier código distinto de 2xx haría que Clavaris reintentara y acabara desactivando el endpoint.
 
 **Orden.**
 - El espejo aplica un evento solo si su `(occurredAt, event_id)` es mayor que el del último aplicado; el UUID se compara **sin signo**, como Postgres (con signo, un empate se resolvería al revés en el dominio y en SQL).
@@ -305,7 +305,7 @@ Un sexto (la comprobación previa por `Content-Length` del filtro) era real y se
 - **Conciliación**: no hay un recorrido que compare el espejo con Clavaris tras un hueco de eventos. El 4.3 (prueba de vida) lo cubre en la práctica; si se quiere más, es trabajo aparte.
 - **Vigilancia del endpoint**: Clavaris lo desactiva tras fallos repetidos y los eventos se pierden. Hace falta una alerta sobre la métrica `jobseeker_webhook_total` (ausencia de `applied` o exceso de `error`) cuando exista Alertmanager (ADR-0012).
 - **Estado de liveness y refresh token almacenado** de la sesión cerrada: el cierre borra la sesión de Redis, pero **no se verificó** qué pasa con la entrada de liveness y el refresh token guardado de esa sesión (4.3). Hay que comprobar que no quedan huérfanos y, si quedan, borrarlos en el mismo consumidor.
-- **`account.banned`/`unbanned`**: sin tratar hasta verificar su carga.
+- **`account.banned`/`unbanned`**: tratados como `suspended`/`reactivated`. El espejo no distingue «baneada» de «suspendida»: si algún día importa la diferencia, `BANNED` exigiría ampliar la restricción `ck_accounts_identity_status` con una migración.
 - **Cableado de beans** (`OutboxConfiguration`): 4 mutantes que devuelven nulo de un método `@Bean` no los distingue una prueba dirigida; los cubre el arranque del contexto.
 
 ## 12. Paso 5 del Sprint 0: el caso de uso plantilla y lo transversal

@@ -14,10 +14,12 @@ import org.junit.jupiter.params.provider.ValueSource;
 class ClavarisEventTest {
 
   @Test
-  void theFourVerifiedEventsMapToTheirEffect() {
+  void theVerifiedEventsMapToTheirEffect() {
     assertThat(ClavarisEvent.from("account.suspended")).contains(ClavarisEvent.SUSPENDED);
     assertThat(ClavarisEvent.from("account.reactivated")).contains(ClavarisEvent.REACTIVATED);
     assertThat(ClavarisEvent.from("account.deleted")).contains(ClavarisEvent.DELETED);
+    assertThat(ClavarisEvent.from("account.banned")).contains(ClavarisEvent.BANNED);
+    assertThat(ClavarisEvent.from("account.unbanned")).contains(ClavarisEvent.UNBANNED);
     assertThat(ClavarisEvent.from("refresh_token.reuse_detected"))
         .contains(ClavarisEvent.TOKEN_REUSE_DETECTED);
   }
@@ -30,6 +32,23 @@ class ClavarisEventTest {
   }
 
   @Test
+  void aBanIsMirroredLikeASuspensionAndAnUnbanLikeAReactivation() {
+    // Misma carga y misma cascada de revocación en Clavaris: en JobSeeker el efecto es el mismo.
+    assertThat(ClavarisEvent.BANNED.identityStatus()).contains(IdentityStatus.SUSPENDED);
+    assertThat(ClavarisEvent.UNBANNED.identityStatus()).contains(IdentityStatus.ACTIVE);
+  }
+
+  @Test
+  void everyEventThatTakesAccessAwayClosesSessionsAndNoneThatRestoresItDoes() {
+    for (ClavarisEvent event : ClavarisEvent.values()) {
+      boolean takesAccessAway =
+          event.identityStatus().map(status -> status != IdentityStatus.ACTIVE).orElse(true);
+
+      assertThat(event.closesSessions()).as(event.type()).isEqualTo(takesAccessAway);
+    }
+  }
+
+  @Test
   void aReusedRefreshTokenClosesSessionsButDoesNotChangeTheIdentityStatus() {
     assertThat(ClavarisEvent.TOKEN_REUSE_DETECTED.identityStatus()).isEmpty();
     assertThat(ClavarisEvent.TOKEN_REUSE_DETECTED.closesSessions()).isTrue();
@@ -39,7 +58,9 @@ class ClavarisEventTest {
   void onlyTheEventsThatTakeAccessAwayCloseSessions() {
     assertThat(ClavarisEvent.SUSPENDED.closesSessions()).isTrue();
     assertThat(ClavarisEvent.DELETED.closesSessions()).isTrue();
+    assertThat(ClavarisEvent.BANNED.closesSessions()).isTrue();
     assertThat(ClavarisEvent.REACTIVATED.closesSessions()).isFalse();
+    assertThat(ClavarisEvent.UNBANNED.closesSessions()).isFalse();
   }
 
   @ParameterizedTest
@@ -55,9 +76,7 @@ class ClavarisEventTest {
         "refresh_token.reuse_graced",
         "password_reset.requested",
         "organization.deleted",
-        // Parecen análogos a suspender y reactivar, pero su carga no se ha comprobado.
-        "account.banned",
-        "account.unbanned"
+        "account.session_revoked"
       })
   void everyOtherTypeOfTheCatalogHasNoEffect(String type) {
     assertThat(ClavarisEvent.from(type)).isEmpty();

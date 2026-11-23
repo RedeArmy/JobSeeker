@@ -72,6 +72,55 @@ class HandleClavarisWebhookServiceTest {
   }
 
   @Test
+  void banningMirrorsSuspendedAndRequestsClosingTheSessionsWithItsOwnReason() {
+    UUID id = UUID.randomUUID();
+
+    assertThat(handle("account.banned", id, T0)).isEqualTo(HandleClavarisWebhookResult.APPLIED);
+
+    assertThat(state()).isEqualTo(new IdentityState(IdentityStatus.SUSPENDED, T0, id));
+    assertThat(published)
+        .singleElement()
+        .satisfies(
+            out -> {
+              assertThat(out.eventType())
+                  .isEqualTo(AccountSessionsInvalidationRequested.EVENT_TYPE);
+              assertThat(out.payload()).contains("account.banned", id.toString());
+            });
+  }
+
+  @Test
+  void unbanningRestoresTheStatusAndClosesNothing() {
+    handle("account.banned", UUID.randomUUID(), T0);
+    published.clear();
+
+    handle("account.unbanned", UUID.randomUUID(), T0.plusSeconds(1));
+
+    assertThat(state().status()).isEqualTo(IdentityStatus.ACTIVE);
+    assertThat(published).isEmpty();
+  }
+
+  @Test
+  void aBanArrivingAfterANewerUnbanDoesNotRevertItButStillClosesSessions() {
+    handle("account.unbanned", UUID.randomUUID(), T0.plusSeconds(10));
+    published.clear();
+
+    handle("account.banned", UUID.randomUUID(), T0);
+
+    assertThat(state().status()).isEqualTo(IdentityStatus.ACTIVE);
+    assertThat(published).as("cerrar de más es la dirección segura").hasSize(1);
+  }
+
+  @Test
+  void aBanThenADeletionLeavesTheIdentityDeletedWhateverComesAfter() {
+    handle("account.banned", UUID.randomUUID(), T0);
+    handle("account.deleted", UUID.randomUUID(), T0.plusSeconds(1));
+
+    handle("account.unbanned", UUID.randomUUID(), T0.plusSeconds(100));
+
+    assertThat(state().status()).isEqualTo(IdentityStatus.DELETED);
+  }
+
+  @Test
   void deletingIsTerminalAndClosesSessions() {
     handle("account.deleted", UUID.randomUUID(), T0);
 

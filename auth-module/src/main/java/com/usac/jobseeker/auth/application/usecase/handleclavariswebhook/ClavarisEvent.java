@@ -5,16 +5,21 @@ import java.util.Arrays;
 import java.util.Optional;
 
 /**
- * Los eventos de Clavaris que tienen efecto en JobSeeker. Son los cuatro verificados contra
- * entregas reales del spike; el resto de los tipos del catálogo se acepta y se ignora: otro código
- * de estado haría que Clavaris reintentara y acabara desactivando el endpoint entero.
+ * Los eventos de Clavaris que tienen efecto en JobSeeker, todos verificados contra entregas reales;
+ * el resto de los tipos del catálogo se acepta y se ignora: otro código de estado haría que
+ * Clavaris reintentara y acabara desactivando el endpoint entero.
  *
- * <p>`account.banned` y `account.unbanned` parecen análogos a suspender y reactivar, pero su carga
- * no se ha comprobado con una entrega real: no se tratan hasta verificarlo.
+ * <p>`account.banned` y `account.unbanned` llevan la misma carga que suspender y reactivar (solo
+ * identificadores) y Clavaris les aplica la misma cascada de revocación. Se espejan como
+ * `SUSPENDED` y `ACTIVE` porque en JobSeeker el efecto es idéntico: cerrar las sesiones. Sin
+ * tratarlos, una cuenta baneada conservaba su sesión hasta que la prueba de vida la cerraba (hasta
+ * ~10 min).
  */
 public enum ClavarisEvent {
   SUSPENDED("account.suspended", IdentityStatus.SUSPENDED, true),
   REACTIVATED("account.reactivated", IdentityStatus.ACTIVE, false),
+  BANNED("account.banned", IdentityStatus.SUSPENDED, true),
+  UNBANNED("account.unbanned", IdentityStatus.ACTIVE, false),
   DELETED("account.deleted", IdentityStatus.DELETED, true),
   /**
    * No cambia el estado de la identidad, pero un token robado y reutilizado exige cerrar sesiones.
