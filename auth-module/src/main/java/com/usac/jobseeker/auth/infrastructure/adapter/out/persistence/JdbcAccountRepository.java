@@ -6,6 +6,7 @@ import com.usac.jobseeker.auth.application.usecase.resolveactor.ActorLookupPort;
 import com.usac.jobseeker.auth.domain.model.Account;
 import com.usac.jobseeker.auth.domain.model.DeletionStatus;
 import com.usac.jobseeker.auth.domain.model.IdentityStatus;
+import com.usac.jobseeker.common.application.account.AccountChangeObserver;
 import com.usac.jobseeker.common.domain.model.AccountId;
 import com.usac.jobseeker.common.domain.model.Capability;
 import java.util.EnumSet;
@@ -21,9 +22,15 @@ public class JdbcAccountRepository
     implements AccountProvisioningPort, ActorLookupPort, MyAccountPort {
 
   private final JdbcClient jdbc;
+  private final AccountChangeObserver observer;
 
   public JdbcAccountRepository(JdbcClient jdbc) {
+    this(jdbc, AccountChangeObserver.NONE);
+  }
+
+  public JdbcAccountRepository(JdbcClient jdbc, AccountChangeObserver observer) {
     this.jdbc = jdbc;
+    this.observer = observer;
   }
 
   // ON CONFLICT DO NOTHING hace atómico el primer login: dos peticiones simultáneas de la misma
@@ -38,7 +45,11 @@ public class JdbcAccountRepository
             .param("candidate", capabilities.contains(Capability.CANDIDATE))
             .param("recruiter", capabilities.contains(Capability.RECRUITER))
             .update();
-    return inserted == 1;
+    boolean created = inserted == 1;
+    if (created) {
+      observer.accountChanged(id);
+    }
+    return created;
   }
 
   @Override

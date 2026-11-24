@@ -3,6 +3,7 @@ package com.usac.jobseeker.auth.infrastructure.adapter.out.persistence;
 import com.usac.jobseeker.auth.application.usecase.handleclavariswebhook.IdentityStatePort;
 import com.usac.jobseeker.auth.domain.model.IdentityState;
 import com.usac.jobseeker.auth.domain.model.IdentityStatus;
+import com.usac.jobseeker.common.application.account.AccountChangeObserver;
 import com.usac.jobseeker.common.domain.model.AccountId;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -22,9 +23,15 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 public class JdbcIdentityStateRepository implements IdentityStatePort {
 
   private final JdbcClient jdbc;
+  private final AccountChangeObserver observer;
 
   public JdbcIdentityStateRepository(JdbcClient jdbc) {
+    this(jdbc, AccountChangeObserver.NONE);
+  }
+
+  public JdbcIdentityStateRepository(JdbcClient jdbc, AccountChangeObserver observer) {
     this.jdbc = jdbc;
+    this.observer = observer;
   }
 
   @Override
@@ -71,6 +78,10 @@ public class JdbcIdentityStateRepository implements IdentityStatePort {
             .param("at", OffsetDateTime.ofInstant(occurredAt, ZoneOffset.UTC))
             .param("eventId", eventId)
             .update();
-    return updated == 1;
+    boolean applied = updated == 1;
+    if (applied) {
+      observer.accountChanged(accountId);
+    }
+    return applied;
   }
 }

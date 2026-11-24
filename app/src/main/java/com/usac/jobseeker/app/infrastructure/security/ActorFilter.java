@@ -76,9 +76,12 @@ final class ActorFilter extends OncePerRequestFilter {
     // token
     // ya validado, no de un parámetro, y se retira siempre: el hilo se reutiliza.
     MDC.put(MDC_KEY, accountId.value().toString());
+    // El ámbito de la memoria por petición es de esta petición y de nadie más (TD-004).
+    ActorResolutionScope.open(request);
     try {
       continueAs(accountId, request, response, chain);
     } finally {
+      ActorResolutionScope.close(request);
       MDC.remove(MDC_KEY);
     }
   }

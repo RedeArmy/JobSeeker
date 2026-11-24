@@ -10,9 +10,11 @@ import com.usac.jobseeker.auth.application.usecase.resolveactor.ResolveActorServ
 import com.usac.jobseeker.auth.application.usecase.resolveactor.ResolveActorUseCase;
 import com.usac.jobseeker.auth.infrastructure.adapter.out.persistence.JdbcAccountRepository;
 import com.usac.jobseeker.auth.infrastructure.adapter.out.persistence.JdbcIdentityStateRepository;
+import com.usac.jobseeker.common.application.account.AccountChangeObserver;
 import com.usac.jobseeker.common.application.idempotency.ProcessedEventsPort;
 import com.usac.jobseeker.common.application.observability.UseCaseMetricsPort;
 import com.usac.jobseeker.common.application.outbox.DomainEventPublisherPort;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -22,8 +24,11 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 class AuthConfiguration {
 
   @Bean
-  JdbcAccountRepository jdbcAccountRepository(JdbcClient jdbc) {
-    return new JdbcAccountRepository(jdbc);
+  JdbcAccountRepository jdbcAccountRepository(
+      JdbcClient jdbc, ObjectProvider<AccountChangeObserver> observer) {
+    // Sin nadie que escuche (otro módulo que use `auth` solo, o una prueba) no hay nada que avisar.
+    return new JdbcAccountRepository(
+        jdbc, observer.getIfAvailable(() -> AccountChangeObserver.NONE));
   }
 
   @Bean
@@ -32,8 +37,10 @@ class AuthConfiguration {
   }
 
   @Bean
-  JdbcIdentityStateRepository jdbcIdentityStateRepository(JdbcClient jdbc) {
-    return new JdbcIdentityStateRepository(jdbc);
+  JdbcIdentityStateRepository jdbcIdentityStateRepository(
+      JdbcClient jdbc, ObjectProvider<AccountChangeObserver> observer) {
+    return new JdbcIdentityStateRepository(
+        jdbc, observer.getIfAvailable(() -> AccountChangeObserver.NONE));
   }
 
   // El registro de eventos procesados y la bandeja los aporta `app` (ADR-0016): este módulo solo
