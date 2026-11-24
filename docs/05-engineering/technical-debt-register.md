@@ -4,7 +4,7 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | 🟡 En revisión |
-| **Versión** | 1.1 — se pagan TD-003, TD-004, TD-006, TD-007 y TD-008, y se endurece la memoria por petición |
+| **Versión** | 1.2 — se pagan TD-001, TD-018, TD-019 y TD-021 |
 | **Fecha** | 24 de noviembre de 2026 |
 | **Dueño del documento** | Responsable del proyecto |
 | **Revisión del registro** | Al cerrar cada sprint y antes de cada hito de la hoja de ruta |
@@ -51,23 +51,21 @@ Corte: 24-nov-2026.
 | Severidad | Abiertas o planificadas |
 |---|---|
 | S1 Crítica | 0 |
-| S2 Alta | 8 |
-| S3 Media | 7 |
-| S4 Baja | 6 |
-| **Total** | **21** |
+| S2 Alta | 4 |
+| S3 Media | 8 |
+| S4 Baja | 5 |
+| **Total** | **17** |
 
-- **Abiertas:** 19 · **Planificadas:** 2 · **Resueltas:** 14 · **Aceptadas:** 5.
-- **S2 abiertas con disparador próximo** (decidir el siguiente sprint): TD-001, TD-012, TD-018, TD-021 (todas dependen del primer consumidor de `matching`) y TD-005 (primer despliegue).
+- **Abiertas:** 15 · **Planificadas:** 2 · **Resueltas:** 19 · **Aceptadas:** 6.
+- **S2 abiertas con disparador próximo** (decidir el siguiente sprint): TD-012 (antes de `suggestcandidatesforjob`) y TD-005 y TD-016 (primer despliegue), más TD-020 (antes de usuarios reales).
 - **Métricas a seguir en cada revisión:** deuda abierta por severidad, edad de las S2 en días, número de cierres por sprint, aceptadas vencidas.
 
 ## 5. Registro de deuda abierta
 
 | ID | Título | Tipo | Sev | Esf | Confianza | Estado | Disparador |
 |---|---|---|---|---|---|---|---|
-| TD-001 | Los consumidores del sondeador corren dentro de la transacción de reclamo | Arquitectura / Concurrencia | S2 | M | Leída | Abierta | Antes de implementar `embedentity` (paso 3 de `matching`) |
 | TD-002 | Un solo hilo para todas las tareas programadas | Concurrencia | S3 | S | Leída | Abierta | Antes del primer lote programado (anonimización, archivado de vacantes) |
 | TD-005 | Dimensionamiento de producción sin definir | Operación | S2 | S | Hipótesis | Abierta | Antes del primer despliegue (ADR-0026) |
-| TD-009 | Índice sin lector en la bandeja (`idx_outbox_aggregate`) | Rendimiento | S4 | XS | Hipótesis | Abierta | Con tráfico real |
 | TD-010 | Tablas sin escritor ni purga: `idempotency_keys` y `audit_log` | Arquitectura | S3 | M | Leída | Abierta | Primer endpoint con `Idempotency-Key` o primera acción auditable |
 | TD-011 | Marcado de la bandeja evento por evento | Rendimiento | S4 | S | Leída | Abierta | Con volumen |
 | TD-012 | Recuperación vectorial con filtros sin validar | Rendimiento | S2 | M | Hipótesis | Abierta | Antes de `suggestcandidatesforjob` |
@@ -76,28 +74,15 @@ Corte: 24-nov-2026.
 | TD-015 | Persistencia JDBC sin ADR y con SQL repetido | Documentación / Código | S3 | S | Medida | Abierta | Antes del módulo `job` |
 | TD-016 | Documentación y entrega sin cerrar | Documentación | S2 | L | Medida | Abierta | Antes del primer despliegue |
 | TD-017 | Suite de pruebas con demasiados contextos | Pruebas | S3 | M | Medida | Abierta | Cuando `verify` supere 5 min en CI o al sumar `job`/`ats` |
-| TD-018 | Orden de eventos entre sondeadores sin prueba de contrato | Concurrencia | S2 | S | Leída | Abierta | Primer consumidor en `matching` |
-| TD-019 | Qué conserva la copia del perfil de la postulación al anonimizar | Privacidad | S2 | M | Hipótesis | Abierta | TDD de `snapshotapplicationprofile` |
 | TD-020 | Lote de anonimización sin dueño; descubribilidad al apagar la capacidad | Cumplimiento | S2 | L | Leída | Abierta | Antes de tener usuarios reales |
-| TD-021 | Redacción de datos personales del texto libre antes del embedding | Privacidad | S2 | M | Leída | Abierta | `embedentity` |
 | TD-022 | Calibración y cobertura de ESCO sin datos reales; arnés fuera de CI | Pruebas | S3 | L | Medida | Abierta | Antes de fijar el modelo de embeddings (ADR-0018) |
+| TD-027 | Los nombres propios del texto libre no se redactan antes del embedding | Privacidad | S3 | L | Medida | Abierta | Antes de embeber perfiles reales (`embedentity`) |
 | TD-023 | Fin de soporte de Spring Boot 4.1 (31-jul-2027) | Plataforma | S3 | L | Medida | Planificada | 2027-04-30 (inicio de la subida) |
 | TD-024 | El `Dockerfile` compila con una imagen de Java 26 | Operación | S4 | XS | Leída | Abierta | Oportunista |
 | TD-025 | La purga de la bandeja usa `Instant.now()` | Código | S4 | XS | Leída | Abierta | Oportunista |
 | TD-026 | Habilidades sin enlace a la taxonomía | Dominio | S4 | L | Medida | Planificada | Sub-paso de enlazado de ADR-0019 |
 
 ### Fichas
-
-#### TD-001 — Los consumidores del sondeador corren dentro de la transacción de reclamo
-
-**Arquitectura / Concurrencia** · **S2 Alta** · esfuerzo **M** · confianza **Leída** · **Abierta**
-
-- **Evidencia:** `OutboxPoller.pollOnce` hace `claim` y `dispatch` de hasta `batch-size` (50) eventos dentro de un solo `TransactionTemplate.execute`.
-- **Interés (qué cuesta no pagarla):** Hoy nulo (los consumidores son instantáneos). Cuando `matching` llame a Ollama retendrá una conexión del pool (10 por defecto) y los bloqueos de fila durante hasta 50 llamadas seguidas, y un lote lento puede dejar sin servicio a las peticiones.
-- **Disparador:** Antes de implementar `embedentity` (paso 3 de `matching`).
-- **Remediación propuesta:** (a) El consumidor solo encola trabajo en una tabla propia y un trabajador lo ejecuta fuera de transacción; o (b) reclamo corto con arrendamiento (`PROCESSING` + `lease_until`) y proceso sin transacción abierta. Enmendar ADR-0016.
-- **Criterio de cierre:** Prueba de integración con un consumidor lento (≥ 2 s) que demuestre que no mantiene transacción ni conexión del pool abiertas mientras trabaja; ADR-0016 enmendado.
-- **Referencias:** `docs/03-architecture/adr/0016-transactional-outbox-for-domain-events.md`
 
 #### TD-002 — Un solo hilo para todas las tareas programadas
 
@@ -120,17 +105,6 @@ Corte: 24-nov-2026.
 - **Remediación propuesta:** Fijar `maximum-pool-size`, `connection-timeout` y `max-lifetime` según el límite del agrupador; decidir `spring.threads.virtual.enabled`; añadir `-XX:+ExitOnOutOfMemoryError`. Documentar en ADR-0026.
 - **Criterio de cierre:** Valores en `application-prod.yml` con su razón y una prueba de carga básica sin saturar el pool a la concurrencia objetivo.
 - **Referencias:** `docs/03-architecture/adr/0026-deployment-topology-and-disaster-recovery.md`
-
-#### TD-009 — Índice sin lector en la bandeja (`idx_outbox_aggregate`)
-
-**Rendimiento** · **S4 Baja** · esfuerzo **XS** · confianza **Hipótesis** · **Abierta**
-
-- **Evidencia:** Ninguna consulta de `OutboxStore` filtra por agregado; el índice encarece cada alta de la tabla más escrita.
-- **Interés (qué cuesta no pagarla):** Amplificación de escritura constante.
-- **Disparador:** Con tráfico real.
-- **Remediación propuesta:** Confirmar con `pg_stat_user_indexes` y retirar por migración (expand/contract), o documentar el lector previsto.
-- **Criterio de cierre:** Migración o decisión registrada de conservarlo.
-- **Referencias:** `docs/03-architecture/adr/0027-flyway-migrations-location-versioning-and-ownership.md`
 
 #### TD-010 — Tablas sin escritor ni purga: `idempotency_keys` y `audit_log`
 
@@ -220,28 +194,6 @@ Corte: 24-nov-2026.
 - **Criterio de cierre:** Número de contextos distintos medido (objetivo ≤ 5) y tiempo de `verify` en CI registrado.
 - **Referencias:** `docs/05-engineering/test-strategy.md`
 
-#### TD-018 — Orden de eventos entre sondeadores sin prueba de contrato
-
-**Concurrencia** · **S2 Alta** · esfuerzo **S** · confianza **Leída** · **Abierta**
-
-- **Evidencia:** Con `SKIP LOCKED` y varios sondeadores, los eventos de un mismo agregado pueden llegar desordenados; ADR-0016 delega en los consumidores «el posterior gana por versión» y nada lo verifica.
-- **Interés (qué cuesta no pagarla):** Un consumidor que aplique la versión 4 después de la 5 deja un estado obsoleto de forma permanente.
-- **Disparador:** Primer consumidor en `matching`.
-- **Remediación propuesta:** Prueba de contrato reutilizable (llega la v5 antes que la v4: el estado final es la v5) y exigirla a cada consumidor.
-- **Criterio de cierre:** La prueba existe y la pasa cada consumidor.
-- **Referencias:** `docs/03-architecture/adr/0016-transactional-outbox-for-domain-events.md`
-
-#### TD-019 — Qué conserva la copia del perfil de la postulación al anonimizar
-
-**Privacidad** · **S2 Alta** · esfuerzo **M** · confianza **Hipótesis** · **Abierta**
-
-- **Evidencia:** `cv` borra habilidades, idiomas, autorizaciones, salario y disponibilidad (BR-DATA-05), pero `application_profile_snapshots` probablemente conserva habilidades ligadas a la cuenta.
-- **Interés (qué cuesta no pagarla):** Un conjunto de habilidades específicas es casi único y reidentifica junto al `account_id`: el borrado de `cv` protegería menos de lo que parece.
-- **Disparador:** TDD de `snapshotapplicationprofile`.
-- **Remediación propuesta:** Reducir la copia a lo que el reclutador necesita para su historial, o desligarla de la cuenta al anonimizar.
-- **Criterio de cierre:** Decisión registrada (D5 de `matching`) y prueba de anonimización sobre la copia.
-- **Referencias:** `docs/03-architecture/tdd/matching-module.md`
-
 #### TD-020 — Lote de anonimización sin dueño; descubribilidad al apagar la capacidad
 
 **Cumplimiento** · **S2 Alta** · esfuerzo **L** · confianza **Leída** · **Abierta**
@@ -253,17 +205,6 @@ Corte: 24-nov-2026.
 - **Criterio de cierre:** TDD aprobado y lote que invoca `anonymizeprofiledata` y la API de administración de Clavaris.
 - **Referencias:** `docs/01-product/business-rules.md` (BR-DATA-04 a 06)
 
-#### TD-021 — Redacción de datos personales del texto libre antes del embedding
-
-**Privacidad** · **S2 Alta** · esfuerzo **M** · confianza **Leída** · **Abierta**
-
-- **Evidencia:** `cv` entrega las descripciones tal como la persona las escribió; ADR-0017 asigna la redacción a `matching`, que aún no tiene código ni prueba.
-- **Interés (qué cuesta no pagarla):** Un correo o teléfono escrito en una descripción llegaría al modelo de embeddings.
-- **Disparador:** `embedentity`.
-- **Remediación propuesta:** Redactor determinista en `matching` con prueba de que ningún patrón de contacto llega al texto que se embebe.
-- **Criterio de cierre:** Prueba de redacción y control correspondiente de ADR-0017 verificado.
-- **Referencias:** `docs/03-architecture/adr/0017-matching-v2-pipeline-calibration-and-freshness.md`
-
 #### TD-022 — Calibración y cobertura de ESCO sin datos reales; arnés fuera de CI
 
 **Pruebas** · **S3 Media** · esfuerzo **L** · confianza **Medida** · **Abierta**
@@ -274,6 +215,17 @@ Corte: 24-nov-2026.
 - **Remediación propuesta:** Conseguir los datos con consentimiento, correr la medición y conectar las pruebas del arnés a CI.
 - **Criterio de cierre:** Informe de cobertura y calibración archivado y pruebas del arnés en CI.
 - **Referencias:** `docs/03-architecture/adr/0018-embedding-model-selection-and-versioning.md`
+
+#### TD-027 — Los nombres propios del texto libre no se redactan antes del embedding
+
+**Privacidad** · **S3 Media** · esfuerzo **L** · confianza **Medida** · **Abierta**
+
+- **Evidencia:** `PiiRedactor` quita correos, enlaces, usuarios y cifras de contacto, y una prueba fija que «Trabajé con Ana López» sigue intacto: reconocer nombres exige un modelo de lenguaje, no una expresión regular.
+- **Interés (qué cuesta no pagarla):** Un nombre escrito en una descripción llega al servicio de embeddings. Es Ollama local por defecto (ADR-0004), así que no sale del entorno propio; sube de gravedad si algún caso usa la API externa.
+- **Disparador:** Antes de embeber perfiles reales (`embedentity`).
+- **Remediación propuesta:** Reconocimiento de entidades con un modelo local sobre las descripciones, o excluir las descripciones de la representación canónica si la medición de ADR-0017 muestra que no aportan.
+- **Criterio de cierre:** Decisión registrada con medición del aporte de las descripciones al puntaje, y prueba de nombres si se mantienen.
+- **Referencias:** `docs/03-architecture/adr/0017-matching-v2-pipeline-calibration-and-freshness.md`
 
 #### TD-023 — Fin de soporte de Spring Boot 4.1 (31-jul-2027)
 
@@ -337,6 +289,11 @@ Corte: 24-nov-2026.
 | TD-R12 | Monitor global en el limitador de tasa (antes TD-007) | Concurrencia | S3 | 2026-11-24 | #33 | La ruta caliente lee un `AtomicReference` sin monitor; solo la conexión inicial y su reintento sincronizan. Prueba que falla si se restituye el `synchronized`. |
 | TD-R13 | Registro INFO en cada lectura de perfil (antes TD-008) | Operación | S4 | 2026-11-24 | #33 | Las dos lecturas registran en DEBUG; la métrica sigue contando cada una. |
 | TD-R14 | La memoria por petición de TD-004 tenía límites implícitos: dependía de qué petición hubiera enlazada al hilo y de que cada caso de uso futuro se acordara de invalidarla (hallazgo al pagar TD-004) | Concurrencia | S2 | 2026-11-24 | #33 | El ámbito es explícito (lo abre y cierra `ActorFilter`; sin él no se recuerda nada) y toda escritura de `accounts` avisa por `AccountChangeObserver` desde el adaptador que escribe. Una prueba estructural falla si aparece un escritor de `accounts` que no avise. Decisión: no se recuerdan los rechazos (no ahorran nada y «sin aprovisionar» rompería la carrera del primer acceso). |
+| TD-R15 | Los consumidores del sondeador corrían dentro de la transacción de reclamo (antes TD-001) | Arquitectura | S2 | 2026-11-24 | #34 | Reclamo corto con arrendamiento y despacho sin transacción ni bloqueos de fila; un evento que mata el proceso en bucle acaba en FAILED. ADR-0016 enmendado. Pruebas contra Postgres real y verificación restaurando el comportamiento anterior. |
+| TD-R16 | La promesa de orden por agregado de ADR-0016 no se cumplía (antes TD-018) | Concurrencia | S2 | 2026-11-24 | #34 | El reclamo toma como mucho un evento por agregado, el de menor versión, y ninguno si hay otro en vuelo; un reintento en espera no bloquea a los siguientes. Prueba con cuatro instancias y contrato de nombres de los consumidores. |
+| TD-R17 | Qué conserva la copia del perfil de la postulación al anonimizar (antes TD-019) | Privacidad | S2 | 2026-11-24 | #34 | Decisión D5 resuelta: la copia pierde `canonical_text` y `canonical_hash`; las fotos del score nunca guardan texto del candidato. En el TDD de `matching` y en el modelo de datos, con su criterio de aceptación. |
+| TD-R18 | Redacción de datos personales del texto libre antes del embedding (antes TD-021) | Privacidad | S2 | 2026-11-24 | #34 | `PiiRedactor` y un `EmbeddableText` que solo se construye redactado; `EmbeddingClientPort` solo acepta ese tipo, así que el compilador lo garantiza. Queda TD-027 para los nombres propios. |
+| TD-R19 | Índice `idx_outbox_aggregate` sin lector (antes TD-009) | Rendimiento | S4 | 2026-11-24 | #34 | Descartada: el nuevo reclamo lo usa para comprobar si un agregado tiene un evento en vuelo. |
 
 ## 7. Deuda aceptada
 
@@ -346,6 +303,7 @@ Corte: 24-nov-2026.
 | TD-A02 | Excepciones de squawk `constraint-missing-not-valid` en `auth` (`V20261122100000`) y `cv` (`V20261124110000`) | ADR-0027 | Las tablas no existen en ningún entorno desplegado: no hay filas que escanear ni escrituras que bloquear. | Primer despliegue (ADR-0026) | Desde entonces, `NOT VALID` y `VALIDATE` en migraciones separadas. |
 | TD-A03 | Habilidades como texto libre | ADR-0019 | Hasta el enlazado a la taxonomía no hay identificador que guardar. | Sub-paso de enlazado | Ver TD-026. |
 | TD-A04 | Un `404` al excluir una cuenta revela si ese UUID existe | `docs/03-architecture/tdd/cv-module.md` §10.4 | Los identificadores son UUID aleatorios de 122 bits, no enumerables; «nunca existió» y «ya no vuelve» responden igual. | 2027-02-01 | Revisar si algún identificador deja de ser aleatorio. |
+| TD-A06 | El reclamo de la bandeja está serializado por un bloqueo de aviso global y una fila en vuelo se reentrega al vencer el arrendamiento | ADR-0016 (enmienda 24-nov-2026) | El bloqueo dura milisegundos y hace correcto el orden por agregado; la reentrega tras un fallo del marcado es redundancia, no pérdida, porque los consumidores son idempotentes. | 2027-02-01 | Si el volumen hace del bloqueo un cuello de botella, particionar su clave por rango de agregado. |
 | TD-A05 | Tope de 500 exclusiones como límite blando | `docs/03-architecture/tdd/cv-module.md` §10.4 | Contar e insertar no es atómico; bajo concurrencia podría pasarse por pocas filas sin consecuencia. | Sin vencimiento | Hacerlo estricto solo si el tope pasa a ser un límite de negocio. |
 
 ## 8. Historial de este documento
@@ -353,7 +311,8 @@ Corte: 24-nov-2026.
 | Versión | Fecha | Cambio |
 |---|---|---|
 | 1.0 | 2026-11-24 | Registro inicial: 26 fichas abiertas o planificadas de la auditoría, 8 resueltas con su evidencia y 5 aceptadas con fecha de revisión. |
-| 1.1 | 2026-11-24 | Se pagan TD-003, TD-004, TD-006, TD-007 y TD-008 (PR #33) y pasan a resueltas como TD-R09 a TD-R13; TD-R14 registra el límite implícito que apareció al pagar TD-004 y su arreglo. Quedan 21 abiertas o planificadas, 14 resueltas y 5 aceptadas. |
+| 1.1 | 2026-11-24 | Se pagan TD-003, TD-004, TD-006, TD-007 y TD-008 (PR #33) y pasan a resueltas como TD-R09 a TD-R13; TD-R14 registra el límite implícito que apareció al pagar TD-004 y su arreglo. Quedan 17 abiertas o planificadas, 19 resueltas y 6 aceptadas. |
+| 1.2 | 2026-11-24 | Se pagan TD-001, TD-018, TD-019 y TD-021 (PR #34) y pasan a resueltas como TD-R15 a TD-R18; TD-009 se descarta (TD-R19) porque el nuevo reclamo usa su índice. Entran TD-027 (nombres propios sin redactar) y TD-A06 (bloqueo de reclamo). Quedan 17 abiertas o planificadas, 19 resueltas y 6 aceptadas. |
 
 ## 9. Plantilla de ficha
 

@@ -1,0 +1,12 @@
+-- Arrendamiento de las filas de la bandeja (ADR-0016, enmienda de la decisión 2): el sondeador
+-- reclama con una transacción corta que marca `locked_until`, despacha **sin transacción abierta** y
+-- registra el resultado. Antes el reclamo, la llamada a cada consumidor y el marcado ocurrían en una
+-- sola transacción, que retenía una conexión del pool y los bloqueos de fila mientras un consumidor
+-- hablaba con Ollama.
+--
+-- `locked_until` es nulo mientras nadie la trabaja. Una fila con arrendamiento vigente está «en
+-- vuelo»: nadie más la reclama ni reclama otra del mismo agregado (orden por agregado). Si el proceso
+-- muere con la fila en vuelo, el arrendamiento vence y otra instancia la reclama de nuevo: al menos una
+-- vez, y los consumidores son idempotentes (decisión 3). Columna nula sin valor por defecto: no
+-- reescribe la tabla ni bloquea las escrituras.
+alter table outbox_events add column locked_until timestamptz;

@@ -479,6 +479,8 @@ Los vectores los calcula y guarda `matching` (caso de uso `embedentity`), así q
 
 **Anonimización (BR-DATA-05):** al recibir `AccountAnonymized`, `matching` anula **todo** el bloque `embedding*` a la vez (la restricción lo exige) y fuerza `discoverable = false`. Nunca se borra la fila, para que una repetición del evento sea idempotente.
 
+**Copias y fotos del score (`matching`, decisión D5 de su TDD, 24-nov-2026).** La copia del perfil canónico que se guarda al postular (`application_profile_snapshots`) contiene texto libre del candidato, que es un dato derivado de la persona: al anonimizar la cuenta, `canonical_text` y `canonical_hash` pasan a `NULL` y la fila se conserva solo como metadato de la postulación. Las fotos del score (`compatibility_score_snapshots`) no guardan texto del candidato —su evidencia se expresa en términos de los requisitos de la vacante—, así que se conservan tal cual: son el historial que BR-DATA-05 manda preservar.
+
 ### 4.8 `applications` (contextos `ats` / `tracker`)
 
 | Columna | Tipo | Restricciones | Descripción |
