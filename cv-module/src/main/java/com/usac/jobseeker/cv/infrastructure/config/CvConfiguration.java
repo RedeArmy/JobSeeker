@@ -5,6 +5,8 @@ import com.usac.jobseeker.common.application.outbox.DomainEventPublisherPort;
 import com.usac.jobseeker.cv.application.support.CandidateChange;
 import com.usac.jobseeker.cv.application.support.ProfileChange;
 import com.usac.jobseeker.cv.application.support.Stamp;
+import com.usac.jobseeker.cv.application.usecase.anonymizeprofiledata.AnonymizeProfileDataService;
+import com.usac.jobseeker.cv.application.usecase.anonymizeprofiledata.AnonymizeProfileDataUseCase;
 import com.usac.jobseeker.cv.application.usecase.changeavailability.ChangeAvailabilityService;
 import com.usac.jobseeker.cv.application.usecase.changeavailability.ChangeAvailabilityUseCase;
 import com.usac.jobseeker.cv.application.usecase.changediscoverability.ChangeDiscoverabilityService;
@@ -39,6 +41,7 @@ import com.usac.jobseeker.cv.application.usecase.savecandidateprofile.SaveCandid
 import com.usac.jobseeker.cv.application.usecase.saveprofessionalprofile.CandidateCapabilityPort;
 import com.usac.jobseeker.cv.application.usecase.saveprofessionalprofile.SaveProfessionalProfileService;
 import com.usac.jobseeker.cv.application.usecase.saveprofessionalprofile.SaveProfessionalProfileUseCase;
+import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcAnonymizationRepository;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcAvailabilityExclusionRepository;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcCandidateCollectionsRepository;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcCandidateProfileRepository;
@@ -248,5 +251,20 @@ class CvConfiguration {
         candidates,
         candidateCollections,
         metrics);
+  }
+
+  // ---- anonimización (sub-paso 6 del diseño de cv) ----
+
+  @Bean
+  JdbcAnonymizationRepository jdbcAnonymizationRepository(JdbcClient jdbc) {
+    return new JdbcAnonymizationRepository(jdbc);
+  }
+
+  @Bean
+  AnonymizeProfileDataUseCase anonymizeProfileDataUseCase(
+      JdbcAnonymizationRepository store,
+      DomainEventPublisherPort events,
+      UseCaseMetricsPort metrics) {
+    return new AnonymizeProfileDataService(store, events, metrics, Stamp.system());
   }
 }

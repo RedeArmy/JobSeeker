@@ -1,8 +1,10 @@
 package com.usac.jobseeker.app.infrastructure.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.usac.jobseeker.app.InfrastructureTestConfiguration;
@@ -73,6 +75,10 @@ class CvEventsAndSnapshotIntegrationTest {
   @Autowired private MeterRegistry meters;
 
   @Autowired
+  private com.usac.jobseeker.cv.application.usecase.anonymizeprofiledata.AnonymizeProfileDataUseCase
+      anonymize;
+
+  @Autowired
   private com.usac.jobseeker.cv.application.usecase.getprofilesnapshot.GetProfileSnapshotUseCase
       snapshots;
 
@@ -112,12 +118,18 @@ class CvEventsAndSnapshotIntegrationTest {
   }
 
   // Los tipos de evento que `cv` publica por la bandeja, con la forma de su carga.
-  private static final java.util.Set<String> CV_EVENTS =
+  private static final java.util.Set<String> EDIT_EVENTS =
       java.util.Set.of(
           "profile.updated",
           "candidate.discoverability_changed",
           "candidate.availability_changed",
           "candidate.availability_exclusion_changed");
+
+  // Todo el catálogo de `cv`: las cuatro de edición y la de anonimización.
+  private static final java.util.Set<String> CV_EVENTS =
+      java.util.stream.Stream.concat(
+              EDIT_EVENTS.stream(), java.util.stream.Stream.of("profile.anonymized"))
+          .collect(java.util.stream.Collectors.toUnmodifiableSet());
 
   private static final String SECRET_NAME = "Ana Lopez Secretisima";
   private static final String SECRET_EMAIL = "secreta@example.test";
@@ -216,7 +228,7 @@ class CvEventsAndSnapshotIntegrationTest {
     poller(received).pollOnce();
 
     var mine = received.stream().filter(e -> e.payload().contains(id.toString())).toList();
-    assertThat(mine).extracting(OutboxEvent::eventType).containsAll(CV_EVENTS);
+    assertThat(mine).extracting(OutboxEvent::eventType).containsAll(EDIT_EVENTS);
     for (OutboxEvent event : mine) {
       var json =
           com.jayway.jsonpath.JsonPath.<java.util.Map<String, Object>>read(event.payload(), "$");
@@ -295,5 +307,74 @@ class CvEventsAndSnapshotIntegrationTest {
                       new com.usac.jobseeker.common.domain.model.AccountId(account))))
           .isEmpty();
     }
+  }
+
+  @Test
+  void anonymizingAnAccountLeavesNoPersonalDataEmitsOneEventAndIsRepeatable() throws Exception {
+    jdbc.update("delete from outbox_events");
+    UUID id = candidateWithEverything();
+    var command =
+        new com.usac.jobseeker.cv.application.usecase.anonymizeprofiledata
+            .AnonymizeProfileDataCommand(new com.usac.jobseeker.common.domain.model.AccountId(id));
+
+    var first = anonymize.execute(command);
+    var second = anonymize.execute(command);
+
+    assertThat(first)
+        .isEqualTo(
+            com.usac.jobseeker.cv.application.usecase.anonymizeprofiledata
+                .AnonymizeProfileDataUseCase.Result.ANONYMIZED);
+    assertThat(second)
+        .isEqualTo(
+            com.usac.jobseeker.cv.application.usecase.anonymizeprofiledata
+                .AnonymizeProfileDataUseCase.Result.NOTHING_TO_ANONYMIZE);
+    var received = new ArrayList<OutboxEvent>();
+    poller(received).pollOnce();
+    assertThat(received)
+        .filteredOn(
+            e -> e.eventType().equals("profile.anonymized") && e.payload().contains(id.toString()))
+        .hasSize(1);
+    // Nada que identifique a la persona sobrevive en ninguna tabla de `cv`.
+    assertThat(
+            jdbc.queryForObject(
+                "select full_name from professional_profiles where account_id = ?",
+                String.class,
+                id))
+        .isEqualTo("Candidato eliminado");
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from professional_profiles where account_id = ? and (bio is not null or headline is not null)",
+                Integer.class,
+                id))
+        .isZero();
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from candidate_profiles where account_id = ? and (contact_email is not null or contact_phone is not null or discoverable)",
+                Integer.class,
+                id))
+        .isZero();
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from experiences e join professional_profiles p on p.id = e.professional_profile_id where p.account_id = ?",
+                Integer.class,
+                id))
+        .isZero();
+  }
+
+  @Test
+  void afterAnonymizingTheApiSeesNoProfileAndThereIsNoSnapshot() throws Exception {
+    UUID id = candidateWithEverything();
+    anonymize.execute(
+        new com.usac.jobseeker.cv.application.usecase.anonymizeprofiledata
+            .AnonymizeProfileDataCommand(new com.usac.jobseeker.common.domain.model.AccountId(id)));
+
+    mvc.perform(authed(get(PROFILE), id)).andExpect(jsonPath("$.created").value(false));
+    mvc.perform(authed(get(CANDIDATE), id)).andExpect(jsonPath("$.created").value(false));
+    assertThat(
+            snapshots.execute(
+                new com.usac.jobseeker.cv.application.usecase.getprofilesnapshot
+                    .GetProfileSnapshotQuery(
+                    new com.usac.jobseeker.common.domain.model.AccountId(id))))
+        .isEmpty();
   }
 }
