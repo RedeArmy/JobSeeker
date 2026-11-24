@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.usac.jobseeker.common.domain.error.AlreadyExistsException;
 import com.usac.jobseeker.common.domain.error.FieldViolation;
 import com.usac.jobseeker.common.domain.error.ForbiddenCapabilityException;
 import com.usac.jobseeker.common.domain.error.NotFoundException;
@@ -49,6 +50,11 @@ class ApiExceptionHandlerTest {
       throw new ValidationFailedException(
           List.of(
               new FieldViolation("fullName", "REQUIRED"), new FieldViolation("bio", "TOO_LONG")));
+    }
+
+    @GetMapping("/duplicate")
+    String duplicate() {
+      throw new AlreadyExistsException();
     }
 
     @GetMapping("/forbidden")
@@ -154,6 +160,14 @@ class ApiExceptionHandlerTest {
   @Test
   void anOrdinaryErrorCarriesNoDetailsField() throws Exception {
     mvc.perform(get("/missing")).andExpect(jsonPath("$.error.details").doesNotExist());
+  }
+
+  @Test
+  void aDuplicateIsA409WithItsOwnCodeDistinctFromAStaleVersion() throws Exception {
+    mvc.perform(get("/duplicate").requestAttr(TRACE_ATTRIBUTE, "traza-de-prueba"))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.error.code").value("ALREADY_EXISTS"))
+        .andExpect(jsonPath("$.error.traceId").value("traza-de-prueba"));
   }
 
   @Test

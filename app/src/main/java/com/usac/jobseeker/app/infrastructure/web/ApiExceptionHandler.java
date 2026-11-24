@@ -1,6 +1,7 @@
 package com.usac.jobseeker.app.infrastructure.web;
 
 import com.usac.jobseeker.app.infrastructure.security.ErrorEnvelope;
+import com.usac.jobseeker.common.domain.error.AlreadyExistsException;
 import com.usac.jobseeker.common.domain.error.ForbiddenCapabilityException;
 import com.usac.jobseeker.common.domain.error.NotFoundException;
 import com.usac.jobseeker.common.domain.error.StaleStateException;
@@ -76,6 +77,13 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                 request,
                 "STALE_STATE",
                 "El recurso cambió mientras lo editabas; vuelve a cargarlo."));
+  }
+
+  /** Lo que se quiso crear ya existe: 409 con su propio código, distinto de una versión vieja. */
+  @ExceptionHandler(AlreadyExistsException.class)
+  ResponseEntity<Object> alreadyExists(HttpServletRequest request) {
+    return ResponseEntity.status(HttpStatus.CONFLICT)
+        .body(ErrorEnvelope.body(request, "ALREADY_EXISTS", "Eso ya existe."));
   }
 
   /**
