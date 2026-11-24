@@ -36,4 +36,17 @@ class CvConfigurationTest {
         .isNotNull();
     assertThat(config.getVisibleAvailabilityUseCase(profiles, exclusions)).isNotNull();
   }
+
+  @Test
+  void theSnapshotUseCaseIsBuiltFromTheReadAdapters() {
+    assertThat(
+            config.getProfileSnapshotUseCase(
+                account -> true,
+                config.jdbcProfessionalProfileRepository(jdbc),
+                config.jdbcProfileCollectionsRepository(jdbc),
+                config.jdbcCandidateProfileRepository(jdbc),
+                config.jdbcCandidateCollectionsRepository(jdbc),
+                (useCase, outcome) -> {}))
+        .isNotNull();
+  }
 }
