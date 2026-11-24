@@ -224,6 +224,7 @@ final class MigrationRules {
         "recruiter_profiles",
         "candidate_availability_exclusions",
         "candidate_work_authorizations",
+        "candidate_skills",
         "candidate_languages",
         "recruiter_templates",
         "branded_cv_exports");

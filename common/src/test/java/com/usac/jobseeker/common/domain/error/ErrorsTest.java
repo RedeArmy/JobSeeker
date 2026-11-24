@@ -55,6 +55,12 @@ class ErrorsTest {
   }
 
   @Test
+  void aMissingCapabilityNamesNeitherTheCapabilityNorTheResource() {
+    assertThat(new ForbiddenCapabilityException().getMessage())
+        .isEqualTo("La cuenta no tiene la capacidad necesaria");
+  }
+
+  @Test
   void aNotFoundCarriesNoIdentifierOfTheResource() {
     assertThat(new NotFoundException().getMessage()).isEqualTo("El recurso no existe");
   }
