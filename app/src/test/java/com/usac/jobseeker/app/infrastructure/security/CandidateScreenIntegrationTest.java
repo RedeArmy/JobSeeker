@@ -73,8 +73,9 @@ class CandidateScreenIntegrationTest {
         .andExpect(status().isOk());
 
     String page = body(get(PAGE).with(as(id)));
-    assertThat(page).contains("Java;4", "en;B2", "GT, MX", "ana@example.test");
-    assertThat(page).contains("name=\"version\" value=\"4\"");
+    assertThat(page)
+        .contains("Java;4", "en;B2", "GT, MX", "ana@example.test")
+        .contains("name=\"version\" value=\"4\"");
   }
 
   @Test
@@ -93,8 +94,9 @@ class CandidateScreenIntegrationTest {
 
     String page = body(get(PAGE).with(as(id)));
 
-    assertThat(page).doesNotContain("<script>alert(1)").contains("&lt;script&gt;");
     assertThat(page)
+        .doesNotContain("<script>alert(1)")
+        .contains("&lt;script&gt;")
         .doesNotContainPattern(Pattern.compile("<[^>]+ style="))
         .doesNotContainPattern(Pattern.compile("<script>(?!</script>)"));
   }

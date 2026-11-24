@@ -7,6 +7,7 @@ import com.usac.jobseeker.common.domain.error.FieldViolation;
 import com.usac.jobseeker.common.domain.error.ForbiddenCapabilityException;
 import com.usac.jobseeker.common.domain.error.StaleStateException;
 import com.usac.jobseeker.common.domain.error.ValidationFailedException;
+import com.usac.jobseeker.cv.application.support.Stamp;
 import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.CandidateCollectionsReadPort;
 import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.CandidateProfileView;
 import com.usac.jobseeker.cv.application.usecase.getmyprofessionalprofile.ProfessionalProfileReadPort;
@@ -16,12 +17,9 @@ import com.usac.jobseeker.cv.domain.model.CandidateCollections;
 import com.usac.jobseeker.cv.domain.model.CandidateDetails;
 import com.usac.jobseeker.cv.domain.model.CandidateProfile;
 import com.usac.jobseeker.cv.domain.model.CandidateProfileId;
-import java.time.Clock;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.UUID;
-import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -45,8 +43,7 @@ public class SaveCandidateProfileService implements SaveCandidateProfileUseCase 
   private final CandidateCapabilityPort capabilities;
   private final DomainEventPublisherPort events;
   private final UseCaseMetricsPort metrics;
-  private final Clock clock;
-  private final Supplier<UUID> ids;
+  private final Stamp stamp;
 
   public SaveCandidateProfileService(
       CandidateProfileStorePort profiles,
@@ -55,8 +52,7 @@ public class SaveCandidateProfileService implements SaveCandidateProfileUseCase 
       CandidateCapabilityPort capabilities,
       DomainEventPublisherPort events,
       UseCaseMetricsPort metrics,
-      Clock clock,
-      Supplier<UUID> ids) {
+      Stamp stamp) {
     this.profiles = Objects.requireNonNull(profiles, "profiles");
     this.collections = Objects.requireNonNull(collections, "collections");
     this.professionalProfiles =
@@ -64,8 +60,7 @@ public class SaveCandidateProfileService implements SaveCandidateProfileUseCase 
     this.capabilities = Objects.requireNonNull(capabilities, "capabilities");
     this.events = Objects.requireNonNull(events, "events");
     this.metrics = Objects.requireNonNull(metrics, "metrics");
-    this.clock = Objects.requireNonNull(clock, "clock");
-    this.ids = Objects.requireNonNull(ids, "ids");
+    this.stamp = Objects.requireNonNull(stamp, "stamp");
   }
 
   @Override
@@ -140,7 +135,10 @@ public class SaveCandidateProfileService implements SaveCandidateProfileUseCase 
     }
     CandidateProfile profile =
         CandidateProfile.create(
-            new CandidateProfileId(ids.get()), command.accountId(), details, clock.instant());
+            new CandidateProfileId(stamp.ids().get()),
+            command.accountId(),
+            details,
+            stamp.clock().instant());
     if (!profiles.insertIfAbsent(profile)) {
       throw stale();
     }
@@ -152,7 +150,7 @@ public class SaveCandidateProfileService implements SaveCandidateProfileUseCase 
     if (current.version() != expectedVersion) {
       throw stale();
     }
-    CandidateProfile edited = current.edit(details, clock.instant());
+    CandidateProfile edited = current.edit(details, stamp.clock().instant());
     if (!profiles.updateIfVersion(edited, expectedVersion)) {
       throw stale();
     }
@@ -167,7 +165,7 @@ public class SaveCandidateProfileService implements SaveCandidateProfileUseCase 
   private void publishUpdated(CandidateProfile profile) {
     events.publish(
         new OutboxEvent(
-            ids.get(),
+            stamp.ids().get(),
             ProfileUpdated.CANDIDATE_AGGREGATE_TYPE,
             profile.id().value(),
             profile.version(),

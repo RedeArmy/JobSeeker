@@ -14,13 +14,15 @@ import java.util.regex.Pattern;
  */
 public record ContactInfo(String email, String phone) {
 
+  private static final String EMAIL_FIELD = "contactEmail";
   public static final int EMAIL_MAX = 254;
   public static final int PHONE_MAX = 30;
 
   // Una comprobación de forma, no de existencia: algo@dominio.tld sin espacios. Verificar que el
   // buzón exista exigiría enviar un correo, y eso es de otro caso de uso.
-  private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
-  private static final Pattern PHONE = Pattern.compile("^[0-9+()\\-. ]+$");
+  private static final Pattern EMAIL_SHAPE =
+      Pattern.compile("^[^@\\s]++@[^@\\s.]++(?:\\.[^@\\s.]++)++$");
+  private static final Pattern PHONE_SHAPE = Pattern.compile("^[0-9+()\\-. ]+$");
 
   public ContactInfo {
     Objects.requireNonNull(email, "email");
@@ -29,17 +31,17 @@ public record ContactInfo(String email, String phone) {
   static ContactInfo of(String email, String phone, List<FieldViolation> violations) {
     String cleanEmail = email == null ? "" : email.strip();
     if (cleanEmail.isEmpty()) {
-      violations.add(new FieldViolation("contactEmail", CandidateRules.REQUIRED));
+      violations.add(new FieldViolation(EMAIL_FIELD, CandidateRules.REQUIRED));
     } else if (cleanEmail.codePointCount(0, cleanEmail.length()) > EMAIL_MAX) {
-      violations.add(new FieldViolation("contactEmail", CandidateRules.TOO_LONG));
+      violations.add(new FieldViolation(EMAIL_FIELD, CandidateRules.TOO_LONG));
     } else if (TextRules.hasForbiddenControl(cleanEmail, false)
-        || !EMAIL.matcher(cleanEmail).matches()) {
-      violations.add(new FieldViolation("contactEmail", "INVALID_EMAIL"));
+        || !EMAIL_SHAPE.matcher(cleanEmail).matches()) {
+      violations.add(new FieldViolation(EMAIL_FIELD, "INVALID_EMAIL"));
     }
     String stripped = phone == null ? "" : phone.strip();
     if (stripped.length() > PHONE_MAX) {
       violations.add(new FieldViolation("contactPhone", CandidateRules.TOO_LONG));
-    } else if (!stripped.isEmpty() && !PHONE.matcher(stripped).matches()) {
+    } else if (!stripped.isEmpty() && !PHONE_SHAPE.matcher(stripped).matches()) {
       violations.add(new FieldViolation("contactPhone", "INVALID_PHONE"));
     }
     // Un teléfono en blanco es «no lo dio»: se guarda como ausente, no como cadena vacía.

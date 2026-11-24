@@ -10,6 +10,7 @@ import com.usac.jobseeker.common.domain.error.StaleStateException;
 import com.usac.jobseeker.common.domain.error.ValidationFailedException;
 import com.usac.jobseeker.common.domain.model.AccountId;
 import com.usac.jobseeker.cv.application.support.CandidateChange;
+import com.usac.jobseeker.cv.application.support.Stamp;
 import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.CandidateCollectionsReadPort;
 import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.CandidateProfileReadPort;
 import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.GetMyCandidateProfileQuery;
@@ -113,8 +114,7 @@ class CandidateServicesTest {
           a -> isCandidate,
           events::add,
           (useCase, outcome) -> metrics.add(useCase + ":" + outcome),
-          Clock.fixed(now, ZoneOffset.UTC),
-          UUID::randomUUID);
+          new Stamp(Clock.fixed(now, ZoneOffset.UTC), UUID::randomUUID));
   private final CandidateChange change =
       new CandidateChange(
           db,
@@ -166,7 +166,7 @@ class CandidateServicesTest {
     assertThat(result.profile().details().countryOfResidence()).isEqualTo("GT");
     assertThat(events).hasSize(1);
     assertThat(events.get(0).aggregateType()).isEqualTo("candidate_profile");
-    assertThat(events.get(0).payload().toString()).doesNotContain("ana@example.test");
+    assertThat(events.get(0).payload()).doesNotContain("ana@example.test");
     assertThat(metrics).containsExactly("save_candidate_profile:created");
   }
 
@@ -288,7 +288,7 @@ class CandidateServicesTest {
         .containsExactly(new CandidateLanguage("en", LanguageProficiency.B2));
     assertThat(last.collections().workAuthorizations()).containsExactly("GT");
     assertThat(events)
-        .extracting(e -> e.payload().toString())
+        .extracting(e -> e.payload())
         .anyMatch(p -> p.contains(ProfileUpdated.CHANGE_SKILLS))
         .anyMatch(p -> p.contains(ProfileUpdated.CHANGE_LANGUAGES))
         .anyMatch(p -> p.contains(ProfileUpdated.CHANGE_WORK_AUTHORIZATIONS));

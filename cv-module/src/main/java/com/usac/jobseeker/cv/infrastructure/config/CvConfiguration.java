@@ -4,6 +4,7 @@ import com.usac.jobseeker.common.application.observability.UseCaseMetricsPort;
 import com.usac.jobseeker.common.application.outbox.DomainEventPublisherPort;
 import com.usac.jobseeker.cv.application.support.CandidateChange;
 import com.usac.jobseeker.cv.application.support.ProfileChange;
+import com.usac.jobseeker.cv.application.support.Stamp;
 import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.GetMyCandidateProfileService;
 import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.GetMyCandidateProfileUseCase;
 import com.usac.jobseeker.cv.application.usecase.getmyprofessionalprofile.GetMyProfessionalProfileService;
@@ -150,14 +151,7 @@ class CvConfiguration {
       DomainEventPublisherPort events,
       UseCaseMetricsPort metrics) {
     return new SaveCandidateProfileService(
-        profiles,
-        collections,
-        professionalProfiles,
-        capabilities,
-        events,
-        metrics,
-        Clock.systemUTC(),
-        UUID::randomUUID);
+        profiles, collections, professionalProfiles, capabilities, events, metrics, Stamp.system());
   }
 
   // Lo común a los tres conjuntos (capacidad, versión, evento, métrica y log) se construye una vez.

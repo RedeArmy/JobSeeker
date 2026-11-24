@@ -31,9 +31,6 @@ final class CandidateMessages {
           Map.entry("languages", "Los idiomas"),
           Map.entry("workAuthorizations", "Las autorizaciones de trabajo"));
 
-  private static final Map<String, String> ELEMENTS =
-      Map.of("skills", "habilidad", "languages", "idioma", "workAuthorizations", "país");
-
   private static final Map<String, String> PARTS =
       Map.of(
           "name",

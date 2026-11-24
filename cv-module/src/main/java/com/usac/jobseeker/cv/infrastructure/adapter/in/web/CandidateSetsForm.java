@@ -29,7 +29,7 @@ final class CandidateSetsForm {
       if (parts.length == 2 && !parts[1].isBlank()) {
         try {
           level = Integer.valueOf(parts[1].strip());
-        } catch (NumberFormatException notANumber) {
+        } catch (NumberFormatException _) {
           bad.add(new FieldViolation("skills[" + i + "].level", "OUT_OF_RANGE"));
         }
       }
@@ -49,7 +49,7 @@ final class CandidateSetsForm {
       if (parts.length == 2 && !parts[1].isBlank()) {
         try {
           level = LanguageProficiency.valueOf(parts[1].strip().toUpperCase(java.util.Locale.ROOT));
-        } catch (IllegalArgumentException unknown) {
+        } catch (IllegalArgumentException _) {
           bad.add(new FieldViolation("languages[" + i + "].proficiency", "INVALID"));
         }
       }

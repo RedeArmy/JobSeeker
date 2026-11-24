@@ -192,12 +192,11 @@ class JdbcCandidateRepositoriesTest {
   void aSalaryAmountWithoutItsCurrencyIsRejectedByTheDatabase() {
     var saved = created(minimal());
 
-    assertThatThrownBy(
-            () ->
-                jdbc.sql(
-                        "update candidate_profiles set salary_expectation_min = 100 where id = :id")
-                    .param("id", saved.id().value())
-                    .update())
-        .isInstanceOf(DataAccessException.class);
+    var id = saved.id().value();
+    var statement =
+        jdbc.sql("update candidate_profiles set salary_expectation_min = 100 where id = :id")
+            .param("id", id);
+
+    assertThatThrownBy(statement::update).isInstanceOf(DataAccessException.class);
   }
 }
