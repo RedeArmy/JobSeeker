@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.usac.jobseeker.common.domain.error.FieldViolation;
+import com.usac.jobseeker.common.domain.error.ForbiddenCapabilityException;
 import com.usac.jobseeker.common.domain.error.NotFoundException;
 import com.usac.jobseeker.common.domain.error.StaleStateException;
 import com.usac.jobseeker.common.domain.error.ValidationFailedException;
@@ -48,6 +49,11 @@ class ApiExceptionHandlerTest {
       throw new ValidationFailedException(
           List.of(
               new FieldViolation("fullName", "REQUIRED"), new FieldViolation("bio", "TOO_LONG")));
+    }
+
+    @GetMapping("/forbidden")
+    String forbidden() {
+      throw new ForbiddenCapabilityException();
     }
 
     @GetMapping("/absent")
@@ -148,6 +154,20 @@ class ApiExceptionHandlerTest {
   @Test
   void anOrdinaryErrorCarriesNoDetailsField() throws Exception {
     mvc.perform(get("/missing")).andExpect(jsonPath("$.error.details").doesNotExist());
+  }
+
+  @Test
+  void aMissingCapabilityIsA403WithItsOwnCodeAndSaysNothingAboutWhichOne() throws Exception {
+    String body =
+        mvc.perform(get("/forbidden").requestAttr(TRACE_ATTRIBUTE, "traza-de-prueba"))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.error.code").value("FORBIDDEN_CAPABILITY"))
+            .andExpect(jsonPath("$.error.traceId").value("traza-de-prueba"))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    assertThat(body).doesNotContain("CANDIDATE", "RECRUITER");
   }
 
   @Test

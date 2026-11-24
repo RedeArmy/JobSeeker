@@ -1,6 +1,7 @@
 package com.usac.jobseeker.app.infrastructure.web;
 
 import com.usac.jobseeker.app.infrastructure.security.ErrorEnvelope;
+import com.usac.jobseeker.common.domain.error.ForbiddenCapabilityException;
 import com.usac.jobseeker.common.domain.error.NotFoundException;
 import com.usac.jobseeker.common.domain.error.StaleStateException;
 import com.usac.jobseeker.common.domain.error.ValidationFailedException;
@@ -75,6 +76,20 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                 request,
                 "STALE_STATE",
                 "El recurso cambió mientras lo editabas; vuelve a cargarlo."));
+  }
+
+  /**
+   * La cuenta no tiene la capacidad que la operación exige: 403 con un código propio, porque el
+   * cliente puede reaccionar distinto a «no tienes permiso» que a una sesión inválida (BR-ACCT-04).
+   */
+  @ExceptionHandler(ForbiddenCapabilityException.class)
+  ResponseEntity<Object> forbiddenCapability(HttpServletRequest request) {
+    return ResponseEntity.status(HttpStatus.FORBIDDEN)
+        .body(
+            ErrorEnvelope.body(
+                request,
+                "FORBIDDEN_CAPABILITY",
+                "Tu cuenta no tiene habilitada la capacidad necesaria para esta operación."));
   }
 
   /**

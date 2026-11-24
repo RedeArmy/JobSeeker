@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Mi perfil de candidato · JobSeeker</title>
+  <!-- ADR-0020: el token CSRF viaja en una <meta>; HTMX lo adjunta a cada petición (hx-headers). -->
+  <meta name="_csrf" th:content="${_csrf.token}"/>
+  <meta name="_csrf_header" th:content="${_csrf.headerName}"/>
+  <!-- Misma configuración que el perfil profesional: un 422 solo reemplaza la zona de errores y un 409
+       o 404 recarga el contenido; sin eval ni estilos en línea para mantener la CSP estricta. -->
+  <meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false,"includeIndicatorStyles":false,"responseHandling":[{"code":"204","swap":false},{"code":"422","swap":true,"error":false,"target":"#candidate-errors","swapOverride":"outerHTML"},{"code":"409","swap":true,"error":false},{"code":"404","swap":true,"error":false},{"code":"[23]..","swap":true},{"code":"[45]..","swap":false,"error":true}]}'/>
+  <link rel="stylesheet" th:href="@{/css/app.css}"/>
+  <script th:src="@{/js/htmx.min.js}"></script>
+</head>
+<body th:attr="hx-headers=|{&quot;${_csrf.headerName}&quot;: &quot;${_csrf.token}&quot;}|">
+<main>
+  <p><a th:href="@{/app/home}">Inicio</a> · <a th:href="@{/app/profile}">Mi perfil profesional</a></p>
+  <h1>Mi perfil de candidato</h1>
+
+  <div id="candidate-content" th:fragment="content">
+
+    <div id="candidate-errors" th:fragment="errors" role="alert" aria-live="polite">
+      <p class="notice" th:if="${notice != null}" th:text="${notice}">aviso</p>
+      <ul class="errors" th:if="${errors != null and !errors.isEmpty()}">
+        <li th:each="message : ${errors}" th:text="${message}">error</li>
+      </ul>
+    </div>
+
+    <section>
+      <h2>Contacto y elegibilidad</h2>
+      <p th:unless="${profile.created()}">Aún no has creado tu perfil de candidato. Necesitas tener antes tu perfil profesional.</p>
+      <form th:attr="hx-put=@{/app/candidate-profile/details}" hx-target="#candidate-content" hx-swap="outerHTML">
+        <input type="hidden" name="version" th:value="${profile.version()}"/>
+        <label>Correo de contacto <input type="email" name="contactEmail" maxlength="254" required th:value="${profile.contactEmail()}"/></label>
+        <label>Teléfono <input type="text" name="contactPhone" maxlength="30" th:value="${profile.contactPhone()}"/></label>
+        <label>País de residencia (código, p. ej. GT) <input type="text" name="countryOfResidence" maxlength="2" th:value="${profile.countryOfResidence()}"/></label>
+        <label>Modalidad deseada
+          <select name="desiredModality">
+            <option value="">Sin preferencia</option>
+            <option th:each="m : ${T(com.usac.jobseeker.cv.domain.model.WorkModality).values()}" th:value="${m}" th:text="${m}" th:selected="${m == profile.desiredModality()}">REMOTE</option>
+          </select>
+        </label>
+        <label>Jornada preferida
+          <select name="preferredWorkSchedule">
+            <option value="">Sin preferencia</option>
+            <option th:each="s : ${T(com.usac.jobseeker.cv.domain.model.WorkSchedule).values()}" th:value="${s}" th:text="${s}" th:selected="${s == profile.preferredWorkSchedule()}">FULL_TIME</option>
+          </select>
+        </label>
+        <label><input type="checkbox" name="relocationWillingness" value="true" th:checked="${profile.relocationWillingness()}"/> Estoy dispuesto a reubicarme</label>
+        <fieldset>
+          <legend>Expectativa salarial (opcional; si das un monto, indica moneda y periodo)</legend>
+          <label>Mínimo <input type="number" name="salaryMin" min="0" step="0.01" th:value="${profile.salary() != null ? profile.salary().min() : null}"/></label>
+          <label>Máximo <input type="number" name="salaryMax" min="0" step="0.01" th:value="${profile.salary() != null ? profile.salary().max() : null}"/></label>
+          <label>Moneda (p. ej. USD) <input type="text" name="salaryCurrency" maxlength="3" th:value="${profile.salary() != null ? profile.salary().currency() : null}"/></label>
+          <label>Periodo
+            <select name="salaryPeriod">
+              <option value="">—</option>
+              <option th:each="p : ${T(com.usac.jobseeker.cv.domain.model.SalaryPeriod).values()}" th:value="${p}" th:text="${p}" th:selected="${profile.salary() != null and p == profile.salary().period()}">MONTH</option>
+            </select>
+          </label>
+        </fieldset>
+        <button type="submit" th:text="${profile.created() ? 'Guardar' : 'Crear mi perfil de candidato'}">Guardar</button>
+      </form>
+    </section>
+
+    <th:block th:if="${profile.created()}">
+      <section>
+        <h2>Habilidades</h2>
+        <form th:attr="hx-put=@{/app/candidate-profile/skills}" hx-target="#candidate-content" hx-swap="outerHTML">
+          <input type="hidden" name="version" th:value="${profile.version()}"/>
+          <label>Una por línea; nivel opcional de 1 a 4 tras «;» (p. ej. <code>Java;4</code>)
+            <textarea name="text" rows="6" th:text="${skillsText}"></textarea></label>
+          <button type="submit">Guardar habilidades</button>
+        </form>
+      </section>
+
+      <section>
+        <h2>Idiomas</h2>
+        <form th:attr="hx-put=@{/app/candidate-profile/languages}" hx-target="#candidate-content" hx-swap="outerHTML">
+          <input type="hidden" name="version" th:value="${profile.version()}"/>
+          <label>Uno por línea: código y nivel (A1–C2 o NATIVE), p. ej. <code>en;B2</code>
+            <textarea name="text" rows="4" th:text="${languagesText}"></textarea></label>
+          <button type="submit">Guardar idiomas</button>
+        </form>
+      </section>
+
+      <section>
+        <h2>Autorización de trabajo</h2>
+        <form th:attr="hx-put=@{/app/candidate-profile/work-authorizations}" hx-target="#candidate-content" hx-swap="outerHTML">
+          <input type="hidden" name="version" th:value="${profile.version()}"/>
+          <label>Países donde puedes trabajar legalmente, separados por comas (p. ej. <code>GT, MX</code>)
+            <textarea name="text" rows="2" th:text="${countriesText}"></textarea></label>
+          <button type="submit">Guardar autorizaciones</button>
+        </form>
+      </section>
+    </th:block>
+  </div>
+</main>
+</body>
+</html>
