@@ -351,7 +351,7 @@ CHECK `(is_candidate_enabled OR is_recruiter_enabled)` — toda cuenta debe tene
 | version | bigint | NOT NULL DEFAULT 0 | Bloqueo optimista: dos ediciones simultáneas no se pisan, la segunda recibe `409 STALE_STATE`. Editar una fila hija incrementa la versión de la raíz (`tdd/cv-module.md` §5) |
 | updated_at | timestamptz | NOT NULL DEFAULT now() | Fecha de la última edición. El recálculo del score lo dispara el **evento** `ProfileUpdatedEvent` por la bandeja de salida (ADR-0016), no esta columna, y solo si la cuenta tiene capacidad de candidato habilitada (BR-MATCH-03, BR-ACCT-06) |
 
-**Anonimización (BR-DATA-05, ADR-0013):** al ejecutarse `AnonymizeExpiredAccountDeletionsUseCase`, `full_name` → placeholder genérico ("Candidato eliminado"), `bio`/`headline`/`profile_photo_url` → `NULL`. Las filas hijas (`experiences`, `education_entries`, `certifications`, `projects`) se eliminan físicamente — a diferencia de `Application`/`CompatibilityScore`, no hay un tercero con interés legítimo en conservar el detalle de la experiencia laboral de alguien que pidió ser olvidado.
+**Anonimización (BR-DATA-05, ADR-0013):** al ejecutarse `AnonymizeExpiredAccountDeletionsUseCase`, `full_name` → placeholder genérico ("Candidato eliminado"), `bio`/`headline`/`profile_photo_url` → `NULL`. Las filas hijas (`experiences`, `education_entries`, `certifications`, `projects`) se eliminan físicamente — a diferencia de `Application`/`CompatibilityScore`, no hay un tercero con interés legítimo en conservar el detalle de la experiencia laboral de alguien que pidió ser olvidado. `anonymized_at` (nulo mientras el perfil está vivo, migración `V20261124110000`) marca el estado terminal y hace idempotente el proceso; la aplicación trata un perfil con `anonymized_at` como inexistente, y una restricción `CHECK` impide que conserve titular, biografía o foto. Cada anonimización incrementa `version`.
 
 ### 4.3 `experiences`, `education_entries`, `certifications`, `projects` (contexto `cv`, hijas de `professional_profiles`)
 
@@ -404,7 +404,7 @@ CHECK `(is_candidate_enabled OR is_recruiter_enabled)` — toda cuenta debe tene
 
 **Restricción de coherencia:** `ck_cp_salary_complete` (moneda, periodo y al menos un importe: todos o ninguno), la única de esta tabla. Toda restricción nueva sobre una tabla con filas se añade con `NOT VALID` y se valida después (ADR-0027, squawk).
 
-**Anonimización (BR-DATA-05, ADR-0013):** `contact_email`/`contact_phone`/`raw_cv_text` → `NULL`; el vector del perfil lo borra `matching` al recibir `AccountAnonymized` (§4.7.1); `discoverable` → `false` (forzado, para que un perfil anonimizado nunca vuelva a aparecer en sugerencias); el resto de columnas (elegibilidad, disponibilidad) se conservan sin identificar a la persona — son datos de preferencia, no PII directa, y mantenerlos no permite reidentificar a nadie por sí solos. `candidate_work_authorizations`/`candidate_languages` se eliminan físicamente (mismo criterio que las tablas hijas de `professional_profiles`).
+**Anonimización (BR-DATA-05, ADR-0013):** `contact_email`/`contact_phone`/`raw_cv_text` → `NULL`; el vector del perfil lo borra `matching` al recibir `AccountAnonymized` (§4.7.1); `discoverable` → `false` (forzado, para que un perfil anonimizado nunca vuelva a aparecer en sugerencias); el resto de columnas (elegibilidad, disponibilidad) se conservan sin identificar a la persona — son datos de preferencia, no PII directa, y mantenerlos no permite reidentificar a nadie por sí solos. `candidate_work_authorizations`, `candidate_languages` y `candidate_skills` se eliminan físicamente (mismo criterio que las tablas hijas de `professional_profiles`). `anonymized_at` marca el estado terminal; `contact_email` pasa a admitir nulo **solo** con `anonymized_at`, y una restricción `CHECK` exige que un perfil anonimizado no tenga contacto ni sea descubrible y que uno vivo sí tenga correo.
 
 ### 4.5 `recruiter_profiles` (contexto `cv`)
 
@@ -551,7 +551,7 @@ Restricción de unicidad `(candidate_profile_id, country)` en `candidate_work_au
 
 Restricción de unicidad: índice único sobre `(candidate_profile_id, lower(btrim(raw_name)))`, para que «Java» y « java » no sean dos habilidades; cuando exista la taxonomía se añade `(candidate_profile_id, skill_id)` parcial `WHERE skill_id IS NOT NULL`. Definición tomada de `03-lld.md` §4, que ya la había diseñado (hallazgo F4 de la revisión de noviembre) pero nunca llegó a este documento.
 
-**Anonimización (BR-DATA-05):** las habilidades se conservan; no identifican a nadie por sí solas y el candidato anonimizado ya no es descubrible ni tiene embedding.
+**Anonimización (BR-DATA-05):** las habilidades **se eliminan** (revisión 24-nov-2026; antes se conservaban). Mientras son texto libre sin enlace a la taxonomía pueden contener lo que la persona escribió, y conservarlas no sirve a nadie: el perfil anonimizado ya no es descubrible, no tiene embedding y ningún cálculo las lee. Si más adelante están enlazadas a la taxonomía (ADR-0019), un identificador de habilidad sí se podría conservar sin identificar a nadie.
 
 
 ### 4.13 `candidate_invitations` (contexto `job`)
