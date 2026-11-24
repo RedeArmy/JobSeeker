@@ -146,6 +146,7 @@ El **arnés de evaluación** corre en paralelo desde el sub-paso 2 y debe estar 
 | **D2** | ¿Se acepta jqwik como dependencia de pruebas? | Sí, solo en `test`, con su decisión registrada |
 | **D3** | La fuente de verdad del contenido de la vacante para la representación canónica: ¿el texto de la descripción o los requisitos estructurados? | Ambos: la descripción para la afinidad semántica y los requisitos para las dimensiones, con una sola huella sobre su combinación canónica; se define con el TDD de `job` |
 | **D4** | Qué hacer con un score ya publicado cuando cambia la moneda del candidato | Recalcular por el flujo normal: es un cambio de perfil como cualquier otro |
+| **D5** | Qué conserva `application_profile_snapshots` al anonimizar la cuenta. `cv` borra habilidades, idiomas, autorizaciones, salario y disponibilidad (BR-DATA-05, `tdd/cv-module.md` §10.6), pero esta copia es donde vive el historial del reclutador y probablemente guarda las habilidades vinculadas al `account_id`: un conjunto de habilidades específicas es casi único y reidentifica | Decidir con el TDD de `snapshotapplicationprofile`: o la copia se reduce a lo que el reclutador necesita para su historial (el desglose del score) o se separa del `account_id` al anonimizar. Hasta entonces, el borrado de `cv` protege menos de lo que parece |
 
 ## 12. No cubierto todavía
 
