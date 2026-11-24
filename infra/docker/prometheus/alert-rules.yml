@@ -1,5 +1,5 @@
-# Reglas de alerta (ADR-0012). Las métricas de negocio (retraso del outbox, rechazos de elegibilidad)
-# se añaden junto con los casos de uso que las emiten; hoy solo existe la de disponibilidad.
+# Reglas de alerta (ADR-0012). Las métricas de negocio se añaden junto con los casos de uso que las
+# emiten: hoy la disponibilidad y la frescura de los embeddings de `matching` (ADR-0017, control C4).
 groups:
   - name: availability
     rules:
@@ -12,3 +12,32 @@ groups:
         annotations:
           summary: "JobSeeker no responde"
           description: "Ningún destino de /actuator/prometheus respondió en los últimos 2 minutos."
+  # Frescura de matching (NFR-PERF-07, ADR-0017 decisión 10): tras editar un perfil, el vector debe
+  # estar actualizado en p95 ≤ 120 s. Las dos primeras avisan de una cola atascada o con trabajo
+  # perdido; la tercera, de que el objetivo no se cumple aunque la cola parezca sana.
+  - name: matching-freshness
+    rules:
+      - alert: MatchingEmbeddingQueueStalled
+        expr: max(jobseeker_matching_queue_oldest_age_seconds{job="jobseeker"}) > 120
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "La cola de embeddings está atascada"
+          description: "El trabajo de embedding listo más viejo lleva más de 120 s esperando durante 5 minutos: Ollama caído o saturado, o el trabajador detenido."
+      - alert: MatchingEmbeddingJobsFailed
+        expr: max(jobseeker_matching_queue_depth{job="jobseeker", status="failed"}) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Hay trabajos de embedding fallidos"
+          description: "Hay trabajos de la cola de embeddings en FAILED desde hace más de 10 minutos; ya no se reintentan y requieren revisión."
+      - alert: MatchingFreshnessObjectiveMissed
+        expr: histogram_quantile(0.95, sum by (le) (rate(jobseeker_matching_freshness_seconds_bucket{job="jobseeker"}[15m]))) > 120
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No se cumple el objetivo de frescura de matching"
+          description: "El p95 del tiempo entre una edición y su vector supera los 120 s (ADR-0017, decisión 10) desde hace 15 minutos."
