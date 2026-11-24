@@ -1,0 +1,166 @@
+package com.usac.jobseeker.cv.application.support;
+
+import com.usac.jobseeker.common.application.observability.UseCaseMetricsPort;
+import com.usac.jobseeker.common.application.outbox.DomainEventPublisherPort;
+import com.usac.jobseeker.common.application.outbox.OutboxEvent;
+import com.usac.jobseeker.common.domain.error.FieldViolation;
+import com.usac.jobseeker.common.domain.error.ForbiddenCapabilityException;
+import com.usac.jobseeker.common.domain.error.NotFoundException;
+import com.usac.jobseeker.common.domain.error.StaleStateException;
+import com.usac.jobseeker.common.domain.error.ValidationFailedException;
+import com.usac.jobseeker.common.domain.model.AccountId;
+import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.CandidateCollectionsReadPort;
+import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.CandidateProfileView;
+import com.usac.jobseeker.cv.application.usecase.savecandidateprofile.CandidateProfileStorePort;
+import com.usac.jobseeker.cv.application.usecase.saveprofessionalprofile.CandidateCapabilityPort;
+import com.usac.jobseeker.cv.domain.event.ProfileUpdated;
+import com.usac.jobseeker.cv.domain.model.CandidateCollections;
+import com.usac.jobseeker.cv.domain.model.CandidateProfile;
+import com.usac.jobseeker.cv.domain.model.CandidateProfileId;
+import java.time.Clock;
+import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
+
+/**
+ * Lo que comparten los tres conjuntos del perfil de candidato al reemplazarse: comprobar la
+ * capacidad, comprobar y avanzar la versión, escribir el conjunto, publicar el evento, contar el
+ * resultado y devolver el perfil completo. Es el equivalente de {@link ProfileChange} para el
+ * perfil de candidato, que tiene su propia versión.
+ *
+ * <p>Se llama dentro de la transacción del caso de uso: la versión, el conjunto y el evento se
+ * escriben juntos o ninguno (ADR-0016). La versión se avanza **antes** de escribir el conjunto, de
+ * modo que si otra edición ya la avanzó, esta falla sin tocar nada. Ni el log ni la métrica llevan
+ * datos del perfil (BR-DATA-01).
+ */
+public class CandidateChange {
+
+  private static final Logger LOG = LoggerFactory.getLogger(CandidateChange.class);
+  private static final String TRACE_ID_KEY = "traceId";
+
+  private final CandidateProfileStorePort profiles;
+  private final CandidateCollectionsReadPort collections;
+  private final CandidateCapabilityPort capabilities;
+  private final DomainEventPublisherPort events;
+  private final UseCaseMetricsPort metrics;
+  private final Clock clock;
+  private final Supplier<UUID> ids;
+
+  public CandidateChange(
+      CandidateProfileStorePort profiles,
+      CandidateCollectionsReadPort collections,
+      CandidateCapabilityPort capabilities,
+      DomainEventPublisherPort events,
+      UseCaseMetricsPort metrics,
+      Clock clock,
+      Supplier<UUID> ids) {
+    this.profiles = Objects.requireNonNull(profiles, "profiles");
+    this.collections = Objects.requireNonNull(collections, "collections");
+    this.capabilities = Objects.requireNonNull(capabilities, "capabilities");
+    this.events = Objects.requireNonNull(events, "events");
+    this.metrics = Objects.requireNonNull(metrics, "metrics");
+    this.clock = Objects.requireNonNull(clock, "clock");
+    this.ids = Objects.requireNonNull(ids, "ids");
+  }
+
+  /** Falla con 403 si la cuenta no tiene la capacidad de candidato; se comprueba antes que nada. */
+  public void requireCandidate(String useCase, AccountId account) {
+    if (!capabilities.isCandidate(account)) {
+      throw failed(useCase, "forbidden", new ForbiddenCapabilityException());
+    }
+  }
+
+  /** Una versión negativa no existe: 0 es «sin crear» y las guardadas empiezan en 1. */
+  public static void requireValidVersion(long version) {
+    if (version < 0) {
+      throw new ValidationFailedException(List.of(new FieldViolation("version", "INVALID")));
+    }
+  }
+
+  /** Construye el conjunto validándolo; si no cumple las reglas se cuenta como `invalid`. */
+  public <T> T validated(String useCase, Supplier<T> build) {
+    try {
+      return build.get();
+    } catch (ValidationFailedException invalid) {
+      metrics.count(useCase, "invalid");
+      throw invalid;
+    }
+  }
+
+  /**
+   * Reemplaza un conjunto del perfil y devuelve el perfil completo.
+   *
+   * @param change tipo de cambio que lleva el evento
+   * @param unchanged dice si el conjunto pedido es igual al que ya está guardado; si lo es, no se
+   *     avanza la versión ni se emite evento, para que un reenvío no provoque recálculos del score
+   *     (BR-MATCH-03)
+   * @param mutation lo que escribe el conjunto; recibe el perfil dueño
+   */
+  public CandidateProfileView apply(
+      String useCase,
+      AccountId account,
+      long expectedVersion,
+      String change,
+      Predicate<CandidateCollections> unchanged,
+      Mutation mutation) {
+    requireCandidate(useCase, account);
+    // Sin perfil de candidato no hay conjunto que reemplazar; para quien pregunta es lo mismo que
+    // un recurso inexistente.
+    CandidateProfile current =
+        profiles
+            .findByAccountId(account)
+            .orElseThrow(() -> failed(useCase, "not_found", new NotFoundException()));
+    if (current.version() != expectedVersion) {
+      throw failed(useCase, "stale", new StaleStateException());
+    }
+    CandidateCollections stored = collections.findByProfileId(current.id());
+    if (unchanged.test(stored)) {
+      metrics.count(useCase, "unchanged");
+      LOG.info(
+          "event=candidate_set_replaced use_case={} outcome=unchanged Conjunto sin cambios",
+          useCase);
+      return CandidateProfileView.of(current, stored);
+    }
+    CandidateProfile touched = current.touched(clock.instant());
+    if (!profiles.updateIfVersion(touched, expectedVersion)) {
+      throw failed(useCase, "stale", new StaleStateException());
+    }
+    mutation.write(current.id());
+    // BR-MATCH-03 / BR-ACCT-06: el perfil cambió y lo que dependa de él se recalcula.
+    publish(touched, change);
+    metrics.count(useCase, "replaced");
+    LOG.info(
+        "event=candidate_set_replaced use_case={} outcome=replaced Conjunto del perfil de candidato reemplazado",
+        useCase);
+    return CandidateProfileView.of(touched, collections.findByProfileId(current.id()));
+  }
+
+  private <E extends RuntimeException> E failed(String useCase, String outcome, E error) {
+    metrics.count(useCase, outcome);
+    return error;
+  }
+
+  private void publish(CandidateProfile profile, String change) {
+    events.publish(
+        new OutboxEvent(
+            ids.get(),
+            ProfileUpdated.CANDIDATE_AGGREGATE_TYPE,
+            profile.id().value(),
+            profile.version(),
+            ProfileUpdated.EVENT_TYPE,
+            OutboxEvent.FIRST_EVENT_VERSION,
+            ProfileUpdated.payload(profile.accountId(), change, profile.version()),
+            MDC.get(TRACE_ID_KEY)));
+  }
+
+  /** Lo que escribe un caso de uso sobre el conjunto, ya con la versión del perfil avanzada. */
+  @FunctionalInterface
+  public interface Mutation {
+    void write(CandidateProfileId profile);
+  }
+}

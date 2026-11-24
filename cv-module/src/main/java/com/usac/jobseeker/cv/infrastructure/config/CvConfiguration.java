@@ -2,7 +2,10 @@ package com.usac.jobseeker.cv.infrastructure.config;
 
 import com.usac.jobseeker.common.application.observability.UseCaseMetricsPort;
 import com.usac.jobseeker.common.application.outbox.DomainEventPublisherPort;
+import com.usac.jobseeker.cv.application.support.CandidateChange;
 import com.usac.jobseeker.cv.application.support.ProfileChange;
+import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.GetMyCandidateProfileService;
+import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.GetMyCandidateProfileUseCase;
 import com.usac.jobseeker.cv.application.usecase.getmyprofessionalprofile.GetMyProfessionalProfileService;
 import com.usac.jobseeker.cv.application.usecase.getmyprofessionalprofile.GetMyProfessionalProfileUseCase;
 import com.usac.jobseeker.cv.application.usecase.managecertifications.ManageCertificationsService;
@@ -13,9 +16,19 @@ import com.usac.jobseeker.cv.application.usecase.manageexperiences.ManageExperie
 import com.usac.jobseeker.cv.application.usecase.manageexperiences.ManageExperiencesUseCase;
 import com.usac.jobseeker.cv.application.usecase.manageprojects.ManageProjectsService;
 import com.usac.jobseeker.cv.application.usecase.manageprojects.ManageProjectsUseCase;
+import com.usac.jobseeker.cv.application.usecase.replacecandidatelanguages.ReplaceCandidateLanguagesService;
+import com.usac.jobseeker.cv.application.usecase.replacecandidatelanguages.ReplaceCandidateLanguagesUseCase;
+import com.usac.jobseeker.cv.application.usecase.replacecandidateskills.ReplaceCandidateSkillsService;
+import com.usac.jobseeker.cv.application.usecase.replacecandidateskills.ReplaceCandidateSkillsUseCase;
+import com.usac.jobseeker.cv.application.usecase.replaceworkauthorizations.ReplaceWorkAuthorizationsService;
+import com.usac.jobseeker.cv.application.usecase.replaceworkauthorizations.ReplaceWorkAuthorizationsUseCase;
+import com.usac.jobseeker.cv.application.usecase.savecandidateprofile.SaveCandidateProfileService;
+import com.usac.jobseeker.cv.application.usecase.savecandidateprofile.SaveCandidateProfileUseCase;
 import com.usac.jobseeker.cv.application.usecase.saveprofessionalprofile.CandidateCapabilityPort;
 import com.usac.jobseeker.cv.application.usecase.saveprofessionalprofile.SaveProfessionalProfileService;
 import com.usac.jobseeker.cv.application.usecase.saveprofessionalprofile.SaveProfessionalProfileUseCase;
+import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcCandidateCollectionsRepository;
+import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcCandidateProfileRepository;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcCertificationRepository;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcEducationRepository;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcExperienceRepository;
@@ -105,5 +118,75 @@ class CvConfiguration {
   @Bean
   ManageProjectsUseCase manageProjectsUseCase(JdbcClient jdbc, ProfileChange change) {
     return new ManageProjectsService(new JdbcProjectRepository(jdbc), change);
+  }
+
+  // ---- perfil de candidato (sub-paso 3 del diseño de cv) ----
+
+  @Bean
+  JdbcCandidateProfileRepository jdbcCandidateProfileRepository(JdbcClient jdbc) {
+    return new JdbcCandidateProfileRepository(jdbc);
+  }
+
+  @Bean
+  JdbcCandidateCollectionsRepository jdbcCandidateCollectionsRepository(JdbcClient jdbc) {
+    return new JdbcCandidateCollectionsRepository(jdbc);
+  }
+
+  @Bean
+  GetMyCandidateProfileUseCase getMyCandidateProfileUseCase(
+      JdbcCandidateProfileRepository profiles,
+      JdbcCandidateCollectionsRepository collections,
+      CandidateCapabilityPort capabilities,
+      UseCaseMetricsPort metrics) {
+    return new GetMyCandidateProfileService(profiles, collections, capabilities, metrics);
+  }
+
+  @Bean
+  SaveCandidateProfileUseCase saveCandidateProfileUseCase(
+      JdbcCandidateProfileRepository profiles,
+      JdbcCandidateCollectionsRepository collections,
+      JdbcProfessionalProfileRepository professionalProfiles,
+      CandidateCapabilityPort capabilities,
+      DomainEventPublisherPort events,
+      UseCaseMetricsPort metrics) {
+    return new SaveCandidateProfileService(
+        profiles,
+        collections,
+        professionalProfiles,
+        capabilities,
+        events,
+        metrics,
+        Clock.systemUTC(),
+        UUID::randomUUID);
+  }
+
+  // Lo común a los tres conjuntos (capacidad, versión, evento, métrica y log) se construye una vez.
+  @Bean
+  CandidateChange candidateChange(
+      JdbcCandidateProfileRepository profiles,
+      JdbcCandidateCollectionsRepository collections,
+      CandidateCapabilityPort capabilities,
+      DomainEventPublisherPort events,
+      UseCaseMetricsPort metrics) {
+    return new CandidateChange(
+        profiles, collections, capabilities, events, metrics, Clock.systemUTC(), UUID::randomUUID);
+  }
+
+  @Bean
+  ReplaceCandidateSkillsUseCase replaceCandidateSkillsUseCase(
+      JdbcCandidateCollectionsRepository store, CandidateChange change) {
+    return new ReplaceCandidateSkillsService(store, change);
+  }
+
+  @Bean
+  ReplaceCandidateLanguagesUseCase replaceCandidateLanguagesUseCase(
+      JdbcCandidateCollectionsRepository store, CandidateChange change) {
+    return new ReplaceCandidateLanguagesService(store, change);
+  }
+
+  @Bean
+  ReplaceWorkAuthorizationsUseCase replaceWorkAuthorizationsUseCase(
+      JdbcCandidateCollectionsRepository store, CandidateChange change) {
+    return new ReplaceWorkAuthorizationsService(store, change);
   }
 }
