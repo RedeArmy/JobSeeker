@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.usac.jobseeker.app.InfrastructureTestConfiguration;
+import com.usac.jobseeker.app.infrastructure.outbox.WithoutOutboxScheduler;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -12,8 +13,10 @@ import java.util.List;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -25,9 +28,13 @@ import org.springframework.jdbc.core.JdbcTemplate;
  */
 @SpringBootTest
 @Import(InfrastructureTestConfiguration.class)
+// El sondeador real reclamaría y procesaría las filas PENDING que estas pruebas insertan para
+// comprobar el reclamo concurrente, y la prueba fallaría solo cuando la máquina va lenta.
+@WithoutOutboxScheduler
 class MigrationsIntegrationTest {
 
   @Autowired private JdbcTemplate jdbc;
+  @Autowired private ApplicationContext context;
   @Autowired private DataSource dataSource;
 
   @Test
@@ -125,6 +132,14 @@ class MigrationsIntegrationTest {
     assertThatThrownBy(() -> insertOutbox(unknownStatus, "LOST", "null"))
         .isInstanceOf(DataIntegrityViolationException.class);
     insertOutbox(UUID.randomUUID(), "PENDING", "null");
+  }
+
+  @Test
+  void theRealSchedulerIsReplacedByAMockSoNoPollerCanTakeTheRowsOfTheClaimTest() {
+    // Guarda de @WithoutOutboxScheduler: si dejara de aplicarse, la prueba de reclamo concurrente
+    // volvería a ser intermitente sin que nada lo avisara.
+    // El tipo es privado del paquete de la bandeja: se busca por el nombre del bean.
+    assertThat(Mockito.mockingDetails(context.getBean("outboxScheduler")).isMock()).isTrue();
   }
 
   @Test
