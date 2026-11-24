@@ -163,7 +163,7 @@ Las pruebas de la migración (la de «publicadas inmutables» y el análisis de 
 | 2 | ✅ **Hecho (24-nov-2026).** Las tablas hijas, las cuatro colecciones (`manage*`) y **las pantallas HTMX del perfil**. Detalle y desvíos de este documento en §10.2 | 1 |
 | 3 | ✅ **Hecho (23-nov-2026).** `CandidateProfile`: moneda y periodo (M1), `get`/`save`, habilidades, idiomas, autorizaciones, su API JSON y su pantalla `/app/candidate-profile`. Detalle y desvíos de este documento en §10.3 | 1 |
 | 4 | ✅ **Hecho (24-nov-2026).** Descubribilidad, disponibilidad y lista de exclusión, con sus eventos, su API JSON y su pantalla `/app/candidate-visibility`. Detalle y desvíos de este documento en §10.4 | 3 |
-| 5 | `getprofilesnapshot` y los eventos conectados a la bandeja; prueba de contrato con `matching` | 3, TDD de `matching` |
+| 5 | ✅ **Hecho (24-nov-2026).** `getprofilesnapshot`, el catálogo de eventos de `cv` y sus pruebas de contrato (forma del resultado, eventos por la bandeja real). Detalle y desvíos de este documento en §10.5 | 3, TDD de `matching` |
 | 6 | `anonymizeprofiledata` | 2, 3, 4 |
 
 ### 10.1 Sub-paso 1: qué se construyó y en qué se desvió de este documento
@@ -223,6 +223,30 @@ Se construyeron `changediscoverability`, `changeavailability` y `manageavailabil
 - **Pantalla aparte** (`/app/candidate-visibility`, enlazada desde el inicio y desde el perfil de candidato) en lugar de otra sección de la misma página: así un cambio de visibilidad no recarga los formularios de datos, y cada controlador conserva pocas dependencias. Mismo comportamiento HTMX que las demás pantallas.
 
 **Pendiente de este sub-paso, no implementado:** que `matching` consuma los tres eventos (actualizar su copia de `discoverable`, ordenar sugeridos por disponibilidad y aplicar BR-MATCH-09), que corresponde a su propio TDD, y desactivar la descubribilidad al apagar la capacidad de candidato (D5), que espera el caso de uso de `auth`.
+
+### 10.5 Sub-paso 5: qué se construyó y en qué se desvió de este documento
+
+Se construyó `getprofilesnapshot` con su resultado `ProfileSnapshot`, y se fijó con pruebas el contrato de los eventos de `cv` por la bandeja. Decisiones que la primera versión de este documento no tenía:
+
+- **Qué sale y qué no.** Salen titular, experiencias (cargo, fechas, descripción), formación (título, **nivel de catálogo**, fecha), certificaciones (nombre y fechas), proyectos (nombre, descripción, tipo, rol, fechas), habilidades, idiomas, autorizaciones, país, modalidad, jornada, reubicación y salario con moneda y periodo, más `discoverable` y las versiones. **No** salen nombre, biografía, foto, correo, teléfono, enlaces, **ni el nombre de empresas, instituciones o emisores**: §7 solo excluía la institución, pero un nombre de empleador o emisor no aporta al cálculo y sí introduce sesgo de prestigio (ADR-0025 por escribir), así que se excluyen todos. El estado de disponibilidad tampoco sale: quién puede verlo depende de quién pregunta y eso lo resuelve `getvisibleavailability`.
+- **Los valores de catálogo viajan como su nombre** (`"BACHELOR"`, `"HYBRID"`), no como el tipo de `cv`: ningún tipo interno cruza el límite del módulo, y `matching` traduce a los suyos en su adaptador.
+- **Cada campo se copia a mano.** No se reutiliza ninguna vista existente, que podría crecer con un dato personal sin que nadie lo note: lo que no se copia en `GetProfileSnapshotService` no puede llegar a un consumidor.
+- **«Sin perfil» no es un error.** Devuelve vacío si la cuenta no tiene la capacidad de candidato (el perfil se conserva pero deja de ser legible desde fuera, decisión 8) o si falta el perfil profesional o el de candidato. Se lee todo en una sola transacción de solo lectura para que ambos perfiles sean de la misma versión.
+- **Las habilidades no llevan `skill_id`** todavía: la taxonomía (ADR-0019) la añade el sub-paso del enlazado. `matching` ya admite una habilidad en texto libre.
+- **El texto libre no se redacta aquí.** Las descripciones pueden contener lo que la persona escribió (un correo, un teléfono); redactarlo antes de generar un embedding es de `matching` (ADR-0017, control sobre PII), porque `cv` no sabe para qué se usará.
+- **Catálogo de eventos.** `cv` publica cuatro tipos por la bandeja, todos con `eventVersion` 1 y una carga con solo identificadores:
+
+  | Tipo | Agregado | Carga | Cuándo |
+  |---|---|---|---|
+  | `profile.updated` | `professional_profile` o `candidate_profile` | `accountId`, `change`, `version` | cambia el perfil profesional (solo con la capacidad de candidato) o un dato o conjunto del de candidato |
+  | `candidate.discoverability_changed` | `candidate_profile` | `accountId`, `version` | cambia la descubribilidad |
+  | `candidate.availability_changed` | `candidate_profile` | `accountId`, `version` | cambia la disponibilidad |
+  | `candidate.availability_exclusion_changed` | `candidate_profile` | `accountId`, `excludedAccountId`, `action` | se añade o quita una exclusión |
+
+  Ninguna carga lleva el valor nuevo: quien consume lee `getprofilesnapshot` (o `getvisibleavailability`). La versión del agregado no retrocede, así que un consumidor puede descartar un evento más viejo que el que ya aplicó («el evento posterior gana»).
+- **Prueba de contrato por la bandeja real:** un consumidor de prueba recibe, por el sondeador de verdad y sobre Postgres, los cuatro tipos que produce un perfil completo, con la forma acordada y sin ningún dato personal en la carga, y las filas quedan `PROCESSED`.
+
+**Pendiente de este sub-paso, no implementado:** el adaptador de lectura de `matching` (`infrastructure.adapter.out.cv`) que traduce este resultado a `CandidateSignals` y a la representación canónica, y su prueba de que ningún dato personal llega a su dominio. Es el paso 3 del orden de entrega del TDD de `matching`; esta PR deja de `cv` todo lo que ese paso necesita. El evento `AccountAnonymized` llega con el sub-paso 6.
 
 Cada sub-paso sale como una PR propia con su definición de hecho completa (OpenAPI anotado, política de límite de tasa, métrica y log con `traceId`, prueba de autorización y de CSRF).
 

@@ -13,6 +13,8 @@ import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.GetMyCand
 import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.GetMyCandidateProfileUseCase;
 import com.usac.jobseeker.cv.application.usecase.getmyprofessionalprofile.GetMyProfessionalProfileService;
 import com.usac.jobseeker.cv.application.usecase.getmyprofessionalprofile.GetMyProfessionalProfileUseCase;
+import com.usac.jobseeker.cv.application.usecase.getprofilesnapshot.GetProfileSnapshotService;
+import com.usac.jobseeker.cv.application.usecase.getprofilesnapshot.GetProfileSnapshotUseCase;
 import com.usac.jobseeker.cv.application.usecase.getvisibleavailability.GetVisibleAvailabilityService;
 import com.usac.jobseeker.cv.application.usecase.getvisibleavailability.GetVisibleAvailabilityUseCase;
 import com.usac.jobseeker.cv.application.usecase.manageavailabilityexclusions.AccountDirectoryPort;
@@ -227,5 +229,24 @@ class CvConfiguration {
   GetVisibleAvailabilityUseCase getVisibleAvailabilityUseCase(
       JdbcCandidateProfileRepository profiles, JdbcAvailabilityExclusionRepository exclusions) {
     return new GetVisibleAvailabilityService(profiles, exclusions);
+  }
+
+  // ---- lectura para otros módulos (sub-paso 5 del diseño de cv) ----
+
+  @Bean
+  GetProfileSnapshotUseCase getProfileSnapshotUseCase(
+      CandidateCapabilityPort capabilities,
+      JdbcProfessionalProfileRepository professionals,
+      JdbcProfileCollectionsRepository professionalCollections,
+      JdbcCandidateProfileRepository candidates,
+      JdbcCandidateCollectionsRepository candidateCollections,
+      UseCaseMetricsPort metrics) {
+    return new GetProfileSnapshotService(
+        capabilities,
+        professionals,
+        professionalCollections,
+        candidates,
+        candidateCollections,
+        metrics);
   }
 }
