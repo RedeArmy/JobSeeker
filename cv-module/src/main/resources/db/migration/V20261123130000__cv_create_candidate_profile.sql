@@ -58,7 +58,7 @@ create table candidate_skills (
     raw_name text not null,
     skill_id uuid,
     -- Nivel declarado: 1 básico, 2 intermedio, 3 avanzado, 4 experto (el significado vive en la aplicación).
-    proficiency smallint,
+    proficiency integer,
     source text not null default 'DECLARED',
     constraint ck_cs_name check (btrim(raw_name) <> '' and char_length(raw_name) <= 100),
     constraint ck_cs_proficiency check (proficiency is null or proficiency between 1 and 4),
