@@ -1,1 +1,9 @@
-# Marcador de posición: configuración base del módulo matching (ajustes independientes del perfil).
+# Configuración base de `matching` (ajustes independientes del perfil). Los valores por defecto viven en
+# `MatchingProperties`; aquí solo se enlazan las variables de entorno de Ollama (`.env.example`).
+jobseeker:
+  matching:
+    embedding:
+      host: ${OLLAMA_HOST:localhost}
+      port: ${OLLAMA_PORT:11434}
+      # Provisional hasta que el protocolo de 300 pares fije el definitivo (ADR-0018).
+      model: ${OLLAMA_EMBEDDING_MODEL:qwen3-embedding:0.6b}
