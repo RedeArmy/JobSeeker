@@ -95,3 +95,59 @@ CREATE TABLE processed_events (
 - **Retención de `processed_events`** estaba sin definir y la deduplicación de eventos externos depende de ella (pendiente señalado en el addendum 4 del dossier).
 - **`SKIP LOCKED` y el *pooler* (verificado el 18-nov-2026 con PgBouncer 1.26 en modo transacción como emulación; Supabase real no probado):** `SELECT … FOR UPDATE SKIP LOCKED` dentro de una transacción funciona en modo transacción. El sondeador debe usar **solo** transacciones: un `SET` de sesión contamina a otros clientes del *pooler* (un cliente fijó `strict_order` y los tres siguientes lo vieron) y un bloqueo de sesión (`pg_advisory_lock`) queda retenido en el servidor aunque el cliente se vaya y otro cliente lo «adquiere» (exclusión mutua rota). Se usa `SET LOCAL` y nunca bloqueos de sesión. Pendiente comprobar con la instancia real de Supabase.
 
+## Enmienda del 24-nov-2026: despacho sin transacción y orden por agregado (TD-001, TD-018)
+
+La auditoría del 24-nov-2026 encontró que la implementación no cumplía dos de las promesas de este
+ADR, y que una de ellas se habría vuelto un problema real al llegar el primer consumidor que llama a
+Ollama. Se corrige el sondeador; las decisiones 1, 3, 5, 6 y 8 a 12 no cambian.
+
+**Decisión 2 (despacho), enmendada.** El reclamo y el despacho dejan de compartir una transacción:
+
+1. **Reclamo corto.** Una transacción de milisegundos marca las filas con `locked_until = ahora +
+   arrendamiento` (por defecto 5 min, `jobseeker.outbox.lease`), cuenta el intento y las devuelve.
+2. **Despacho sin transacción.** Los consumidores se llaman sin transacción abierta ni bloqueos de
+   fila. Antes, el reclamo de hasta 50 filas, la llamada a cada consumidor y el marcado ocurrían en una
+   sola transacción: un consumidor que tardara (Ollama) retenía una conexión del pool y los bloqueos
+   durante hasta 50 llamadas seguidas.
+3. **Resultado.** `PROCESSED`, reintento con retroceso (`available_at` futuro) o `FAILED`, cada uno en
+   su propia sentencia.
+4. **Si el proceso muere con filas en vuelo**, el arrendamiento vence y otra instancia las reclama de
+   nuevo: al menos una vez, que es lo que ya prometía la decisión 3. El intento se cuenta **al
+   reclamar**, de modo que un evento que mata el proceso en bucle llega a `maxAttempts` y pasa a
+   `FAILED` en vez de reclamarse sin fin.
+5. **Si falla el propio marcado** (la base de datos cae justo después de que el consumidor terminó),
+   la fila sigue arrendada y se reentrega al vencer el arrendamiento; los consumidores son
+   idempotentes. Es redundancia aceptada, no pérdida.
+
+**Decisión 4 (orden), enmendada.** «Se garantiza orden por agregado mediante `aggregate_version`» no
+era cierto: con `SKIP LOCKED` dos instancias podían despachar a la vez la v5 y la v6 del mismo
+agregado, y el manejador de la v5 podía leer el estado antes de la v6 y escribir después que el de la
+v6. Ahora el reclamo toma **como mucho un evento por agregado** (el de menor versión entre los
+disponibles) y **ninguno si ya hay otro de ese agregado en vuelo**. Un evento que espera su reintento
+no bloquea a los siguientes: solo el que está en vuelo. Los reclamos se serializan con un bloqueo de
+aviso de transacción (`pg_advisory_xact_lock`), para que cada uno vea ya confirmados los
+arrendamientos de los demás; funciona con el agrupador en modo transacción porque se libera al
+confirmar.
+
+Consecuencias y límites:
+
+- Se despacha **un evento por agregado y por pasada**. Una ráfaga de ediciones de un mismo perfil
+  necesita tantas pasadas como eventos, así que el planificador repite pasadas mientras haya trabajo
+  (hasta 20 por sondeo) y no espera al siguiente.
+- El reclamo está serializado por un bloqueo global. Dura milisegundos y es correcto para una
+  aplicación de un proceso o unas pocas instancias; si el volumen lo hiciera un cuello de botella, la
+  salida es particionar la clave del bloqueo por rango de agregado.
+- Los consumidores siguen siendo de **nivel disparado**: releen el estado actual y no copian valores de
+  la carga. Eso, más la ausencia de manejadores simultáneos por agregado, es lo que hace correcto el
+  orden. El contrato está en la documentación de `OutboxEventConsumer` y se comprueba sobre los beans
+  reales (nombres únicos y no vacíos, porque son la clave de `processed_events`).
+- Nuevo índice de lectura: `idx_outbox_aggregate` ya tiene un lector, el reclamo (la ficha TD-009 se
+  descarta por eso).
+
+Pruebas que fijan el comportamiento (contra Postgres real): un consumidor lento no deja ninguna sesión
+con transacción abierta ni la fila bloqueada; una fila en vuelo no la reclama otra instancia; una fila
+cuyo proceso murió se reclama al vencer el arrendamiento; un evento que mata el proceso en bucle acaba
+en `FAILED`; nunca corren dos manejadores del mismo agregado con cuatro instancias; entre los
+disponibles va primero la menor versión; y un reintento en espera no bloquea la versión siguiente.
+Las dos garantías principales se verificaron además restaurando el comportamiento anterior y viendo
+fallar la prueba.
