@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Mi visibilidad · JobSeeker</title>
+  <!-- ADR-0020: el token CSRF viaja en una <meta>; HTMX lo adjunta a cada petición (hx-headers). -->
+  <meta name="_csrf" th:content="${_csrf.token}"/>
+  <meta name="_csrf_header" th:content="${_csrf.headerName}"/>
+  <!-- Misma configuración que el resto de pantallas del perfil: un 422 solo reemplaza la zona de
+       errores y un 409 o 404 recarga el contenido; sin eval ni estilos en línea (CSP estricta). -->
+  <meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false,"includeIndicatorStyles":false,"responseHandling":[{"code":"204","swap":false},{"code":"422","swap":true,"error":false,"target":"#visibility-errors","swapOverride":"outerHTML"},{"code":"409","swap":true,"error":false},{"code":"404","swap":true,"error":false},{"code":"[23]..","swap":true},{"code":"[45]..","swap":false,"error":true}]}'/>
+  <link rel="stylesheet" th:href="@{/css/app.css}"/>
+  <script th:src="@{/js/htmx.min.js}"></script>
+</head>
+<body th:attr="hx-headers=|{&quot;${_csrf.headerName}&quot;: &quot;${_csrf.token}&quot;}|">
+<main>
+  <p><a th:href="@{/app/home}">Inicio</a> · <a th:href="@{/app/candidate-profile}">Mi perfil de candidato</a></p>
+  <h1>Quién puede verme</h1>
+
+  <div id="visibility-content" th:fragment="content">
+
+    <div id="visibility-errors" th:fragment="errors" role="alert" aria-live="polite">
+      <p class="notice" th:if="${notice != null}" th:text="${notice}">aviso</p>
+      <ul class="errors" th:if="${errors != null and !errors.isEmpty()}">
+        <li th:each="message : ${errors}" th:text="${message}">error</li>
+      </ul>
+    </div>
+
+    <p class="notice" th:unless="${profile.created()}">
+      Primero crea tu <a th:href="@{/app/candidate-profile}">perfil de candidato</a>: estas opciones se guardan en él.
+    </p>
+
+    <th:block th:if="${profile.created()}">
+      <section>
+        <h2>Descubribilidad</h2>
+        <p>Si la desactivas, los reclutadores dejan de ver tu perfil entre sus sugerencias. Quienes ya recibieron tu postulación siguen viéndolo.</p>
+        <form th:attr="hx-put=@{/app/candidate-visibility/discoverability}" hx-target="#visibility-content" hx-swap="outerHTML">
+          <input type="hidden" name="version" th:value="${profile.version()}"/>
+          <label><input type="checkbox" name="discoverable" value="true" th:checked="${profile.discoverable()}"/> Aparecer en las sugerencias a reclutadores</label>
+          <button type="submit">Guardar</button>
+        </form>
+      </section>
+
+      <section>
+        <h2>Disponibilidad</h2>
+        <form th:attr="hx-put=@{/app/candidate-visibility/availability}" hx-target="#visibility-content" hx-swap="outerHTML">
+          <input type="hidden" name="version" th:value="${profile.version()}"/>
+          <label>Mi estado
+            <select name="status">
+              <option th:each="s : ${statuses}" th:value="${s}" th:selected="${s == profile.availabilityStatus()}"
+                      th:text="${s.name() == 'OPEN_TO_WORK' ? 'Buscando activamente' : (s.name() == 'NOT_LOOKING' ? 'Conforme en mi puesto actual' : 'Sin declarar')}">Sin declarar</option>
+            </select>
+          </label>
+          <button type="submit">Guardar</button>
+        </form>
+      </section>
+
+      <section>
+        <h2>Ocultar mi disponibilidad a ciertas cuentas</h2>
+        <p>Estas cuentas ven tu estado como «sin declarar». Siguen viendo el resto de tu perfil y tú puedes postular normalmente.</p>
+        <ul th:if="${!exclusions.isEmpty()}">
+          <li th:each="e : ${exclusions}">
+            <code th:text="${e.accountId()}">00000000-0000-0000-0000-000000000000</code>
+            <button type="button" class="danger" hx-confirm="¿Quitar esta cuenta de la lista?" hx-target="#visibility-content" hx-swap="outerHTML"
+                    th:attr="hx-delete=@{/app/candidate-visibility/exclusions/{id}(id=${e.accountId()})}">Quitar</button>
+          </li>
+        </ul>
+        <p th:if="${exclusions.isEmpty()}">No has excluido a nadie.</p>
+        <form th:attr="hx-post=@{/app/candidate-visibility/exclusions}" hx-target="#visibility-content" hx-swap="outerHTML">
+          <label>Identificador de la cuenta <input type="text" name="accountId" maxlength="36" required/></label>
+          <button type="submit">Excluir</button>
+        </form>
+      </section>
+    </th:block>
+  </div>
+</main>
+</body>
+</html>

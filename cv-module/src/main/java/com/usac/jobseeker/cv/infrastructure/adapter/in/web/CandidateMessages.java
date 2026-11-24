@@ -26,6 +26,10 @@ final class CandidateMessages {
           Map.entry("salaryCurrency", "La moneda del salario"),
           Map.entry("salaryPeriod", "El periodo del salario"),
           Map.entry("version", "La versión"),
+          Map.entry("status", "El estado de disponibilidad"),
+          Map.entry("discoverable", "La descubribilidad"),
+          Map.entry("accountId", "La cuenta"),
+          Map.entry("exclusions", "La lista de exclusión"),
           Map.entry("professionalProfile", "Tu perfil profesional"),
           Map.entry("skills", "Las habilidades"),
           Map.entry("languages", "Los idiomas"),
@@ -56,6 +60,7 @@ final class CandidateMessages {
           Map.entry("RANGE_INVERTED", "no puede ser menor que el mínimo."),
           Map.entry("TOO_MANY_DECIMALS", "admite como máximo dos decimales."),
           Map.entry("DUPLICATE", "está repetido."),
+          Map.entry("SELF_EXCLUSION", "no puede ser tu propia cuenta."),
           Map.entry("TOO_MANY", "superó el máximo permitido."));
 
   private CandidateMessages() {}
