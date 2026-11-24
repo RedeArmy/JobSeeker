@@ -30,7 +30,7 @@ public class JdbcProfessionalProfileRepository
   public Optional<ProfessionalProfile> findByAccountId(AccountId accountId) {
     return jdbc.sql(
             "select id, account_id, full_name, headline, bio, version, updated_at"
-                + " from professional_profiles where account_id = :account")
+                + " from professional_profiles where account_id = :account and anonymized_at is null")
         .param(ACCOUNT, accountId.value())
         .query(
             (rows, n) ->
@@ -75,7 +75,7 @@ public class JdbcProfessionalProfileRepository
     return jdbc.sql(
                 "update professional_profiles set full_name = :name, headline = :headline,"
                     + " bio = :bio, version = :version, updated_at = :updatedAt"
-                    + " where account_id = :account and version = :expected")
+                    + " where account_id = :account and version = :expected and anonymized_at is null")
             .param("name", profile.identity().fullName())
             .param(HEADLINE, profile.identity().headline())
             .param("bio", profile.identity().bio())

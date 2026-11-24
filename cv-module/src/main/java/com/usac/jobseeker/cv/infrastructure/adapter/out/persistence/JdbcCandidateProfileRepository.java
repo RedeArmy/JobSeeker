@@ -53,7 +53,7 @@ public class JdbcCandidateProfileRepository
                 + " country_of_residence, desired_modality, preferred_work_schedule,"
                 + " relocation_willingness, salary_expectation_min, salary_expectation_max,"
                 + " salary_currency, salary_period, version, updated_at"
-                + " from candidate_profiles where account_id = :account")
+                + " from candidate_profiles where account_id = :account and anonymized_at is null")
         .param(ACCOUNT, accountId.value())
         .query((rows, n) -> profileOf(rows))
         .optional();
@@ -111,7 +111,7 @@ public class JdbcCandidateProfileRepository
                     + " salary_expectation_min = :salaryMin, salary_expectation_max = :salaryMax,"
                     + " salary_currency = :currency, salary_period = :period, version = :version,"
                     + " updated_at = :updatedAt"
-                    + " where account_id = :account and version = :expected")
+                    + " where account_id = :account and version = :expected and anonymized_at is null")
             .param("email", d.contact().email())
             .param("phone", d.contact().phone())
             .param("country", d.countryOfResidence())
@@ -139,7 +139,8 @@ public class JdbcCandidateProfileRepository
   public boolean updateDiscoverabilityIfVersion(CandidateProfile profile, long expectedVersion) {
     return jdbc.sql(
                 "update candidate_profiles set discoverable = :discoverable, version = :version,"
-                    + " updated_at = :updatedAt where account_id = :account and version = :expected")
+                    + " updated_at = :updatedAt where account_id = :account and version = :expected"
+                    + " and anonymized_at is null")
             .param(DISCOVERABLE, profile.discoverable())
             .param(VERSION, profile.version())
             .param(UPDATED_AT, OffsetDateTime.ofInstant(profile.updatedAt(), ZoneOffset.UTC))
@@ -153,7 +154,8 @@ public class JdbcCandidateProfileRepository
   public boolean updateAvailabilityIfVersion(CandidateProfile profile, long expectedVersion) {
     return jdbc.sql(
                 "update candidate_profiles set availability_status = :status, version = :version,"
-                    + " updated_at = :updatedAt where account_id = :account and version = :expected")
+                    + " updated_at = :updatedAt where account_id = :account and version = :expected"
+                    + " and anonymized_at is null")
             .param("status", profile.availability().name())
             .param(VERSION, profile.version())
             .param(UPDATED_AT, OffsetDateTime.ofInstant(profile.updatedAt(), ZoneOffset.UTC))
