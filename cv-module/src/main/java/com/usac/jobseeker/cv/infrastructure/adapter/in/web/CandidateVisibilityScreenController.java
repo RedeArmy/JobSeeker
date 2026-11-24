@@ -1,7 +1,10 @@
 package com.usac.jobseeker.cv.infrastructure.adapter.in.web;
 
+import static com.usac.jobseeker.cv.infrastructure.adapter.in.web.WebInputs.accountOf;
+import static com.usac.jobseeker.cv.infrastructure.adapter.in.web.WebInputs.caller;
+import static com.usac.jobseeker.cv.infrastructure.adapter.in.web.WebInputs.version;
+
 import com.usac.jobseeker.common.domain.error.AlreadyExistsException;
-import com.usac.jobseeker.common.domain.error.FieldViolation;
 import com.usac.jobseeker.common.domain.error.ForbiddenCapabilityException;
 import com.usac.jobseeker.common.domain.error.NotFoundException;
 import com.usac.jobseeker.common.domain.error.StaleStateException;
@@ -22,7 +25,6 @@ import com.usac.jobseeker.cv.domain.model.AvailabilityStatus;
 import java.security.Principal;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -175,24 +177,5 @@ public class CandidateVisibilityScreenController {
                     exclusions.list(new ListAvailabilityExclusionsQuery(account)))
                 .exclusions());
     model.addAttribute("statuses", AvailabilityStatus.values());
-  }
-
-  private static AccountId accountOf(String raw) {
-    try {
-      return new AccountId(UUID.fromString(raw == null ? "" : raw.strip()));
-    } catch (IllegalArgumentException _) {
-      throw new ValidationFailedException(List.of(new FieldViolation("accountId", "INVALID")));
-    }
-  }
-
-  private static long version(Long value) {
-    if (value == null) {
-      throw new ValidationFailedException(List.of(new FieldViolation("version", "REQUIRED")));
-    }
-    return value;
-  }
-
-  private static AccountId caller(Principal principal) {
-    return new AccountId(UUID.fromString(principal.getName()));
   }
 }

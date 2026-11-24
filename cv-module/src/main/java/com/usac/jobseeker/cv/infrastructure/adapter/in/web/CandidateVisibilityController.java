@@ -1,8 +1,11 @@
 package com.usac.jobseeker.cv.infrastructure.adapter.in.web;
 
+import static com.usac.jobseeker.cv.infrastructure.adapter.in.web.WebInputs.accountOf;
+import static com.usac.jobseeker.cv.infrastructure.adapter.in.web.WebInputs.caller;
+import static com.usac.jobseeker.cv.infrastructure.adapter.in.web.WebInputs.version;
+
 import com.usac.jobseeker.common.domain.error.FieldViolation;
 import com.usac.jobseeker.common.domain.error.ValidationFailedException;
-import com.usac.jobseeker.common.domain.model.AccountId;
 import com.usac.jobseeker.cv.application.usecase.changeavailability.ChangeAvailabilityCommand;
 import com.usac.jobseeker.cv.application.usecase.changeavailability.ChangeAvailabilityUseCase;
 import com.usac.jobseeker.cv.application.usecase.changediscoverability.ChangeDiscoverabilityCommand;
@@ -17,7 +20,6 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.security.Principal;
 import java.util.List;
-import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -141,26 +143,5 @@ public class CandidateVisibilityController {
     return AvailabilityExclusionsResponse.from(
         exclusions.remove(
             new RemoveAvailabilityExclusionCommand(caller(principal), accountOf(accountId))));
-  }
-
-  // Un identificador que no es un UUID es un dato inválido, no un recurso inexistente.
-  private static AccountId accountOf(String raw) {
-    try {
-      return new AccountId(UUID.fromString(raw == null ? "" : raw.strip()));
-    } catch (IllegalArgumentException _) {
-      throw new ValidationFailedException(List.of(new FieldViolation("accountId", "INVALID")));
-    }
-  }
-
-  private static long version(Long value) {
-    if (value == null) {
-      throw new ValidationFailedException(List.of(new FieldViolation("version", "REQUIRED")));
-    }
-    return value;
-  }
-
-  // `sub` ya fue validado como UUID por el decodificador de la cadena (`SubjectValidator`).
-  private static AccountId caller(Principal principal) {
-    return new AccountId(UUID.fromString(principal.getName()));
   }
 }
