@@ -1,11 +1,12 @@
 package com.usac.jobseeker.cv.infrastructure.adapter.in.web;
 
-import com.usac.jobseeker.common.domain.error.FieldViolation;
+import static com.usac.jobseeker.cv.infrastructure.adapter.in.web.WebInputs.caller;
+import static com.usac.jobseeker.cv.infrastructure.adapter.in.web.WebInputs.version;
+
 import com.usac.jobseeker.common.domain.error.ForbiddenCapabilityException;
 import com.usac.jobseeker.common.domain.error.NotFoundException;
 import com.usac.jobseeker.common.domain.error.StaleStateException;
 import com.usac.jobseeker.common.domain.error.ValidationFailedException;
-import com.usac.jobseeker.common.domain.model.AccountId;
 import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.CandidateProfileView;
 import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.GetMyCandidateProfileQuery;
 import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.GetMyCandidateProfileUseCase;
@@ -22,9 +23,7 @@ import com.usac.jobseeker.cv.domain.model.WorkModality;
 import com.usac.jobseeker.cv.domain.model.WorkSchedule;
 import java.math.BigDecimal;
 import java.security.Principal;
-import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -196,16 +195,5 @@ public class CandidateScreenController {
 
   private Optional<CandidateProfileView> currentProfile(Principal principal) {
     return getProfile.execute(new GetMyCandidateProfileQuery(caller(principal)));
-  }
-
-  private static long version(Long value) {
-    if (value == null) {
-      throw new ValidationFailedException(List.of(new FieldViolation("version", "REQUIRED")));
-    }
-    return value;
-  }
-
-  private static AccountId caller(Principal principal) {
-    return new AccountId(UUID.fromString(principal.getName()));
   }
 }

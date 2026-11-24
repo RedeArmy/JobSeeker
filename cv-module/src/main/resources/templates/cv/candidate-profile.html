@@ -15,7 +15,7 @@
 </head>
 <body th:attr="hx-headers=|{&quot;${_csrf.headerName}&quot;: &quot;${_csrf.token}&quot;}|">
 <main>
-  <p><a th:href="@{/app/home}">Inicio</a> · <a th:href="@{/app/profile}">Mi perfil profesional</a></p>
+  <p><a th:href="@{/app/home}">Inicio</a> · <a th:href="@{/app/profile}">Mi perfil profesional</a> · <a th:href="@{/app/candidate-visibility}">Quién puede verme</a></p>
   <h1>Mi perfil de candidato</h1>
 
   <div id="candidate-content" th:fragment="content">

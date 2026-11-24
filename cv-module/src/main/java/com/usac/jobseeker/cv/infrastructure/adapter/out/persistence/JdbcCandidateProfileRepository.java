@@ -1,6 +1,8 @@
 package com.usac.jobseeker.cv.infrastructure.adapter.out.persistence;
 
 import com.usac.jobseeker.common.domain.model.AccountId;
+import com.usac.jobseeker.cv.application.usecase.changeavailability.AvailabilityStorePort;
+import com.usac.jobseeker.cv.application.usecase.changediscoverability.DiscoverabilityStorePort;
 import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.CandidateProfileReadPort;
 import com.usac.jobseeker.cv.application.usecase.savecandidateprofile.CandidateProfileStorePort;
 import com.usac.jobseeker.cv.domain.model.AvailabilityStatus;
@@ -27,10 +29,15 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * uso y un guardado del contacto no debe poder reabrir un perfil que su dueño ocultó.
  */
 public class JdbcCandidateProfileRepository
-    implements CandidateProfileReadPort, CandidateProfileStorePort {
+    implements CandidateProfileReadPort,
+        CandidateProfileStorePort,
+        DiscoverabilityStorePort,
+        AvailabilityStorePort {
 
   private static final String ACCOUNT = "account";
   private static final String VERSION = "version";
+  private static final String DISCOVERABLE = "discoverable";
+  private static final String EXPECTED = "expected";
   private static final String UPDATED_AT = "updatedAt";
 
   private final JdbcClient jdbc;
@@ -71,7 +78,7 @@ public class JdbcCandidateProfileRepository
             .param(ACCOUNT, profile.accountId().value())
             .param("email", d.contact().email())
             .param("phone", d.contact().phone())
-            .param("discoverable", profile.discoverable())
+            .param(DISCOVERABLE, profile.discoverable())
             .param("availability", profile.availability().name())
             .param("country", d.countryOfResidence())
             .param("modality", d.desiredModality() == null ? null : d.desiredModality().name())
@@ -120,7 +127,38 @@ public class JdbcCandidateProfileRepository
             .param(VERSION, profile.version())
             .param(UPDATED_AT, OffsetDateTime.ofInstant(profile.updatedAt(), ZoneOffset.UTC))
             .param(ACCOUNT, profile.accountId().value())
-            .param("expected", expectedVersion)
+            .param(EXPECTED, expectedVersion)
+            .update()
+        == 1;
+  }
+
+  // Solo esta columna y la versión: un cambio de descubribilidad no debe poder pisar datos del
+  // perfil
+  // que otra edición acaba de guardar. La condición sobre `version` es el mismo bloqueo optimista.
+  @Override
+  public boolean updateDiscoverabilityIfVersion(CandidateProfile profile, long expectedVersion) {
+    return jdbc.sql(
+                "update candidate_profiles set discoverable = :discoverable, version = :version,"
+                    + " updated_at = :updatedAt where account_id = :account and version = :expected")
+            .param(DISCOVERABLE, profile.discoverable())
+            .param(VERSION, profile.version())
+            .param(UPDATED_AT, OffsetDateTime.ofInstant(profile.updatedAt(), ZoneOffset.UTC))
+            .param(ACCOUNT, profile.accountId().value())
+            .param(EXPECTED, expectedVersion)
+            .update()
+        == 1;
+  }
+
+  @Override
+  public boolean updateAvailabilityIfVersion(CandidateProfile profile, long expectedVersion) {
+    return jdbc.sql(
+                "update candidate_profiles set availability_status = :status, version = :version,"
+                    + " updated_at = :updatedAt where account_id = :account and version = :expected")
+            .param("status", profile.availability().name())
+            .param(VERSION, profile.version())
+            .param(UPDATED_AT, OffsetDateTime.ofInstant(profile.updatedAt(), ZoneOffset.UTC))
+            .param(ACCOUNT, profile.accountId().value())
+            .param(EXPECTED, expectedVersion)
             .update()
         == 1;
   }
@@ -148,7 +186,7 @@ public class JdbcCandidateProfileRepository
         new CandidateProfileId(rows.getObject("id", UUID.class)),
         new AccountId(rows.getObject("account_id", UUID.class)),
         details,
-        rows.getBoolean("discoverable"),
+        rows.getBoolean(DISCOVERABLE),
         AvailabilityStatus.valueOf(rows.getString("availability_status")),
         rows.getLong(VERSION),
         rows.getObject("updated_at", OffsetDateTime.class).toInstant());

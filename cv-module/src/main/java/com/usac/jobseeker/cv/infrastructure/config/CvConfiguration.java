@@ -5,10 +5,19 @@ import com.usac.jobseeker.common.application.outbox.DomainEventPublisherPort;
 import com.usac.jobseeker.cv.application.support.CandidateChange;
 import com.usac.jobseeker.cv.application.support.ProfileChange;
 import com.usac.jobseeker.cv.application.support.Stamp;
+import com.usac.jobseeker.cv.application.usecase.changeavailability.ChangeAvailabilityService;
+import com.usac.jobseeker.cv.application.usecase.changeavailability.ChangeAvailabilityUseCase;
+import com.usac.jobseeker.cv.application.usecase.changediscoverability.ChangeDiscoverabilityService;
+import com.usac.jobseeker.cv.application.usecase.changediscoverability.ChangeDiscoverabilityUseCase;
 import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.GetMyCandidateProfileService;
 import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.GetMyCandidateProfileUseCase;
 import com.usac.jobseeker.cv.application.usecase.getmyprofessionalprofile.GetMyProfessionalProfileService;
 import com.usac.jobseeker.cv.application.usecase.getmyprofessionalprofile.GetMyProfessionalProfileUseCase;
+import com.usac.jobseeker.cv.application.usecase.getvisibleavailability.GetVisibleAvailabilityService;
+import com.usac.jobseeker.cv.application.usecase.getvisibleavailability.GetVisibleAvailabilityUseCase;
+import com.usac.jobseeker.cv.application.usecase.manageavailabilityexclusions.AccountDirectoryPort;
+import com.usac.jobseeker.cv.application.usecase.manageavailabilityexclusions.ManageAvailabilityExclusionsService;
+import com.usac.jobseeker.cv.application.usecase.manageavailabilityexclusions.ManageAvailabilityExclusionsUseCase;
 import com.usac.jobseeker.cv.application.usecase.managecertifications.ManageCertificationsService;
 import com.usac.jobseeker.cv.application.usecase.managecertifications.ManageCertificationsUseCase;
 import com.usac.jobseeker.cv.application.usecase.manageeducation.ManageEducationService;
@@ -28,6 +37,7 @@ import com.usac.jobseeker.cv.application.usecase.savecandidateprofile.SaveCandid
 import com.usac.jobseeker.cv.application.usecase.saveprofessionalprofile.CandidateCapabilityPort;
 import com.usac.jobseeker.cv.application.usecase.saveprofessionalprofile.SaveProfessionalProfileService;
 import com.usac.jobseeker.cv.application.usecase.saveprofessionalprofile.SaveProfessionalProfileUseCase;
+import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcAvailabilityExclusionRepository;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcCandidateCollectionsRepository;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcCandidateProfileRepository;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcCertificationRepository;
@@ -182,5 +192,40 @@ class CvConfiguration {
   ReplaceWorkAuthorizationsUseCase replaceWorkAuthorizationsUseCase(
       JdbcCandidateCollectionsRepository store, CandidateChange change) {
     return new ReplaceWorkAuthorizationsService(store, change);
+  }
+
+  // ---- descubribilidad, disponibilidad y lista de exclusión (sub-paso 4 del diseño de cv) ----
+
+  @Bean
+  JdbcAvailabilityExclusionRepository jdbcAvailabilityExclusionRepository(JdbcClient jdbc) {
+    return new JdbcAvailabilityExclusionRepository(jdbc);
+  }
+
+  @Bean
+  ChangeDiscoverabilityUseCase changeDiscoverabilityUseCase(
+      JdbcCandidateProfileRepository store, CandidateChange change) {
+    return new ChangeDiscoverabilityService(store, change);
+  }
+
+  @Bean
+  ChangeAvailabilityUseCase changeAvailabilityUseCase(
+      JdbcCandidateProfileRepository store, CandidateChange change) {
+    return new ChangeAvailabilityService(store, change);
+  }
+
+  @Bean
+  ManageAvailabilityExclusionsUseCase manageAvailabilityExclusionsUseCase(
+      JdbcAvailabilityExclusionRepository exclusions,
+      AccountDirectoryPort directory,
+      CandidateChange change,
+      UseCaseMetricsPort metrics) {
+    return new ManageAvailabilityExclusionsService(
+        exclusions, directory, change, Clock.systemUTC(), metrics);
+  }
+
+  @Bean
+  GetVisibleAvailabilityUseCase getVisibleAvailabilityUseCase(
+      JdbcCandidateProfileRepository profiles, JdbcAvailabilityExclusionRepository exclusions) {
+    return new GetVisibleAvailabilityService(profiles, exclusions);
   }
 }

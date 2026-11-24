@@ -61,6 +61,11 @@ class ErrorsTest {
   }
 
   @Test
+  void aDuplicateCarriesNoIdentifierOfTheResource() {
+    assertThat(new AlreadyExistsException().getMessage()).isEqualTo("El recurso ya existe");
+  }
+
+  @Test
   void aNotFoundCarriesNoIdentifierOfTheResource() {
     assertThat(new NotFoundException().getMessage()).isEqualTo("El recurso no existe");
   }
