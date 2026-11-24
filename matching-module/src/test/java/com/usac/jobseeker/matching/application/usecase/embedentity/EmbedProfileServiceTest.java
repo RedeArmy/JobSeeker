@@ -232,10 +232,10 @@ class EmbedProfileServiceTest {
         };
 
     CandidateSignalsReader reader = accountId -> Optional.empty();
-    UseCaseMetricsPort metrics = (u, o) -> {};
+    UseCaseMetricsPort noMetrics = (u, o) -> {};
     Clock clock = Clock.systemUTC();
 
-    assertThatThrownBy(() -> new EmbedProfileService(reader, anyClient, store, metrics, clock, 0))
+    assertThatThrownBy(() -> new EmbedProfileService(reader, anyClient, store, noMetrics, clock, 0))
         .isInstanceOf(IllegalArgumentException.class);
   }
 }
