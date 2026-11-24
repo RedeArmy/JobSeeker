@@ -25,6 +25,7 @@
 - [ ] 14. New HTTP endpoints have an explicit rate-limit policy
 - [ ] 15. New use cases expose a business metric and structured logs with `traceId`
 - [ ] 16. New mutating `/app/**` routes require CSRF and are covered by the route-sweep test
+- [ ] 17. Technical debt this change leaves or finds is recorded in `docs/05-engineering/technical-debt-register.md` (or paid here); debt it closes is moved to its resolved section with this PR as evidence (`n/a` if none)
 
 ## Notes for the reviewer
 

@@ -4,9 +4,9 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | 🟡 En revisión |
-| **Versión** | 1.2 — criterio #5 automatizado con ArchUnit (ADR-0015) y añadido el #16 (CSRF, NFR-SEC-08, ADR-0020) |
+| **Versión** | 1.3 — añadido el #17 (deuda técnica registrada o pagada, `technical-debt-register.md`); antes, 1.2: criterio #5 automatizado con ArchUnit (ADR-0015) y añadido el #16 (CSRF, NFR-SEC-08, ADR-0020) |
 | **Fecha** | Agosto 2026 · actualizado en noviembre 2026 |
-| **Documentos relacionados** | Test Strategy, Git Workflow, Coding Standards |
+| **Documentos relacionados** | Test Strategy, Git Workflow, Coding Standards, Registro de Deuda Técnica (`technical-debt-register.md`) |
 
 ---
 
@@ -34,6 +34,7 @@ Fijar el checklist mínimo que toda historia de usuario o cambio debe cumplir an
 | 14 | Todo endpoint HTTP nuevo tiene una política de rate limiting explícita asignada (no queda sin límite por omisión, NFR-SEC-06) | Revisión manual del filtro/anotación de Bucket4j en el PR (ADR-0011) |
 | 15 | Todo endpoint o caso de uso nuevo expone al menos una métrica de negocio propia vía Micrometer y logging estructurado con `traceId` (NFR-OBS-05) | Revisión manual + verificación en `/actuator/prometheus` en el ambiente de PR/staging |
 | 16 | Toda ruta mutante nueva o modificada de `/app/**` (`POST/PUT/PATCH/DELETE`) exige el token CSRF y está cubierta por la prueba que recorre todas las rutas mutantes y verifica `403` sin token; todo endpoint de `/api/v1/**` está cubierto por la prueba que verifica `401` sin Bearer y `403`/`404` con otra cuenta o capacidad equivocada (NFR-SEC-08, NFR-SEC-03, ADR-0020) | Prueba automática en CI; ningún endpoint mutante nuevo queda fuera de la lista que recorre la prueba |
+| 17 | La deuda técnica que el cambio deja o descubre queda registrada en `technical-debt-register.md` (ficha nueva con evidencia, interés, disparador y criterio de cierre) o se paga en el mismo cambio; la que el cambio cierra se mueve a la sección de resueltas con su PR y su evidencia | Revisión manual de la PR contra el registro; la casilla indica `n/a` si el cambio no deja ni cierra deuda |
 
 ## 3. Criterios adicionales para cambios en `matching-module`
 
