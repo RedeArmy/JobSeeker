@@ -152,6 +152,17 @@ class CandidateDomainTest {
   }
 
   @Test
+  void amountsAreKeptWithTwoDecimalsSoTheSameDataIsAlwaysEqual() {
+    var plain = details("a@b.co", null, n("4500"), n("5000.5"), "USD", SalaryPeriod.MONTH);
+    var padded = details("a@b.co", null, n("4500.00"), n("5000.50"), "USD", SalaryPeriod.MONTH);
+
+    assertThat(plain).isEqualTo(padded);
+    assertThat(plain.salary().min()).hasToString("4500.00");
+    assertThat(new SalaryExpectation(n("1E+3"), null, "USD", SalaryPeriod.YEAR).min())
+        .hasToString("1000.00");
+  }
+
+  @Test
   void noSalaryDataAtAllMeansNoSalary() {
     assertThat(details("a@b.co", null, null, null, null, null).salary()).isNull();
     assertThat(details("a@b.co", null, null, null, "  ", null).salary()).isNull();

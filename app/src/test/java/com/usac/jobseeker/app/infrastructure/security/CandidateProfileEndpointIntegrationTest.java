@@ -178,6 +178,43 @@ class CandidateProfileEndpointIntegrationTest {
     assertThat(candidateEvents(id)).isEqualTo(1);
   }
 
+  // Regresión: 4500 y 4500.00 eran datos distintos y un reenvío idéntico subía la versión.
+  @Test
+  void resendingTheSameSalaryNeverBumpsTheVersionWhateverItsWrittenScale() throws Exception {
+    UUID id = candidate();
+    createProfile(id);
+    String body =
+        "{\"contactEmail\":\"a@b.co\",\"salaryMin\":%s,\"salaryCurrency\":\"USD\",\"salaryPeriod\":\"MONTH\",\"version\":%d}";
+    mvc.perform(json(put(CANDIDATE), id, body.formatted("4500", 0)))
+        .andExpect(status().isCreated());
+
+    mvc.perform(json(put(CANDIDATE), id, body.formatted("4500.00", 1)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.version").value(1));
+    mvc.perform(json(put(CANDIDATE), id, body.formatted("4500.0", 1)))
+        .andExpect(jsonPath("$.version").value(1));
+
+    assertThat(candidateEvents(id)).isEqualTo(1);
+  }
+
+  // Regresión: una habilidad sin nivel se leía como nivel 0.
+  @Test
+  void aSkillWithoutLevelComesBackWithoutLevelAndAResendIsAnUnchangedSet() throws Exception {
+    UUID id = candidate();
+    createProfile(id);
+    createCandidate(id);
+    String body =
+        "{\"skills\":[{\"name\":\"Java\"},{\"name\":\"SQL\",\"level\":2}],\"version\":%d}";
+    mvc.perform(json(put(CANDIDATE + "/skills"), id, body.formatted(1))).andExpect(status().isOk());
+
+    mvc.perform(authed(get(CANDIDATE), id))
+        .andExpect(jsonPath("$.skills[0].name").value("Java"))
+        .andExpect(jsonPath("$.skills[0].level").doesNotExist())
+        .andExpect(jsonPath("$.skills[1].level").value(2));
+    mvc.perform(json(put(CANDIDATE + "/skills"), id, body.formatted(2)))
+        .andExpect(jsonPath("$.version").value(2));
+  }
+
   @Test
   void aRecruiterOnlyAccountGets403OnEveryCandidateRoute() throws Exception {
     UUID id = recruiter();
