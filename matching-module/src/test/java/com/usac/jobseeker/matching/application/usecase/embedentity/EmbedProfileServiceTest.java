@@ -3,6 +3,7 @@ package com.usac.jobseeker.matching.application.usecase.embedentity;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.usac.jobseeker.common.application.observability.UseCaseMetricsPort;
 import com.usac.jobseeker.common.domain.model.AccountId;
 import com.usac.jobseeker.matching.domain.model.CandidateProfileId;
 import com.usac.jobseeker.matching.domain.model.CandidateSignals;
@@ -230,15 +231,11 @@ class EmbedProfileServiceTest {
           }
         };
 
-    assertThatThrownBy(
-            () ->
-                new EmbedProfileService(
-                    accountId -> Optional.empty(),
-                    anyClient,
-                    store,
-                    (u, o) -> {},
-                    Clock.systemUTC(),
-                    0))
+    CandidateSignalsReader reader = accountId -> Optional.empty();
+    UseCaseMetricsPort metrics = (u, o) -> {};
+    Clock clock = Clock.systemUTC();
+
+    assertThatThrownBy(() -> new EmbedProfileService(reader, anyClient, store, metrics, clock, 0))
         .isInstanceOf(IllegalArgumentException.class);
   }
 }

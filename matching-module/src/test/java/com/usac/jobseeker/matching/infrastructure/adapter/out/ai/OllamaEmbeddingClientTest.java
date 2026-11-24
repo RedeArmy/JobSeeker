@@ -13,7 +13,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.LockSupport;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
@@ -37,10 +39,10 @@ class OllamaEmbeddingClientTest {
         exchange -> {
           body.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
           if (delayMillis > 0) {
-            try {
-              Thread.sleep(delayMillis);
-            } catch (InterruptedException _) {
-              Thread.currentThread().interrupt();
+            // parkNanos puede volver antes de tiempo: se espera hasta el plazo real.
+            long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(delayMillis);
+            while (System.nanoTime() < deadline) {
+              LockSupport.parkNanos(deadline - System.nanoTime());
             }
           }
           byte[] bytes = answer.getBytes(StandardCharsets.UTF_8);
@@ -106,7 +108,9 @@ class OllamaEmbeddingClientTest {
     answer = "{\"error\":\"input length exceeds context: SECRETO-DEL-PERFIL\"}";
     var client = client(3, Duration.ofSeconds(5));
 
-    assertThatThrownBy(() -> client.embed(EmbeddableText.of("texto del perfil")))
+    var text = EmbeddableText.of("texto del perfil");
+
+    assertThatThrownBy(() -> client.embed(text))
         .isInstanceOf(EmbeddingRejectedException.class)
         .hasMessageNotContaining("SECRETO")
         .hasMessageNotContaining("texto del perfil")

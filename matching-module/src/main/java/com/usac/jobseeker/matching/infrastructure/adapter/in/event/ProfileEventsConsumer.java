@@ -69,7 +69,7 @@ public class ProfileEventsConsumer implements OutboxEventConsumer {
     try {
       return Optional.of(
           AccountId.fromSubject(JSON.readTree(payload).path("accountId").asString()));
-    } catch (IllegalArgumentException | tools.jackson.core.JacksonException invalid) {
+    } catch (IllegalArgumentException | tools.jackson.core.JacksonException _) {
       return Optional.empty();
     }
   }

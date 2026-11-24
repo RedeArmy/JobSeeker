@@ -9,5 +9,5 @@ import java.time.Duration;
  */
 public interface EmbeddingFreshnessPort {
 
-  void record(Duration sinceEdit);
+  void observe(Duration sinceEdit);
 }

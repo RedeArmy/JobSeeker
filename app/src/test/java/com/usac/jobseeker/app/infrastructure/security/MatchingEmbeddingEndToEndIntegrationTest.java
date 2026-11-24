@@ -133,12 +133,6 @@ class MatchingEmbeddingEndToEndIntegrationTest {
   @Autowired private com.usac.jobseeker.app.infrastructure.outbox.OutboxStore store;
   @Autowired private org.springframework.transaction.PlatformTransactionManager transactions;
 
-  @BeforeEach
-  void publishTheKeys() {
-    ISSUER.jwks = KEYS.jwks();
-    ISSUER.jwksStatus = 200;
-  }
-
   private String tokenOf(UUID account) {
     return KEYS.token(ISSUER.issuerUri(), Instant.now()).subject(account.toString()).build();
   }
@@ -169,8 +163,10 @@ class MatchingEmbeddingEndToEndIntegrationTest {
   private static final String SECRET_EMAIL = "secreta@example.test";
   private static final String SECRET_PHONE = "5555-0000";
 
-  @org.junit.jupiter.api.BeforeEach
+  @BeforeEach
   void resetTheWorld() {
+    ISSUER.jwks = KEYS.jwks();
+    ISSUER.jwksStatus = 200;
     OLLAMA_CALLS.set(0);
     OLLAMA_BODIES.clear();
     ollamaStatus = 200;
@@ -269,12 +265,8 @@ class MatchingEmbeddingEndToEndIntegrationTest {
     String sent = OLLAMA_BODIES.get(0);
     assertThat(sent)
         .doesNotContain(
-            SECRET_NAME,
-            SECRET_EMAIL,
-            SECRET_PHONE,
-            "Empresa Confidencial",
-            "Mi biografia privada");
-    assertThat(sent).contains("Java", "Engineer", "[correo]", "\"truncate\":false");
+            SECRET_NAME, SECRET_EMAIL, SECRET_PHONE, "Empresa Confidencial", "Mi biografia privada")
+        .contains("Java", "Engineer", "[correo]", "\"truncate\":false");
   }
 
   @Test

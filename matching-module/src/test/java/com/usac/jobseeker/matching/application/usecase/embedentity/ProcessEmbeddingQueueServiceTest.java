@@ -164,15 +164,13 @@ class ProcessEmbeddingQueueServiceTest {
     assertThat(policy.backoff(1)).isEqualTo(Duration.ofSeconds(5));
     assertThat(policy.backoff(2)).isEqualTo(Duration.ofSeconds(10));
     assertThat(policy.backoff(40)).isEqualTo(Duration.ofMinutes(5));
-    assertThatThrownBy(
-            () ->
-                new EmbeddingQueuePolicy(
-                    0, Duration.ofMinutes(1), 1, Duration.ofSeconds(1), Duration.ofSeconds(2)))
+    Duration minute = Duration.ofMinutes(1);
+    Duration one = Duration.ofSeconds(1);
+    Duration two = Duration.ofSeconds(2);
+    Duration five = Duration.ofSeconds(5);
+    assertThatThrownBy(() -> new EmbeddingQueuePolicy(0, minute, 1, one, two))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(
-            () ->
-                new EmbeddingQueuePolicy(
-                    1, Duration.ofMinutes(1), 1, Duration.ofSeconds(5), Duration.ofSeconds(2)))
+    assertThatThrownBy(() -> new EmbeddingQueuePolicy(1, minute, 1, five, two))
         .isInstanceOf(IllegalArgumentException.class);
   }
 }

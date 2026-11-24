@@ -62,7 +62,7 @@ public class EmbeddingQueueMetrics implements EmbeddingFreshnessPort, MeterBinde
   }
 
   @Override
-  public void record(Duration sinceEdit) {
+  public void observe(Duration sinceEdit) {
     MeterRegistry meters = registry.get();
     if (meters == null) {
       return;

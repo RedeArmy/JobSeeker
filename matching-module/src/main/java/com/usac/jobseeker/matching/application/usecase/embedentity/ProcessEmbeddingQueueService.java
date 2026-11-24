@@ -67,13 +67,13 @@ public class ProcessEmbeddingQueueService implements ProcessEmbeddingQueueUseCas
       queue.complete(job);
       metrics.count(USE_CASE, "done");
       // Solo un cálculo terminado mide la frescura: un fallo no la cumple ni la incumple todavía.
-      freshness.record(Duration.between(job.pendingSince(), clock.instant()));
+      freshness.observe(Duration.between(job.pendingSince(), clock.instant()));
     } catch (EmbeddingRejectedException rejected) {
       queue.fail(job);
       metrics.count(USE_CASE, "rejected");
       LOG.error(
           "event=embedding_rejected Un perfil no se pudo embeber y queda para revisión", rejected);
-    } catch (EmbeddingUnavailableException unavailable) {
+    } catch (EmbeddingUnavailableException _) {
       retry(job, "unavailable");
       LOG.warn("event=embedding_unavailable El modelo de embeddings no respondió; se reintenta");
     } catch (RuntimeException unexpected) {

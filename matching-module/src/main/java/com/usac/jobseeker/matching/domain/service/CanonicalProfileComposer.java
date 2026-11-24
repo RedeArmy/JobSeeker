@@ -76,7 +76,7 @@ public final class CanonicalProfileComposer {
     return items.stream()
         .sorted(
             Comparator.comparing(
-                    (CandidateSignals.Experience e) -> e.startDate(),
+                    CandidateSignals.Experience::startDate,
                     Comparator.nullsLast(Comparator.<LocalDate>reverseOrder()))
                 .thenComparing(CandidateSignals.Experience::title))
         .map(

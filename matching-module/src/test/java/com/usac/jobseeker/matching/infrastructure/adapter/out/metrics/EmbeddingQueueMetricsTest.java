@@ -1,6 +1,7 @@
 package com.usac.jobseeker.matching.infrastructure.adapter.out.metrics;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 import com.usac.jobseeker.matching.infrastructure.MatchingPostgres;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -83,9 +84,9 @@ class EmbeddingQueueMetricsTest {
 
   @Test
   void freshnessIsRecordedInAHistogramThatHasTheTargetAsABucket() {
-    metrics.record(Duration.ofSeconds(8));
-    metrics.record(Duration.ofSeconds(100));
-    metrics.record(Duration.ofSeconds(400));
+    metrics.observe(Duration.ofSeconds(8));
+    metrics.observe(Duration.ofSeconds(100));
+    metrics.observe(Duration.ofSeconds(400));
 
     var timer = meters.find("jobseeker_matching_freshness_seconds").timer();
     assertThat(timer.count()).isEqualTo(3);
@@ -97,7 +98,7 @@ class EmbeddingQueueMetricsTest {
 
   @Test
   void aNegativeDurationFromAClockStepIsRecordedAsZeroNotAsNonsense() {
-    metrics.record(Duration.ofSeconds(-5));
+    metrics.observe(Duration.ofSeconds(-5));
 
     assertThat(
             meters
@@ -109,18 +110,20 @@ class EmbeddingQueueMetricsTest {
 
   @Test
   void recordingBeforeBindingIsIgnoredInsteadOfFailing() {
-    new EmbeddingQueueMetrics(jdbc).record(Duration.ofSeconds(1));
+    var unbound = new EmbeddingQueueMetrics(jdbc);
+
+    assertThatCode(() -> unbound.observe(Duration.ofSeconds(1))).doesNotThrowAnyException();
   }
 
   @Test
   void theMeterNamesCarryNoPersonalDataOrAccountLabels() {
-    metrics.record(Duration.ofSeconds(1));
+    metrics.observe(Duration.ofSeconds(1));
 
     assertThat(meters.getMeters())
         .allSatisfy(
             meter ->
                 assertThat(meter.getId().getTags())
-                    .extracting(t -> t.getKey())
+                    .extracting(io.micrometer.core.instrument.Tag::getKey)
                     .isSubsetOf("status", "le"));
   }
 
