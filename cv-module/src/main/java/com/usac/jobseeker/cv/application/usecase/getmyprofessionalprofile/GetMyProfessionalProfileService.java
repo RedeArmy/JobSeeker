@@ -39,7 +39,8 @@ public class GetMyProfessionalProfileService implements GetMyProfessionalProfile
             .map(p -> ProfessionalProfileView.of(p, collections.findByProfileId(p.id())));
     String outcome = view.isPresent() ? "found" : "not_created";
     metrics.count(USE_CASE, outcome);
-    LOG.info(
+    // DEBUG y no INFO: es la línea más frecuente del sistema y la métrica ya cuenta cada lectura.
+    LOG.debug(
         "event=professional_profile_viewed outcome={} Consulta del propio perfil profesional",
         outcome);
     return view;
