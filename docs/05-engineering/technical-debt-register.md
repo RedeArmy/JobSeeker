@@ -4,7 +4,7 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | 🟡 En revisión |
-| **Versión** | 1.0 — registro inicial a partir de la auditoría del 24-nov-2026 |
+| **Versión** | 1.1 — se pagan TD-003, TD-004, TD-006, TD-007 y TD-008, y se endurece la memoria por petición |
 | **Fecha** | 24 de noviembre de 2026 |
 | **Dueño del documento** | Responsable del proyecto |
 | **Revisión del registro** | Al cerrar cada sprint y antes de cada hito de la hoja de ruta |
@@ -52,11 +52,11 @@ Corte: 24-nov-2026.
 |---|---|
 | S1 Crítica | 0 |
 | S2 Alta | 8 |
-| S3 Media | 10 |
-| S4 Baja | 8 |
-| **Total** | **26** |
+| S3 Media | 7 |
+| S4 Baja | 6 |
+| **Total** | **21** |
 
-- **Abiertas:** 24 · **Planificadas:** 2 · **Resueltas:** 8 · **Aceptadas:** 5.
+- **Abiertas:** 19 · **Planificadas:** 2 · **Resueltas:** 14 · **Aceptadas:** 5.
 - **S2 abiertas con disparador próximo** (decidir el siguiente sprint): TD-001, TD-012, TD-018, TD-021 (todas dependen del primer consumidor de `matching`) y TD-005 (primer despliegue).
 - **Métricas a seguir en cada revisión:** deuda abierta por severidad, edad de las S2 en días, número de cierres por sprint, aceptadas vencidas.
 
@@ -66,12 +66,7 @@ Corte: 24-nov-2026.
 |---|---|---|---|---|---|---|---|
 | TD-001 | Los consumidores del sondeador corren dentro de la transacción de reclamo | Arquitectura / Concurrencia | S2 | M | Leída | Abierta | Antes de implementar `embedentity` (paso 3 de `matching`) |
 | TD-002 | Un solo hilo para todas las tareas programadas | Concurrencia | S3 | S | Leída | Abierta | Antes del primer lote programado (anonimización, archivado de vacantes) |
-| TD-003 | Comprobación de capacidad duplicada al reemplazar un conjunto | Rendimiento | S4 | XS | Leída | Abierta | Oportunista |
-| TD-004 | La cuenta se resuelve varias veces por petición | Rendimiento | S3 | S | Leída | Abierta | Con la primera medición de latencia en Ola 1 |
 | TD-005 | Dimensionamiento de producción sin definir | Operación | S2 | S | Hipótesis | Abierta | Antes del primer despliegue (ADR-0026) |
-| TD-006 | Inserciones fila por fila al reemplazar conjuntos | Rendimiento | S3 | XS | Leída | Abierta | Oportunista o al medir |
-| TD-007 | Monitor global en el limitador de tasa | Concurrencia | S3 | XS | Leída | Abierta | Antes de habilitar hilos virtuales |
-| TD-008 | Registro INFO en cada lectura de perfil | Operación | S4 | XS | Leída | Abierta | Oportunista |
 | TD-009 | Índice sin lector en la bandeja (`idx_outbox_aggregate`) | Rendimiento | S4 | XS | Hipótesis | Abierta | Con tráfico real |
 | TD-010 | Tablas sin escritor ni purga: `idempotency_keys` y `audit_log` | Arquitectura | S3 | M | Leída | Abierta | Primer endpoint con `Idempotency-Key` o primera acción auditable |
 | TD-011 | Marcado de la bandeja evento por evento | Rendimiento | S4 | S | Leída | Abierta | Con volumen |
@@ -115,28 +110,6 @@ Corte: 24-nov-2026.
 - **Criterio de cierre:** Prueba que muestre que una tarea de 5 s no retrasa el sondeo.
 - **Referencias:** `docs/03-architecture/adr/0016-transactional-outbox-for-domain-events.md`
 
-#### TD-003 — Comprobación de capacidad duplicada al reemplazar un conjunto
-
-**Rendimiento** · **S4 Baja** · esfuerzo **XS** · confianza **Leída** · **Abierta**
-
-- **Evidencia:** `Replace*Service` llama a `change.requireCandidate` y `CandidateChange.apply` la repite: dos consultas idénticas a `accounts`.
-- **Interés (qué cuesta no pagarla):** Una consulta inútil por escritura.
-- **Disparador:** Oportunista.
-- **Remediación propuesta:** Dejar una sola, antes de validar los datos (BR-ACCT-04), y documentar la precondición de `apply`.
-- **Criterio de cierre:** Prueba unitaria con contador: una llamada a `CandidateCapabilityPort` por operación.
-- **Referencias:** `docs/03-architecture/tdd/cv-module.md` §10.3
-
-#### TD-004 — La cuenta se resuelve varias veces por petición
-
-**Rendimiento** · **S3 Media** · esfuerzo **S** · confianza **Leída** · **Abierta**
-
-- **Evidencia:** `ActorFilter` resuelve la cuenta y cada caso de uso vuelve a preguntar la capacidad. Consultas contadas en el código: `GET` del perfil de candidato = 6; `PUT` de un conjunto = 12 + N (N = elementos insertados).
-- **Interés (qué cuesta no pagarla):** Latencia y carga de base de datos proporcionales al tráfico, sin ganancia.
-- **Disparador:** Con la primera medición de latencia en Ola 1.
-- **Remediación propuesta:** Memoizar la `ActorResolution` por petición (atributo que fija `ActorFilter` y lee el adaptador de capacidad). Sin caché entre peticiones, para no debilitar la comprobación de vida de ADR-0020.
-- **Criterio de cierre:** Prueba de extremo a extremo que cuente las consultas a `accounts` por petición: 1.
-- **Referencias:** `docs/03-architecture/adr/0020-web-session-and-api-bearer-authentication-surfaces.md`
-
 #### TD-005 — Dimensionamiento de producción sin definir
 
 **Operación** · **S2 Alta** · esfuerzo **S** · confianza **Hipótesis** · **Abierta**
@@ -147,39 +120,6 @@ Corte: 24-nov-2026.
 - **Remediación propuesta:** Fijar `maximum-pool-size`, `connection-timeout` y `max-lifetime` según el límite del agrupador; decidir `spring.threads.virtual.enabled`; añadir `-XX:+ExitOnOutOfMemoryError`. Documentar en ADR-0026.
 - **Criterio de cierre:** Valores en `application-prod.yml` con su razón y una prueba de carga básica sin saturar el pool a la concurrencia objetivo.
 - **Referencias:** `docs/03-architecture/adr/0026-deployment-topology-and-disaster-recovery.md`
-
-#### TD-006 — Inserciones fila por fila al reemplazar conjuntos
-
-**Rendimiento** · **S3 Media** · esfuerzo **XS** · confianza **Leída** · **Abierta**
-
-- **Evidencia:** `JdbcCandidateCollectionsRepository`: un `insert` por elemento (hasta 100 habilidades = 100 viajes a la base de datos en una petición).
-- **Interés (qué cuesta no pagarla):** Latencia lineal en el tamaño del conjunto, dentro de una transacción que mantiene el bloqueo de la fila del perfil.
-- **Disparador:** Oportunista o al medir.
-- **Remediación propuesta:** `batchUpdate` o `insert ... select unnest(...)`.
-- **Criterio de cierre:** Prueba con 100 elementos y recuento de sentencias ≤ 2.
-- **Referencias:** `cv-module/.../JdbcCandidateCollectionsRepository.java`
-
-#### TD-007 — Monitor global en el limitador de tasa
-
-**Concurrencia** · **S3 Media** · esfuerzo **XS** · confianza **Leída** · **Abierta**
-
-- **Evidencia:** `Bucket4jRedisRateLimiter.connectedBuckets()` es `synchronized` y se llama una o dos veces por petición.
-- **Interés (qué cuesta no pagarla):** Contención en la ruta caliente; con hilos virtuales, además, fija el hilo portador.
-- **Disparador:** Antes de habilitar hilos virtuales.
-- **Remediación propuesta:** `AtomicReference` con inicialización perezosa y retroceso de reconexión fuera del monitor.
-- **Criterio de cierre:** Prueba con N hilos concurrentes sin bloqueo y que conserve el retroceso de reconexión.
-- **Referencias:** `docs/03-architecture/adr/0011-configurable-rate-limiting.md`
-
-#### TD-008 — Registro INFO en cada lectura de perfil
-
-**Operación** · **S4 Baja** · esfuerzo **XS** · confianza **Leída** · **Abierta**
-
-- **Evidencia:** `GetMyCandidateProfileService` y `GetMyProfessionalProfileService` registran una línea INFO por lectura: la más frecuente del sistema.
-- **Interés (qué cuesta no pagarla):** Volumen y coste de logs estructurados sin valor adicional: la métrica ya cuenta cada lectura.
-- **Disparador:** Oportunista.
-- **Remediación propuesta:** Bajar a DEBUG.
-- **Criterio de cierre:** Cambio aplicado; ninguna prueba depende del nivel.
-- **Referencias:** `docs/03-architecture/adr/0012-observability-stack.md`
 
 #### TD-009 — Índice sin lector en la bandeja (`idx_outbox_aggregate`)
 
@@ -391,6 +331,12 @@ Corte: 24-nov-2026.
 | TD-R06 | `nomic-embed-text` como modelo por defecto medido peor que una línea base léxica | Arquitectura | S2 | 2026-11-18 | ADR-0018 | Modelo provisional `qwen3-embedding:0.6b` y calibración obligatoria por modelo. |
 | TD-R07 | La anonimización conservaba habilidades, salario y disponibilidad | Privacidad | S2 | 2026-11-24 | #31 | Se anulan o borran; restricción `CHECK` en la base de datos; BR-DATA-05 y política de privacidad (borrador) actualizados. |
 | TD-R08 | Migraciones rechazadas por el lint (`smallint`, `drop not null`) | Operación | S4 | 2026-11-24 | #28, #31 | `integer` en el nivel de habilidad y excepción documentada con su razón en la migración de anonimización. |
+| TD-R09 | La comprobación de capacidad se repetía al reemplazar un conjunto (antes TD-003) | Rendimiento | S4 | 2026-11-24 | #33 | Se comprueba una sola vez, antes de validar los datos; prueba que cuenta una llamada por operación. |
+| TD-R10 | La cuenta se resolvía varias veces por petición (antes TD-004) | Rendimiento | S3 | 2026-11-24 | #33 | `RequestScopedActorResolution` recuerda la resolución solo dentro del ámbito que abre `ActorFilter`. Lectura del perfil de candidato: de 6 a 5 consultas; reemplazo de un conjunto: de 3 resoluciones de cuenta a 1. Prueba de extremo a extremo que cuenta las llamadas reales. |
+| TD-R11 | Inserciones fila por fila al reemplazar conjuntos (antes TD-006) | Rendimiento | S3 | 2026-11-24 | #33 | Una sentencia `unnest` por conjunto; 100 habilidades cuestan 2 sentencias en vez de 101. Prueba que cuenta las sentencias que llegan al controlador JDBC. |
+| TD-R12 | Monitor global en el limitador de tasa (antes TD-007) | Concurrencia | S3 | 2026-11-24 | #33 | La ruta caliente lee un `AtomicReference` sin monitor; solo la conexión inicial y su reintento sincronizan. Prueba que falla si se restituye el `synchronized`. |
+| TD-R13 | Registro INFO en cada lectura de perfil (antes TD-008) | Operación | S4 | 2026-11-24 | #33 | Las dos lecturas registran en DEBUG; la métrica sigue contando cada una. |
+| TD-R14 | La memoria por petición de TD-004 tenía límites implícitos: dependía de qué petición hubiera enlazada al hilo y de que cada caso de uso futuro se acordara de invalidarla (hallazgo al pagar TD-004) | Concurrencia | S2 | 2026-11-24 | #33 | El ámbito es explícito (lo abre y cierra `ActorFilter`; sin él no se recuerda nada) y toda escritura de `accounts` avisa por `AccountChangeObserver` desde el adaptador que escribe. Una prueba estructural falla si aparece un escritor de `accounts` que no avise. Decisión: no se recuerdan los rechazos (no ahorran nada y «sin aprovisionar» rompería la carrera del primer acceso). |
 
 ## 7. Deuda aceptada
 
@@ -407,6 +353,7 @@ Corte: 24-nov-2026.
 | Versión | Fecha | Cambio |
 |---|---|---|
 | 1.0 | 2026-11-24 | Registro inicial: 26 fichas abiertas o planificadas de la auditoría, 8 resueltas con su evidencia y 5 aceptadas con fecha de revisión. |
+| 1.1 | 2026-11-24 | Se pagan TD-003, TD-004, TD-006, TD-007 y TD-008 (PR #33) y pasan a resueltas como TD-R09 a TD-R13; TD-R14 registra el límite implícito que apareció al pagar TD-004 y su arreglo. Quedan 21 abiertas o planificadas, 14 resueltas y 5 aceptadas. |
 
 ## 9. Plantilla de ficha
 
