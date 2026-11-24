@@ -49,4 +49,12 @@ class CvConfigurationTest {
                 (useCase, outcome) -> {}))
         .isNotNull();
   }
+
+  @Test
+  void theAnonymizationUseCaseIsBuiltFromItsAdapter() {
+    assertThat(
+            config.anonymizeProfileDataUseCase(
+                config.jdbcAnonymizationRepository(jdbc), event -> {}, (useCase, outcome) -> {}))
+        .isNotNull();
+  }
 }
