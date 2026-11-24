@@ -21,6 +21,7 @@
       <dt>Capacidades</dt><dd id="capabilities" th:text="${#strings.setJoin(capabilities, ', ')}">CANDIDATE</dd>
     </dl>
     <p><a th:href="@{/app/profile}">Mi perfil profesional</a></p>
+    <p><a th:href="@{/app/candidate-profile}">Mi perfil de candidato</a></p>
     <form th:action="@{/app/logout}" method="post">
       <button type="submit">Cerrar sesión</button>
     </form>
