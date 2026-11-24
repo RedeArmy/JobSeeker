@@ -186,7 +186,7 @@ public class JdbcCandidateProfileRepository
         new CandidateProfileId(rows.getObject("id", UUID.class)),
         new AccountId(rows.getObject("account_id", UUID.class)),
         details,
-        rows.getBoolean("discoverable"),
+        rows.getBoolean(DISCOVERABLE),
         AvailabilityStatus.valueOf(rows.getString("availability_status")),
         rows.getLong(VERSION),
         rows.getObject("updated_at", OffsetDateTime.class).toInstant());
