@@ -161,7 +161,7 @@ Las pruebas de la migración (la de «publicadas inmutables» y el análisis de 
 |---|---|---|
 | 1 | ✅ **Hecho (23-nov-2026).** Migración de `professional_profiles` (solo la raíz), `ProfessionalProfile` con sus reglas, `getmyprofessionalprofile` y `saveprofessionalprofile`, adaptador JDBC y el controlador JSON. **Es la rebanada plantilla del módulo**: lleva todas las transversales. Detalle y desvíos de este documento en §10.1 | — |
 | 2 | ✅ **Hecho (24-nov-2026).** Las tablas hijas, las cuatro colecciones (`manage*`) y **las pantallas HTMX del perfil**. Detalle y desvíos de este documento en §10.2 | 1 |
-| 3 | `CandidateProfile`: moneda y periodo (M1), `get`/`save`, habilidades, idiomas, autorizaciones | 1 |
+| 3 | ✅ **Hecho (23-nov-2026).** `CandidateProfile`: moneda y periodo (M1), `get`/`save`, habilidades, idiomas, autorizaciones, su API JSON y su pantalla `/app/candidate-profile`. Detalle y desvíos de este documento en §10.3 | 1 |
 | 4 | Descubribilidad, disponibilidad y lista de exclusión, con sus eventos | 3 |
 | 5 | `getprofilesnapshot` y los eventos conectados a la bandeja; prueba de contrato con `matching` | 3, TDD de `matching` |
 | 6 | `anonymizeprofiledata` | 2, 3, 4 |
@@ -194,6 +194,20 @@ Se construyó lo descrito en §4 para `manageexperiences`, `manageeducation`, `m
 - **Pantalla HTMX.** Una operación devuelve el fragmento con el perfil completo, que sustituye al anterior. Un error de validación responde **422 con solo la zona de errores**, para que la persona no pierda lo que acaba de teclear; una versión vieja (409) o un elemento que ya no existe (404) recargan todo el contenido con un aviso. La página cumple la política de seguridad de contenido sin estilos ni scripts en línea, y lo que la persona escribe se escapa. Las trece rutas que mutan quedan cubiertas por la prueba que recorre todas las de `/app/**` exigiendo el token CSRF, sin tocarla.
 
 **Pendiente de este sub-paso, no implementado:** el orden manual de los elementos (hoy se ordenan por fecha, lo vigente primero) y una vista pública del perfil para otro usuario, que dependen de los TDD de `ats` y de `matching`.
+
+### 10.3 Sub-paso 3: qué se construyó y en qué se desvió de este documento
+
+Se construyó el perfil de candidato: contacto y datos de elegibilidad, y los tres conjuntos (habilidades, idiomas, autorizaciones de trabajo), con su migración, la API JSON y la pantalla `/app/candidate-profile`. Decisiones que la primera versión de este documento no tenía:
+
+- **Una versión propia del perfil de candidato**, independiente de la del perfil profesional. Guardar los datos y reemplazar cualquiera de los tres conjuntos avanzan **esa** versión, que viaja en toda escritura; el `409 STALE_STATE` y el «guardar lo mismo no cambia nada» funcionan igual que en el sub-paso 1. Un coordinador común, `CandidateChange`, hace para los tres conjuntos lo que `ProfileChange` hace para las colecciones.
+- **Los conjuntos se reemplazan enteros** (`PUT .../skills`, `.../languages`, `.../work-authorizations`), no elemento a elemento: no tienen identidad propia y la persona los edita como una lista. Reemplazar con una lista vacía lo vacía; omitir el campo es un `400`, para que un olvido no borre datos. Reemplazar por un conjunto igual al guardado no sube la versión ni emite evento.
+- **Un duplicado es un error, no se descarta en silencio**: «Java» y « java » son la misma habilidad y se rechaza con `DUPLICATE` apuntando al elemento (`skills[1].name`); lo mismo para idiomas y países. Límites: 100 habilidades, 30 idiomas, 50 países.
+- **La habilidad es texto libre con nivel opcional de 1 a 4**, sin enlace a la taxonomía: el ADR-0019 ya admite una habilidad sin enlace y el enlazado llega con `matching`. La tabla `candidate_skills` entra a la lista de `cv` en el ADR-0027.
+- **El salario es todo o nada** (BR-CAND-07): con cualquier dato hacen falta moneda ISO 4217 y periodo; el rango no puede estar invertido. Los importes se guardan con **escala fija de dos decimales**: sin ella, `4500` y `4500.00` serían datos distintos y un reenvío idéntico subiría la versión. La prueba contra Postgres lo detectó.
+- **La capacidad de candidato se exige antes de validar los datos** (BR-ACCT-04) y su ausencia es `403 FORBIDDEN_CAPABILITY`, un error nuevo y compartido en `common` que no dice qué capacidad falta. Crear el perfil de candidato sin perfil profesional es `400` sobre `professionalProfile`.
+- **Descubribilidad y disponibilidad no se editan aquí**: nacen en `true` y `UNSET` y ninguna escritura de este sub-paso las toca (la prueba del adaptador lo verifica); son del sub-paso 4.
+- **Pantalla.** Una línea por elemento en un cuadro de texto (`Java;4`, `en;B2`, `GT, MX`), con el error apuntando a la línea. Mismo comportamiento HTMX que el perfil profesional (422 solo con la zona de errores, 409 y 404 recargan).
+- **Un hallazgo de la prueba contra Postgres**: un nivel de habilidad ausente se leía como 0 porque `wasNull()` se consultaba tras otra lectura que lo reinicia. Un doble en memoria no lo habría visto.
 
 Cada sub-paso sale como una PR propia con su definición de hecho completa (OpenAPI anotado, política de límite de tasa, métrica y log con `traceId`, prueba de autorización y de CSRF).
 
