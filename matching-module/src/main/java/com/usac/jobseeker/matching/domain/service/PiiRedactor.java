@@ -1,5 +1,7 @@
 package com.usac.jobseeker.matching.domain.service;
 
+import java.util.List;
+import java.util.function.UnaryOperator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -37,15 +39,32 @@ public final class PiiRedactor {
 
   private static final String PATH = "[^\\s<>\"')\\]]*+";
 
+  // Sitios cuyos enlaces son perfiles de personas, aun sin esquema (`github.com/ana`).
+  private static final List<String> PROFILE_HOSTS =
+      List.of(
+          "linkedin\\.com",
+          "github\\.com",
+          "gitlab\\.com",
+          "bitbucket\\.com",
+          "twitter\\.com",
+          "facebook\\.com",
+          "instagram\\.com",
+          "behance\\.com",
+          "dribbble\\.com",
+          "medium\\.com",
+          "stackoverflow\\.com",
+          "x\\.com",
+          "t\\.me",
+          "wa\\.me");
+
+  private static final Pattern LINK_WITH_SCHEME =
+      Pattern.compile("(?i)\\b(?:https?://|www\\.)[^\\s<>\"')\\]]++");
+
   // La subcadena de etiquetas va perezosa y acotada (0 a 3), no posesiva: una posesiva se comería
   // `github.` como si fuera un subdominio y ya no podría reconocer el sitio.
-  private static final Pattern LINK_PATTERN =
+  private static final Pattern LINK_TO_PROFILE =
       Pattern.compile(
-          "(?i)(?:\\b(?:https?://|www\\.)[^\\s<>\"')\\]]++"
-              + "|\\b(?:(?:[a-z0-9-]++\\.){0,3}?(?:linkedin|github|gitlab|bitbucket|twitter|facebook|"
-              + "instagram|behance|dribbble|medium|stackoverflow)\\.com|x\\.com|t\\.me|wa\\.me)/"
-              + PATH
-              + ")");
+          "(?i)\\b(?:[a-z0-9-]++\\.){0,3}?(?:" + String.join("|", PROFILE_HOSTS) + ")/" + PATH);
 
   private static final Pattern USER_PATTERN = Pattern.compile("(?<![\\p{L}\\p{N}_@])@\\w{3,30}+");
 
@@ -71,17 +90,15 @@ public final class PiiRedactor {
     }
     int[] count = {0};
     String text = replace(EMAIL_PATTERN, raw.replace('\u0000', ' '), count, m -> EMAIL);
-    text = replace(LINK_PATTERN, text, count, m -> LINK);
+    text = replace(LINK_WITH_SCHEME, text, count, m -> LINK);
+    text = replace(LINK_TO_PROFILE, text, count, m -> LINK);
     text = replace(USER_PATTERN, text, count, m -> USER);
     text = replace(NUMBER_PATTERN, text, count, PiiRedactor::numberReplacement);
     return new Result(text, count[0]);
   }
 
   private static String replace(
-      Pattern pattern,
-      String input,
-      int[] count,
-      java.util.function.Function<String, String> replacement) {
+      Pattern pattern, String input, int[] count, UnaryOperator<String> replacement) {
     Matcher matcher = pattern.matcher(input);
     StringBuilder out = new StringBuilder(input.length());
     while (matcher.find()) {
@@ -99,7 +116,7 @@ public final class PiiRedactor {
   // Un rango de años («2018-2022», «2019 2021») tiene la forma de un teléfono pero no lo es: es lo
   // más frecuente que escribe quien describe su experiencia.
   private static String numberReplacement(String found) {
-    String[] groups = found.replaceAll("[^0-9]+", " ").strip().split(" ");
+    String[] groups = found.replaceAll("\\D+", " ").strip().split(" ");
     boolean onlyYears = groups.length >= 2;
     for (String group : groups) {
       onlyYears = onlyYears && isYear(group);

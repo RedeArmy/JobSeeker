@@ -25,8 +25,11 @@ class OutboxConsumersContractIntegrationTest {
   void everyConsumerHasAStableNonBlankNameThatNoOtherConsumerShares() {
     List<String> names = consumers.stream().map(OutboxEventConsumer::name).toList();
 
-    assertThat(names).isNotEmpty().doesNotContainNull().doesNotHaveDuplicates();
-    assertThat(names).allSatisfy(name -> assertThat(name).isNotBlank());
+    assertThat(names)
+        .isNotEmpty()
+        .doesNotContainNull()
+        .doesNotHaveDuplicates()
+        .allSatisfy(name -> assertThat(name).isNotBlank());
   }
 
   @Test

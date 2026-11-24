@@ -19,6 +19,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -305,11 +306,9 @@ class OutboxDeliveryGuaranteesIntegrationTest {
               order
                   .computeIfAbsent(e.aggregateId(), k -> new CopyOnWriteArrayList<>())
                   .add(e.aggregateVersion());
-              try {
-                Thread.sleep(15);
-              } catch (InterruptedException _) {
-                Thread.currentThread().interrupt();
-              }
+              // Retiene el manejador un instante para dar tiempo a que otro del mismo agregado
+              // solape.
+              LockSupport.parkNanos(Duration.ofMillis(15).toNanos());
               running.get(e.aggregateId()).decrementAndGet();
             });
     CountDownLatch together = new CountDownLatch(1);
