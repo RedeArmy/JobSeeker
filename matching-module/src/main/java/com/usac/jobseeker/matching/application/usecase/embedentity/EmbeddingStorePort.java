@@ -1,5 +1,6 @@
 package com.usac.jobseeker.matching.application.usecase.embedentity;
 
+import com.usac.jobseeker.common.domain.model.AccountId;
 import com.usac.jobseeker.matching.domain.model.CandidateProfileId;
 import com.usac.jobseeker.matching.domain.model.EntityEmbedding;
 import com.usac.jobseeker.matching.domain.model.JobPostingId;
@@ -27,11 +28,31 @@ public interface EmbeddingStorePort {
    * Guarda el vector del perfil. Si la fila no existe se crea con `discoverableIfNew`; si existe,
    * la copia **no** cambia.
    */
-  void saveProfileEmbedding(
+  boolean saveProfileEmbedding(
       CandidateProfileId id, boolean discoverableIfNew, EntityEmbedding embedding);
 
-  /** Fija la copia de descubribilidad; crea la fila sin vector si no existía. */
-  void setProfileDiscoverable(CandidateProfileId id, boolean discoverable);
+  /**
+   * Fija la copia de descubribilidad; crea la fila sin vector si no existía. Devuelve `false`, sin
+   * escribir, si la cuenta fue anonimizada (BR-DATA-05).
+   */
+  boolean setProfileDiscoverable(CandidateProfileId id, boolean discoverable);
+
+  /**
+   * Registra que esta cuenta es de este perfil, para poder encontrarlo cuando `cv` ya no lo
+   * entregue. Devuelve `false` si la cuenta fue anonimizada: no se registra de nuevo.
+   */
+  boolean registerProfile(AccountId accountId, CandidateProfileId id);
+
+  /** El perfil de una cuenta, si `matching` lo conoce y no fue anonimizado. */
+  Optional<CandidateProfileId> findProfileIdByAccount(AccountId accountId);
+
+  /**
+   * Anonimización (BR-DATA-05): deja una lápida para la cuenta y anula el vector y la
+   * descubribilidad de su perfil, en una sola transacción. Después, ninguna escritura de un cálculo
+   * que ya estaba en curso puede dejar un vector. Idempotente: devuelve si esta llamada cambió
+   * algo.
+   */
+  boolean anonymizeProfile(AccountId accountId);
 
   /**
    * Anonimización (BR-DATA-05): anula el bloque del vector y fuerza la descubribilidad a falso. No

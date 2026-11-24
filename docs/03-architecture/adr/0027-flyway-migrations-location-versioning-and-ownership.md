@@ -38,7 +38,7 @@ Además, tres afirmaciones del modelo de datos no se sostienen:
    | `auth` | `accounts` |
    | `cv` | `professional_profiles`, `experiences`, `education_entries`, `certifications`, `projects`, `candidate_profiles`, `recruiter_profiles`, `candidate_availability_exclusions`, `candidate_work_authorizations`, `candidate_skills`, `candidate_languages`, `recruiter_templates`, `branded_cv_exports` |
    | `job` | `job_postings`, `eligibility_rules`, `candidate_invitations`, `job_posting_scheduled_transitions`, `application_questions` |
-   | `matching` | `compatibility_scores`, `profile_embeddings`, `job_embeddings` (los vectores y la copia de `discoverable` / `published`; `data-model.md` §4.7.1, añadidas el 23-nov-2026 al mover los vectores fuera de `cv` y `job`) |
+   | `matching` | `compatibility_scores`, `profile_embeddings`, `job_embeddings`, `profile_embedding_accounts`, `matching_work_queue` (los vectores y la copia de `discoverable` / `published`; `data-model.md` §4.7.1, añadidas el 23-nov-2026 al mover los vectores fuera de `cv` y `job`) |
    | `ats` | `applications`, `application_answers`, `application_follow_up_requests`, `application_follow_up_items` |
    | `app` | `outbox_events`, `processed_events`, `idempotency_keys`, `audit_log` (infraestructura transversal; ADR-0016) |
 
