@@ -1,6 +1,8 @@
 package com.usac.jobseeker.cv.infrastructure.adapter.out.persistence;
 
 import com.usac.jobseeker.common.domain.model.AccountId;
+import com.usac.jobseeker.cv.application.usecase.changeavailability.AvailabilityStorePort;
+import com.usac.jobseeker.cv.application.usecase.changediscoverability.DiscoverabilityStorePort;
 import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.CandidateProfileReadPort;
 import com.usac.jobseeker.cv.application.usecase.savecandidateprofile.CandidateProfileStorePort;
 import com.usac.jobseeker.cv.domain.model.AvailabilityStatus;
@@ -27,7 +29,10 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * uso y un guardado del contacto no debe poder reabrir un perfil que su dueño ocultó.
  */
 public class JdbcCandidateProfileRepository
-    implements CandidateProfileReadPort, CandidateProfileStorePort {
+    implements CandidateProfileReadPort,
+        CandidateProfileStorePort,
+        DiscoverabilityStorePort,
+        AvailabilityStorePort {
 
   private static final String ACCOUNT = "account";
   private static final String VERSION = "version";
@@ -117,6 +122,37 @@ public class JdbcCandidateProfileRepository
             .param("salaryMax", salary == null ? null : salary.max())
             .param("currency", salary == null ? null : salary.currency())
             .param("period", salary == null ? null : salary.period().name())
+            .param(VERSION, profile.version())
+            .param(UPDATED_AT, OffsetDateTime.ofInstant(profile.updatedAt(), ZoneOffset.UTC))
+            .param(ACCOUNT, profile.accountId().value())
+            .param("expected", expectedVersion)
+            .update()
+        == 1;
+  }
+
+  // Solo esta columna y la versión: un cambio de descubribilidad no debe poder pisar datos del
+  // perfil
+  // que otra edición acaba de guardar. La condición sobre `version` es el mismo bloqueo optimista.
+  @Override
+  public boolean updateDiscoverabilityIfVersion(CandidateProfile profile, long expectedVersion) {
+    return jdbc.sql(
+                "update candidate_profiles set discoverable = :discoverable, version = :version,"
+                    + " updated_at = :updatedAt where account_id = :account and version = :expected")
+            .param("discoverable", profile.discoverable())
+            .param(VERSION, profile.version())
+            .param(UPDATED_AT, OffsetDateTime.ofInstant(profile.updatedAt(), ZoneOffset.UTC))
+            .param(ACCOUNT, profile.accountId().value())
+            .param("expected", expectedVersion)
+            .update()
+        == 1;
+  }
+
+  @Override
+  public boolean updateAvailabilityIfVersion(CandidateProfile profile, long expectedVersion) {
+    return jdbc.sql(
+                "update candidate_profiles set availability_status = :status, version = :version,"
+                    + " updated_at = :updatedAt where account_id = :account and version = :expected")
+            .param("status", profile.availability().name())
             .param(VERSION, profile.version())
             .param(UPDATED_AT, OffsetDateTime.ofInstant(profile.updatedAt(), ZoneOffset.UTC))
             .param(ACCOUNT, profile.accountId().value())
