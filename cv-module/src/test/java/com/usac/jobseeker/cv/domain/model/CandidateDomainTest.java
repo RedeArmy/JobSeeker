@@ -273,6 +273,39 @@ class CandidateDomainTest {
   }
 
   @Test
+  void changingDiscoverabilityOrAvailabilityAdvancesTheVersionAndTouchesNothingElse() {
+    var base =
+        CandidateProfile.create(
+            new CandidateProfileId(UUID.randomUUID()),
+            new AccountId(UUID.randomUUID()),
+            details("a@b.co", null, null, null, null, null),
+            T0);
+
+    var hidden = base.withDiscoverable(false, T0.plusSeconds(1));
+    var open = hidden.withAvailability(AvailabilityStatus.OPEN_TO_WORK, T0.plusSeconds(2));
+
+    assertThat(hidden.discoverable()).isFalse();
+    assertThat(hidden.availability()).isEqualTo(AvailabilityStatus.UNSET);
+    assertThat(open.discoverable()).isFalse();
+    assertThat(open.availability()).isEqualTo(AvailabilityStatus.OPEN_TO_WORK);
+    assertThat(open.version()).isEqualTo(3);
+    assertThat(open.details()).isEqualTo(base.details());
+    assertThatThrownBy(() -> base.withAvailability(null, T0))
+        .isInstanceOf(NullPointerException.class);
+  }
+
+  @Test
+  void nobodyCanExcludeThemselvesButAnyOtherAccountCanBeExcluded() {
+    var me = new AccountId(UUID.randomUUID());
+    var other = new AccountId(UUID.randomUUID());
+
+    assertThat(AvailabilityExclusion.of(me, other, T0))
+        .isEqualTo(new AvailabilityExclusion(other, T0));
+    assertThat(violationsOf(() -> AvailabilityExclusion.of(me, me, T0)))
+        .containsExactly(new FieldViolation("accountId", "SELF_EXCLUSION"));
+  }
+
+  @Test
   void aSavedProfileCannotHaveVersionZeroAndNeedsEveryPart() {
     var id = new CandidateProfileId(UUID.randomUUID());
     var account = new AccountId(UUID.randomUUID());

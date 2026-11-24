@@ -47,6 +47,23 @@ public record CandidateProfile(
         id, accountId, newDetails, discoverable, availability, version + 1, now);
   }
 
+  /** La siguiente versión con la descubribilidad indicada (BR-DATA-03); los datos no cambian. */
+  public CandidateProfile withDiscoverable(boolean newValue, Instant now) {
+    return new CandidateProfile(id, accountId, details, newValue, availability, version + 1, now);
+  }
+
+  /** La siguiente versión con la disponibilidad declarada (BR-CAND-04); los datos no cambian. */
+  public CandidateProfile withAvailability(AvailabilityStatus newStatus, Instant now) {
+    return new CandidateProfile(
+        id,
+        accountId,
+        details,
+        discoverable,
+        Objects.requireNonNull(newStatus, "status"),
+        version + 1,
+        now);
+  }
+
   /**
    * La siguiente versión sin cambiar los datos: la usa quien reemplaza un conjunto (BR-ACCT-06).
    */
