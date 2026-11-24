@@ -44,18 +44,48 @@ public class OutboxStore implements DomainEventPublisherPort {
   }
 
   /**
-   * Reclama filas pendientes ya disponibles. `SKIP LOCKED` permite que varias instancias sondeen a
-   * la vez sin pisarse ni esperarse. Se ordena por agregado y versión para respetar el orden dentro
-   * de un agregado cuando hay una sola instancia.
+   * Clave del bloqueo de aviso que serializa los reclamos entre instancias: dos reclamos a la vez
+   * no verían los arrendamientos del otro y podrían tomar dos eventos del mismo agregado.
    */
-  public List<Claimed> claim(int limit) {
+  private static final long CLAIM_LOCK_KEY = 7_262_017_001L;
+
+  /**
+   * Reclama filas pendientes ya disponibles y las **arrienda**: marca `locked_until`, cuenta el
+   * intento y devuelve las filas. Debe ejecutarse en su propia transacción, corta; quien despacha
+   * lo hace después, sin transacción abierta (TD-001).
+   *
+   * <p>Garantía de orden por agregado (ADR-0016, decisión 4, TD-018): de cada agregado se toma como
+   * mucho **un** evento, el de menor versión entre los disponibles, y ninguno si ya hay otro de ese
+   * agregado en vuelo. Así nunca corren a la vez dos manejadores del mismo agregado, que podrían
+   * leer el estado antes de un cambio y escribir después que el manejador de ese cambio. Un evento
+   * que espera su retroceso no bloquea a los siguientes: solo el que está en vuelo.
+   *
+   * <p>El bloqueo de aviso hace que el reclamo de una instancia vea ya confirmados los
+   * arrendamientos de las demás.
+   */
+  public List<Claimed> claim(int limit, Duration lease, int maxAttempts) {
+    jdbc.sql("select pg_advisory_xact_lock(:key)").param("key", CLAIM_LOCK_KEY).query().singleRow();
+    failExhaustedLeases(maxAttempts);
     return jdbc.sql(
-            "select id, aggregate_type, aggregate_id, aggregate_version, event_type,"
-                + " event_version, payload::text as payload, trace_id, attempts"
-                + " from outbox_events where status = 'PENDING' and available_at <= now()"
-                + " order by available_at, aggregate_id, aggregate_version"
-                + " limit :limit for update skip locked")
+            "with eligible as ("
+                + " select distinct on (o.aggregate_type, o.aggregate_id) o.id, o.available_at"
+                + " from outbox_events o"
+                + " where o.status = 'PENDING' and o.available_at <= clock_timestamp()"
+                + " and (o.locked_until is null or o.locked_until <= clock_timestamp())"
+                + " and not exists (select 1 from outbox_events f"
+                + " where f.aggregate_type = o.aggregate_type and f.aggregate_id = o.aggregate_id"
+                + " and f.status = 'PENDING' and f.locked_until > clock_timestamp())"
+                + " order by o.aggregate_type, o.aggregate_id, o.aggregate_version, o.available_at),"
+                + " picked as (select id from eligible order by available_at limit :limit)"
+                + " update outbox_events e set locked_until = clock_timestamp() + make_interval(secs => :leaseSeconds),"
+                + " attempts = e.attempts + 1 from picked"
+                + " where e.id = picked.id"
+                + " returning e.id, e.aggregate_type, e.aggregate_id, e.aggregate_version,"
+                + " e.event_type, e.event_version, e.payload::text as payload, e.trace_id,"
+                + " e.attempts, e.available_at")
         .param("limit", limit)
+        // pgjdbc no infiere el tipo de un `Duration`: se pasa en segundos.
+        .param("leaseSeconds", lease.toMillis() / 1000.0)
         .query(
             (rows, n) ->
                 new Claimed(
@@ -72,10 +102,25 @@ public class OutboxStore implements DomainEventPublisherPort {
         .list();
   }
 
+  // Un evento que mata el proceso nunca llega al camino de fallo del sondeador, así que sin esto se
+  // reclamaría sin fin cada vez que venza su arrendamiento. Si vence con los intentos agotados, se
+  // da por fallido para revisión, igual que uno que falla con excepción (ADR-0016, decisión 5).
+  private void failExhaustedLeases(int maxAttempts) {
+    jdbc.sql(
+            "update outbox_events set status = 'FAILED', locked_until = null"
+                + " where status = 'PENDING' and attempts >= :maxAttempts"
+                + " and locked_until <= clock_timestamp()")
+        .param("maxAttempts", maxAttempts)
+        .update();
+  }
+
+  /**
+   * El intento ya se contó al reclamar: así un evento que mata el proceso no se reintenta sin fin.
+   */
   public void markProcessed(UUID id) {
     jdbc.sql(
             "update outbox_events set status = 'PROCESSED', processed_at = now(),"
-                + " attempts = attempts + 1 where id = :id")
+                + " locked_until = null where id = :id")
         .param("id", id)
         .update();
   }
@@ -83,8 +128,8 @@ public class OutboxStore implements DomainEventPublisherPort {
   /** Programa el reintento: la fila vuelve a estar disponible tras el retroceso. */
   public void markRetry(UUID id, Duration delay) {
     jdbc.sql(
-            "update outbox_events set attempts = attempts + 1,"
-                + " available_at = :availableAt where id = :id")
+            "update outbox_events set available_at = :availableAt, locked_until = null"
+                + " where id = :id")
         .param("id", id)
         .param("availableAt", OffsetDateTime.ofInstant(Instant.now().plus(delay), ZoneOffset.UTC))
         .update();
@@ -92,7 +137,7 @@ public class OutboxStore implements DomainEventPublisherPort {
 
   /** Agotados los intentos: se deja para revisión, no se reintenta más. */
   public void markFailed(UUID id) {
-    jdbc.sql("update outbox_events set status = 'FAILED', attempts = attempts + 1 where id = :id")
+    jdbc.sql("update outbox_events set status = 'FAILED', locked_until = null where id = :id")
         .param("id", id)
         .update();
   }

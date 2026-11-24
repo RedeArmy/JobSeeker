@@ -225,7 +225,7 @@ class CvEventsAndSnapshotIntegrationTest {
         .andExpect(status().isCreated());
     var received = new ArrayList<OutboxEvent>();
 
-    poller(received).pollOnce();
+    poller(received).drain(50);
 
     var mine = received.stream().filter(e -> e.payload().contains(id.toString())).toList();
     assertThat(mine).extracting(OutboxEvent::eventType).containsAll(EDIT_EVENTS);
@@ -329,7 +329,7 @@ class CvEventsAndSnapshotIntegrationTest {
             com.usac.jobseeker.cv.application.usecase.anonymizeprofiledata
                 .AnonymizeProfileDataUseCase.Result.NOTHING_TO_ANONYMIZE);
     var received = new ArrayList<OutboxEvent>();
-    poller(received).pollOnce();
+    poller(received).drain(50);
     assertThat(received)
         .filteredOn(
             e -> e.eventType().equals("profile.anonymized") && e.payload().contains(id.toString()))

@@ -41,15 +41,39 @@ public class OutboxPoller {
     this.meters = meters;
   }
 
-  /** Una pasada; devuelve cuántas filas reclamó. */
+  /**
+   * Una pasada; devuelve cuántas filas reclamó. Solo el reclamo es transaccional y corto: el
+   * despacho a los consumidores (que pueden tardar, como una llamada a Ollama) ocurre **sin
+   * transacción abierta**, así que no retiene una conexión del pool ni bloqueos de fila (TD-001).
+   */
   public int pollOnce() {
     // `execute` solo devuelve nulo si el callback lo devuelve, y aquí nunca lo hace.
-    return transaction.execute(
-        status -> {
-          List<OutboxStore.Claimed> batch = store.claim(properties.batchSize());
-          batch.forEach(this::dispatch);
-          return batch.size();
-        });
+    List<OutboxStore.Claimed> batch =
+        transaction.execute(
+            status ->
+                store.claim(properties.batchSize(), properties.lease(), properties.maxAttempts()));
+    batch.forEach(this::dispatch);
+    return batch.size();
+  }
+
+  /**
+   * Repite pasadas mientras haya trabajo, con un tope. Como de cada agregado se despacha un evento
+   * por pasada (orden por agregado), una ráfaga de cambios de un mismo perfil tardaría una pasada
+   * por evento si cada una esperara el siguiente sondeo; así se vacía enseguida. El tope evita que
+   * una pasada del planificador monopolice el hilo.
+   *
+   * @return cuántas filas se reclamaron en total
+   */
+  public int drain(int maxPasses) {
+    int total = 0;
+    for (int pass = 0; pass < maxPasses; pass++) {
+      int claimed = pollOnce();
+      total += claimed;
+      if (claimed == 0) {
+        break;
+      }
+    }
+    return total;
   }
 
   // Cualquier fallo de un consumidor se reintenta con retroceso; no debe tumbar el lote entero.
@@ -65,7 +89,8 @@ public class OutboxPoller {
       store.markProcessed(event.id());
       count("processed");
     } catch (RuntimeException e) {
-      int attempt = claimed.attempts() + 1;
+      // El intento ya se contó al reclamar.
+      int attempt = claimed.attempts();
       if (attempt >= properties.maxAttempts()) {
         store.markFailed(event.id());
         count("failed");

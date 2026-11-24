@@ -2,6 +2,7 @@ package com.usac.jobseeker.app.infrastructure.outbox;
 
 import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.ConstructorBinding;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
 /**
@@ -12,6 +13,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param maxAttempts intentos antes de dejar la fila en FAILED para revisión
  * @param baseBackoff retroceso del primer reintento; se duplica en cada uno
  * @param maxBackoff tope del retroceso
+ * @param lease cuánto se reserva una fila reclamada: debe superar lo que tarda el consumidor más
+ *     lento; si vence, otra instancia la reclama de nuevo (al menos una vez, ADR-0016)
  */
 @ConfigurationProperties("jobseeker.outbox")
 public record OutboxProperties(
@@ -19,8 +22,10 @@ public record OutboxProperties(
     @DefaultValue("50") int batchSize,
     @DefaultValue("10") int maxAttempts,
     @DefaultValue("2s") Duration baseBackoff,
-    @DefaultValue("5m") Duration maxBackoff) {
+    @DefaultValue("5m") Duration maxBackoff,
+    @DefaultValue("5m") Duration lease) {
 
+  @ConstructorBinding
   public OutboxProperties {
     if (pollInterval.compareTo(Duration.ZERO) <= 0) {
       throw new IllegalArgumentException("jobseeker.outbox.poll-interval debe ser positivo");
@@ -29,10 +34,23 @@ public record OutboxProperties(
       throw new IllegalArgumentException(
           "jobseeker.outbox.batch-size y max-attempts deben ser positivos");
     }
+    if (lease.compareTo(Duration.ZERO) <= 0) {
+      throw new IllegalArgumentException("jobseeker.outbox.lease debe ser positivo");
+    }
     if (baseBackoff.compareTo(Duration.ZERO) <= 0 || maxBackoff.compareTo(baseBackoff) < 0) {
       throw new IllegalArgumentException(
           "jobseeker.outbox.base-backoff debe ser positivo y no mayor que max-backoff");
     }
+  }
+
+  /** Sin arrendamiento explícito: el predeterminado de cinco minutos. */
+  public OutboxProperties(
+      Duration pollInterval,
+      int batchSize,
+      int maxAttempts,
+      Duration baseBackoff,
+      Duration maxBackoff) {
+    this(pollInterval, batchSize, maxAttempts, baseBackoff, maxBackoff, Duration.ofMinutes(5));
   }
 
   /**

@@ -57,6 +57,10 @@ class OutboxConfiguration {
     private static final java.time.Duration PROCESSED_EVENTS_RETENTION =
         java.time.Duration.ofDays(30);
 
+    // Tope de pasadas por sondeo: 20 × el tamaño del lote, sin monopolizar el hilo del
+    // planificador.
+    private static final int MAX_PASSES_PER_TICK = 20;
+
     private final OutboxPoller poller;
     private final OutboxStore store;
     private final JdbcProcessedEvents processedEvents;
@@ -89,7 +93,7 @@ class OutboxConfiguration {
     @Scheduled(fixedDelayString = "${jobseeker.outbox.poll-interval:1s}")
     void poll() {
       try {
-        poller.pollOnce();
+        poller.drain(MAX_PASSES_PER_TICK);
       } catch (RuntimeException e) {
         LOG.error("event=outbox_poll_failed Falló una pasada del sondeador de la bandeja", e);
       }
