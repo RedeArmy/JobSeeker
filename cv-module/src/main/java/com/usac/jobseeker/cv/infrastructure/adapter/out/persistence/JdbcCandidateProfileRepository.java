@@ -36,6 +36,8 @@ public class JdbcCandidateProfileRepository
 
   private static final String ACCOUNT = "account";
   private static final String VERSION = "version";
+  private static final String DISCOVERABLE = "discoverable";
+  private static final String EXPECTED = "expected";
   private static final String UPDATED_AT = "updatedAt";
 
   private final JdbcClient jdbc;
@@ -76,7 +78,7 @@ public class JdbcCandidateProfileRepository
             .param(ACCOUNT, profile.accountId().value())
             .param("email", d.contact().email())
             .param("phone", d.contact().phone())
-            .param("discoverable", profile.discoverable())
+            .param(DISCOVERABLE, profile.discoverable())
             .param("availability", profile.availability().name())
             .param("country", d.countryOfResidence())
             .param("modality", d.desiredModality() == null ? null : d.desiredModality().name())
@@ -125,7 +127,7 @@ public class JdbcCandidateProfileRepository
             .param(VERSION, profile.version())
             .param(UPDATED_AT, OffsetDateTime.ofInstant(profile.updatedAt(), ZoneOffset.UTC))
             .param(ACCOUNT, profile.accountId().value())
-            .param("expected", expectedVersion)
+            .param(EXPECTED, expectedVersion)
             .update()
         == 1;
   }
@@ -138,11 +140,11 @@ public class JdbcCandidateProfileRepository
     return jdbc.sql(
                 "update candidate_profiles set discoverable = :discoverable, version = :version,"
                     + " updated_at = :updatedAt where account_id = :account and version = :expected")
-            .param("discoverable", profile.discoverable())
+            .param(DISCOVERABLE, profile.discoverable())
             .param(VERSION, profile.version())
             .param(UPDATED_AT, OffsetDateTime.ofInstant(profile.updatedAt(), ZoneOffset.UTC))
             .param(ACCOUNT, profile.accountId().value())
-            .param("expected", expectedVersion)
+            .param(EXPECTED, expectedVersion)
             .update()
         == 1;
   }
@@ -156,7 +158,7 @@ public class JdbcCandidateProfileRepository
             .param(VERSION, profile.version())
             .param(UPDATED_AT, OffsetDateTime.ofInstant(profile.updatedAt(), ZoneOffset.UTC))
             .param(ACCOUNT, profile.accountId().value())
-            .param("expected", expectedVersion)
+            .param(EXPECTED, expectedVersion)
             .update()
         == 1;
   }

@@ -135,12 +135,6 @@ class CandidateVisibilityEndpointIntegrationTest {
     return id;
   }
 
-  private UUID anyAccount() {
-    UUID id = UUID.randomUUID();
-    jdbc.update("insert into accounts (id, is_recruiter_enabled) values (?, true)", id);
-    return id;
-  }
-
   private int events(UUID account, String type) {
     return jdbc.queryForObject(
         "select count(*) from outbox_events where event_type = ? and aggregate_id ="
@@ -234,13 +228,13 @@ class CandidateVisibilityEndpointIntegrationTest {
             json(put(CANDIDATE + "/discoverability"), id, "{\"discoverable\":false,\"version\":0}"))
         .andExpect(status().isNotFound());
     mvc.perform(authed(get(EXCL), id)).andExpect(status().isNotFound());
-    mvc.perform(json(post(EXCL), id, account(anyAccount()))).andExpect(status().isNotFound());
+    mvc.perform(json(post(EXCL), id, account(recruiter()))).andExpect(status().isNotFound());
   }
 
   @Test
   void anAccountIsExcludedListedAndRemovedWithoutTouchingTheProfileVersion() throws Exception {
     UUID id = withProfile();
-    UUID excluded = anyAccount();
+    UUID excluded = recruiter();
 
     mvc.perform(json(post(EXCL), id, account(excluded)))
         .andExpect(status().isCreated())
@@ -258,7 +252,7 @@ class CandidateVisibilityEndpointIntegrationTest {
   void aDuplicateIsA409AnUnknownAccountOrAMissingOneIsA404AndSelfOrGarbageIsA400()
       throws Exception {
     UUID id = withProfile();
-    UUID excluded = anyAccount();
+    UUID excluded = recruiter();
     mvc.perform(json(post(EXCL), id, account(excluded))).andExpect(status().isCreated());
 
     mvc.perform(json(post(EXCL), id, account(excluded)))
@@ -280,8 +274,8 @@ class CandidateVisibilityEndpointIntegrationTest {
   void anAccountInItsGracePeriodCanBeExcludedButAnAnonymizedOneIsTreatedAsUnknown()
       throws Exception {
     UUID id = withProfile();
-    UUID inGrace = anyAccount();
-    UUID anonymized = anyAccount();
+    UUID inGrace = recruiter();
+    UUID anonymized = recruiter();
     jdbc.update(
         "update accounts set deletion_status = 'PENDING_DELETION', deletion_requested_at = now() where id = ?",
         inGrace);
@@ -312,7 +306,7 @@ class CandidateVisibilityEndpointIntegrationTest {
   void theExclusionListOfOneCandidateIsInvisibleAndUntouchableForAnother() throws Exception {
     UUID mine = withProfile();
     UUID theirs = withProfile();
-    UUID excluded = anyAccount();
+    UUID excluded = recruiter();
     mvc.perform(json(post(EXCL), mine, account(excluded))).andExpect(status().isCreated());
 
     mvc.perform(authed(get(EXCL), theirs)).andExpect(jsonPath("$.exclusions.length()").value(0));
@@ -323,8 +317,8 @@ class CandidateVisibilityEndpointIntegrationTest {
   @Test
   void anExcludedAccountSeesUnsetAndEveryoneElseSeesTheRealStatus() throws Exception {
     UUID id = withProfile();
-    UUID excluded = anyAccount();
-    UUID other = anyAccount();
+    UUID excluded = recruiter();
+    UUID other = recruiter();
     mvc.perform(
             json(
                 put(CANDIDATE + "/availability"),
@@ -354,7 +348,7 @@ class CandidateVisibilityEndpointIntegrationTest {
   @Test
   void ofTwoSimultaneousAddsOfTheSameAccountExactlyOneWins() throws Exception {
     UUID id = withProfile();
-    UUID excluded = anyAccount();
+    UUID excluded = recruiter();
     ExecutorService pool = Executors.newFixedThreadPool(2);
     CountDownLatch start = new CountDownLatch(1);
     List<Future<Integer>> results = new ArrayList<>();

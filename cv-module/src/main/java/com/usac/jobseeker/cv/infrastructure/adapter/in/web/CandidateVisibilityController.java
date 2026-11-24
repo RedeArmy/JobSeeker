@@ -41,7 +41,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class CandidateVisibilityController {
 
   private static final String PATH = "/api/v1/me/candidate-profile";
-  private static final String EXCLUSIONS = PATH + "/availability-exclusions";
+  private static final String EXCLUSIONS_PATH = PATH + "/availability-exclusions";
   private static final String BEARER = ApiDocs.BEARER;
 
   private final ChangeDiscoverabilityUseCase discoverability;
@@ -96,7 +96,7 @@ public class CandidateVisibilityController {
                 caller(principal), body.status(), version(body.version()))));
   }
 
-  @GetMapping(EXCLUSIONS)
+  @GetMapping(EXCLUSIONS_PATH)
   @Operation(
       summary = "Consultar mi lista de exclusión de disponibilidad",
       description = "Las cuentas, de cualquier rol, a las que se oculta mi estado `OPEN_TO_WORK`.",
@@ -110,7 +110,7 @@ public class CandidateVisibilityController {
         exclusions.list(new ListAvailabilityExclusionsQuery(caller(principal))));
   }
 
-  @PostMapping(EXCLUSIONS)
+  @PostMapping(EXCLUSIONS_PATH)
   @Operation(
       summary = "Excluir a una cuenta de mi disponibilidad",
       description =
@@ -129,7 +129,7 @@ public class CandidateVisibilityController {
         .body(AvailabilityExclusionsResponse.from(list));
   }
 
-  @DeleteMapping(EXCLUSIONS + "/{accountId}")
+  @DeleteMapping(EXCLUSIONS_PATH + "/{accountId}")
   @Operation(
       summary = "Quitar a una cuenta de mi lista de exclusión",
       description = "`404` si esa cuenta no estaba en la lista. Devuelve la lista completa.",

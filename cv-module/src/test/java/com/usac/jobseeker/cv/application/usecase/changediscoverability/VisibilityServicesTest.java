@@ -232,8 +232,8 @@ class VisibilityServicesTest {
     assertThat(view.availability()).isEqualTo(AvailabilityStatus.OPEN_TO_WORK);
     assertThat(back.availability()).isEqualTo(AvailabilityStatus.UNSET);
     assertThat(back.version()).isEqualTo(3);
-    assertThat(events).hasSize(2);
     assertThat(events)
+        .hasSize(2)
         .allSatisfy(e -> assertThat(e.payload()).doesNotContain("OPEN_TO_WORK", "UNSET"));
   }
 
