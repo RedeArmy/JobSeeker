@@ -23,9 +23,10 @@ public interface AnonymizationStorePort {
       AccountId accountId, String placeholderName, Instant now);
 
   /**
-   * Anonimiza el perfil de candidato: contacto a nulo, descubribilidad forzada a `false`, y borra
-   * sus habilidades, idiomas, autorizaciones de trabajo y su lista de exclusión. Vacío si no hay
-   * perfil o ya estaba.
+   * Anonimiza el perfil de candidato: contacto y expectativa salarial a nulo, disponibilidad sin
+   * declarar, descubribilidad forzada a `false`, y borra sus habilidades, idiomas, autorizaciones
+   * de trabajo y su lista de exclusión. Se conservan solo país, modalidad, jornada y reubicación.
+   * Vacío si no hay perfil o ya estaba.
    */
   Optional<Anonymized> anonymizeCandidate(AccountId accountId, Instant now);
 }

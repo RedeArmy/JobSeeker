@@ -54,7 +54,10 @@ public class JdbcAnonymizationRepository implements AnonymizationStorePort {
     Optional<Anonymized> marked =
         jdbc.sql(
                 "update candidate_profiles set contact_email = null, contact_phone = null,"
-                    + " discoverable = false, anonymized_at = :now, version = version + 1,"
+                    + " discoverable = false, availability_status = 'UNSET',"
+                    + " salary_expectation_min = null, salary_expectation_max = null,"
+                    + " salary_currency = null, salary_period = null,"
+                    + " anonymized_at = :now, version = version + 1,"
                     + " updated_at = :now where account_id = :account and anonymized_at is null"
                     + " returning id, version")
             .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))

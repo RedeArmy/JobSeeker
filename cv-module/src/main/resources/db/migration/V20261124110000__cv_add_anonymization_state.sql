@@ -4,8 +4,9 @@
 -- inexistente, sin depender de comparar el nombre con el marcador.
 --
 -- En el perfil de candidato el correo deja de ser obligatorio *solo* si el perfil está anonimizado, y
--- la propia restricción exige que un perfil anonimizado no conserve contacto ni sea descubrible: la
--- base es la última defensa de que nunca vuelva a aparecer en sugerencias.
+-- la propia restricción exige que un perfil anonimizado no conserve contacto, expectativa salarial ni
+-- disponibilidad, ni sea descubrible: la base es la última defensa de que nunca vuelva a aparecer en
+-- sugerencias ni conserve un dato sensible que nadie lee.
 --
 -- Excepción de squawk (constraint-missing-not-valid), y es segura: estas tablas las crearon
 -- migraciones de hace pocos sprints y aún no existen en ningún entorno desplegado, así que no hay
@@ -24,5 +25,7 @@ alter table candidate_profiles
         check (
             (anonymized_at is null and contact_email is not null)
             or (anonymized_at is not null and contact_email is null and contact_phone is null
-                and not discoverable)
+                and not discoverable and availability_status = 'UNSET'
+                and salary_expectation_min is null and salary_expectation_max is null
+                and salary_currency is null and salary_period is null)
         );

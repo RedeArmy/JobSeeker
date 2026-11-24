@@ -148,7 +148,7 @@ class JdbcAnonymizationRepositoryTest {
   }
 
   @Test
-  void theCandidateProfileLosesItsContactItsSetsAndItsListButKeepsItsPreferences() {
+  void theCandidateProfileLosesItsContactSalaryAvailabilitySetsAndListButKeepsCoarsePreferences() {
     var person = aFullPerson();
     var excludedAccount = exclusions.list(person.candidate()).get(0).excludedAccount();
 
@@ -157,7 +157,7 @@ class JdbcAnonymizationRepositoryTest {
     assertThat(result).isPresent();
     var row =
         jdbc.sql(
-                "select contact_email, contact_phone, discoverable, country_of_residence, desired_modality, salary_expectation_min, availability_status from candidate_profiles where id = :id")
+                "select contact_email, contact_phone, discoverable, country_of_residence, desired_modality, salary_expectation_min, salary_currency, salary_period, availability_status from candidate_profiles where id = :id")
             .param("id", person.candidate().value())
             .query(
                 (rows, n) ->
@@ -167,11 +167,13 @@ class JdbcAnonymizationRepositoryTest {
                         String.valueOf(rows.getBoolean(3)),
                         rows.getString(4),
                         rows.getString(5),
-                        rows.getBigDecimal(6).toPlainString(),
-                        rows.getString(7)))
+                        String.valueOf(rows.getBigDecimal(6)),
+                        String.valueOf(rows.getString(7)),
+                        String.valueOf(rows.getString(8)),
+                        rows.getString(9)))
             .single();
     assertThat(row)
-        .containsExactly("null", "null", "false", "GT", "REMOTE", "3000.00", "OPEN_TO_WORK");
+        .containsExactly("null", "null", "false", "GT", "REMOTE", "null", "null", "null", "UNSET");
     assertThat(count("candidate_skills", "candidate_profile_id", person.candidate().value()))
         .isZero();
     assertThat(count("candidate_languages", "candidate_profile_id", person.candidate().value()))
@@ -267,6 +269,23 @@ class JdbcAnonymizationRepositoryTest {
 
     assertThatThrownBy(reveal::update).isInstanceOf(DataAccessException.class);
     assertThatThrownBy(restoreContact::update).isInstanceOf(DataAccessException.class);
+  }
+
+  @Test
+  void theDatabaseRefusesToLeaveAnAnonymizedProfileWithSalaryOrAvailability() {
+    var person = aFullPerson();
+    anonymization.anonymizeCandidate(person.account(), LATER);
+    var salary =
+        jdbc.sql(
+                "update candidate_profiles set salary_expectation_min = 100, salary_currency = 'USD', salary_period = 'MONTH' where id = :id")
+            .param("id", person.candidate().value());
+    var availability =
+        jdbc.sql(
+                "update candidate_profiles set availability_status = 'OPEN_TO_WORK' where id = :id")
+            .param("id", person.candidate().value());
+
+    assertThatThrownBy(salary::update).isInstanceOf(DataAccessException.class);
+    assertThatThrownBy(availability::update).isInstanceOf(DataAccessException.class);
   }
 
   @Test
