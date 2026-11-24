@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.usac.jobseeker.app.InfrastructureTestConfiguration;
 import com.usac.jobseeker.common.application.outbox.OutboxEvent;
 import com.usac.jobseeker.common.application.outbox.OutboxEventConsumer;
+import com.usac.jobseeker.cv.application.usecase.getprofilesnapshot.ProfileSnapshot;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -43,8 +44,6 @@ class CvEventsAndSnapshotIntegrationTest {
 
   private static final String PROFILE = "/api/v1/me/professional-profile";
   private static final String CANDIDATE = "/api/v1/me/candidate-profile";
-  private static final String EXCL = CANDIDATE + "/availability-exclusions";
-  private static final String BASE = "{\"contactEmail\":\"ana@example.test\",\"version\":%d}";
 
   private static final StubIssuer ISSUER = startIssuer();
   private static final TestTokens KEYS = TestTokens.withKey("kid-snapshot");
@@ -110,12 +109,6 @@ class CvEventsAndSnapshotIntegrationTest {
     UUID id = UUID.randomUUID();
     jdbc.update("insert into accounts (id, is_recruiter_enabled) values (?, true)", id);
     return id;
-  }
-
-  /** Crea el perfil base (versión 0 → 1), que toda colección necesita. */
-  private void createProfile(UUID account) throws Exception {
-    mvc.perform(json(put(PROFILE), account, "{\"fullName\":\"Ana López\",\"version\":0}"))
-        .andExpect(status().isCreated());
   }
 
   // Los tipos de evento que `cv` publica por la bandeja, con la forma de su carga.
@@ -227,8 +220,7 @@ class CvEventsAndSnapshotIntegrationTest {
     for (OutboxEvent event : mine) {
       var json =
           com.jayway.jsonpath.JsonPath.<java.util.Map<String, Object>>read(event.payload(), "$");
-      assertThat(json).containsKey("accountId");
-      assertThat(json.get("accountId")).isEqualTo(id.toString());
+      assertThat(json).containsEntry("accountId", id.toString());
       assertThat(event.eventVersion()).isEqualTo(1);
       assertThat(event.aggregateType()).isIn("professional_profile", "candidate_profile");
       assertThat(event.payload())
@@ -269,8 +261,10 @@ class CvEventsAndSnapshotIntegrationTest {
             .orElseThrow();
 
     assertThat(snapshot.headline()).isEqualTo("Backend");
-    assertThat(snapshot.experiences()).extracting(e -> e.title()).containsExactly("Engineer");
-    assertThat(snapshot.skills()).extracting(s -> s.name()).containsExactly("Java");
+    assertThat(snapshot.experiences())
+        .extracting(ProfileSnapshot.Experience::title)
+        .containsExactly("Engineer");
+    assertThat(snapshot.skills()).extracting(ProfileSnapshot.Skill::name).containsExactly("Java");
     assertThat(snapshot.countryOfResidence()).isEqualTo("GT");
     assertThat(snapshot.desiredModality()).isEqualTo("REMOTE");
     assertThat(snapshot.discoverable()).isFalse();
