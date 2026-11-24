@@ -39,7 +39,6 @@ class ActorResolutionPerRequestIntegrationTest {
 
   private static final String PROFILE = "/api/v1/me/professional-profile";
   private static final String CANDIDATE = "/api/v1/me/candidate-profile";
-  private static final String EXCL = CANDIDATE + "/availability-exclusions";
   private static final String BASE = "{\"contactEmail\":\"ana@example.test\",\"version\":%d}";
 
   private static final StubIssuer ISSUER = startIssuer();

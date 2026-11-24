@@ -118,7 +118,7 @@ class Bucket4jRedisRateLimiterIntegrationTest {
                 holding.countDown();
                 try {
                   release.await();
-                } catch (InterruptedException interrupted) {
+                } catch (InterruptedException _) {
                   Thread.currentThread().interrupt();
                 }
               }
