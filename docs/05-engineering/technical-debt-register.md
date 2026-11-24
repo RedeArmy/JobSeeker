@@ -4,7 +4,7 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | 🟡 En revisión |
-| **Versión** | 1.2 — se pagan TD-001, TD-018, TD-019 y TD-021 |
+| **Versión** | 1.3 — se paga TD-002 y entran TD-028 y TD-029 |
 | **Fecha** | 24 de noviembre de 2026 |
 | **Dueño del documento** | Responsable del proyecto |
 | **Revisión del registro** | Al cerrar cada sprint y antes de cada hito de la hoja de ruta |
@@ -52,11 +52,11 @@ Corte: 24-nov-2026.
 |---|---|
 | S1 Crítica | 0 |
 | S2 Alta | 4 |
-| S3 Media | 8 |
+| S3 Media | 9 |
 | S4 Baja | 5 |
-| **Total** | **17** |
+| **Total** | **18** |
 
-- **Abiertas:** 15 · **Planificadas:** 2 · **Resueltas:** 19 · **Aceptadas:** 6.
+- **Abiertas:** 16 · **Planificadas:** 2 · **Resueltas:** 21 · **Aceptadas:** 6.
 - **S2 abiertas con disparador próximo** (decidir el siguiente sprint): TD-012 (antes de `suggestcandidatesforjob`) y TD-005 y TD-016 (primer despliegue), más TD-020 (antes de usuarios reales).
 - **Métricas a seguir en cada revisión:** deuda abierta por severidad, edad de las S2 en días, número de cierres por sprint, aceptadas vencidas.
 
@@ -64,7 +64,6 @@ Corte: 24-nov-2026.
 
 | ID | Título | Tipo | Sev | Esf | Confianza | Estado | Disparador |
 |---|---|---|---|---|---|---|---|
-| TD-002 | Un solo hilo para todas las tareas programadas | Concurrencia | S3 | S | Leída | Abierta | Antes del primer lote programado (anonimización, archivado de vacantes) |
 | TD-005 | Dimensionamiento de producción sin definir | Operación | S2 | S | Hipótesis | Abierta | Antes del primer despliegue (ADR-0026) |
 | TD-010 | Tablas sin escritor ni purga: `idempotency_keys` y `audit_log` | Arquitectura | S3 | M | Leída | Abierta | Primer endpoint con `Idempotency-Key` o primera acción auditable |
 | TD-011 | Marcado de la bandeja evento por evento | Rendimiento | S4 | S | Leída | Abierta | Con volumen |
@@ -77,23 +76,14 @@ Corte: 24-nov-2026.
 | TD-020 | Lote de anonimización sin dueño; descubribilidad al apagar la capacidad | Cumplimiento | S2 | L | Leída | Abierta | Antes de tener usuarios reales |
 | TD-022 | Calibración y cobertura de ESCO sin datos reales; arnés fuera de CI | Pruebas | S3 | L | Medida | Abierta | Antes de fijar el modelo de embeddings (ADR-0018) |
 | TD-027 | Los nombres propios del texto libre no se redactan antes del embedding | Privacidad | S3 | L | Medida | Abierta | Antes de embeber perfiles reales (`embedentity`) |
+| TD-028 | El lado de la vacante de `embedentity` no existe: `JobSignals` y `job_embeddings` | Arquitectura | S3 | L | Leída | Abierta | TDD de `job` y primer módulo `job` con código |
+| TD-029 | Sin medición de `embedentity` con un Ollama real | Operación | S3 | S | Leída | Abierta | Un Ollama con el modelo vigente disponible (ADR-0018, protocolo de 300 pares) |
 | TD-023 | Fin de soporte de Spring Boot 4.1 (31-jul-2027) | Plataforma | S3 | L | Medida | Planificada | 2027-04-30 (inicio de la subida) |
 | TD-024 | El `Dockerfile` compila con una imagen de Java 26 | Operación | S4 | XS | Leída | Abierta | Oportunista |
 | TD-025 | La purga de la bandeja usa `Instant.now()` | Código | S4 | XS | Leída | Abierta | Oportunista |
 | TD-026 | Habilidades sin enlace a la taxonomía | Dominio | S4 | L | Medida | Planificada | Sub-paso de enlazado de ADR-0019 |
 
 ### Fichas
-
-#### TD-002 — Un solo hilo para todas las tareas programadas
-
-**Concurrencia** · **S3 Media** · esfuerzo **S** · confianza **Leída** · **Abierta**
-
-- **Evidencia:** `@EnableScheduling` sin `TaskScheduler` configurado: el sondeo (cada 1 s), la purga y los lotes futuros comparten un hilo.
-- **Interés (qué cuesta no pagarla):** Un lote largo retrasa la entrega de eventos de toda la aplicación.
-- **Disparador:** Antes del primer lote programado (anonimización, archivado de vacantes).
-- **Remediación propuesta:** `ThreadPoolTaskScheduler` con pool dimensionado por tarea, o ejecución en hilos virtuales. `fixedDelay` ya evita que una misma tarea se solape consigo misma.
-- **Criterio de cierre:** Prueba que muestre que una tarea de 5 s no retrasa el sondeo.
-- **Referencias:** `docs/03-architecture/adr/0016-transactional-outbox-for-domain-events.md`
 
 #### TD-005 — Dimensionamiento de producción sin definir
 
@@ -227,6 +217,28 @@ Corte: 24-nov-2026.
 - **Criterio de cierre:** Decisión registrada con medición del aporte de las descripciones al puntaje, y prueba de nombres si se mantienen.
 - **Referencias:** `docs/03-architecture/adr/0017-matching-v2-pipeline-calibration-and-freshness.md`
 
+#### TD-028 — El lado de la vacante de `embedentity` no existe: `JobSignals` y `job_embeddings`
+
+**Arquitectura** · **S3 Media** · esfuerzo **L** · confianza **Leída** · **Abierta**
+
+- **Evidencia:** El sub-paso 3 de `matching` se hizo para perfiles; `job-module` no tiene código ni lectura pública, así que no hay de dónde construir `JobSignals` ni qué embeber. `EmbeddingStorePort` ya tiene los métodos de vacante, sin uso.
+- **Interés (qué cuesta no pagarla):** Sin vector de vacante no hay score ni sugeridos: el motor solo funciona de un lado.
+- **Disparador:** TDD de `job` y primer módulo `job` con código.
+- **Remediación propuesta:** Diseñar la lectura pública de `job` en su TDD, y añadir el consumidor, el caso de uso y la cola de vacantes con el mismo patrón que perfiles (nivel disparado, lápida no aplica).
+- **Criterio de cierre:** Una vacante publicada recibe su vector de punta a punta con una prueba equivalente a la de perfiles.
+- **Referencias:** `docs/03-architecture/tdd/matching-module.md`
+
+#### TD-029 — Sin medición de `embedentity` con un Ollama real
+
+**Operación** · **S3 Media** · esfuerzo **S** · confianza **Leída** · **Abierta**
+
+- **Evidencia:** Las pruebas usan un servidor de prueba: se desconoce la carga en frío, el efecto de `keep_alive` y `num_ctx`, y el tiempo real por perfil. Las métricas ya existen para observarlo.
+- **Interés (qué cuesta no pagarla):** El objetivo de frescura p95 ≤ 120 s está instrumentado pero no demostrado con el modelo real.
+- **Disparador:** Un Ollama con el modelo vigente disponible (ADR-0018, protocolo de 300 pares).
+- **Remediación propuesta:** Correr el flujo contra Ollama con el modelo vigente, archivar la medición y ajustar `keep-alive`, `num-ctx` y el tamaño de lote con ella.
+- **Criterio de cierre:** Una medición archivada con el modelo vigente y el p95 observado frente al objetivo.
+- **Referencias:** `docs/03-architecture/adr/0018-embedding-model-selection-and-versioning.md`
+
 #### TD-023 — Fin de soporte de Spring Boot 4.1 (31-jul-2027)
 
 **Plataforma** · **S3 Media** · esfuerzo **L** · confianza **Medida** · **Planificada**
@@ -294,6 +306,8 @@ Corte: 24-nov-2026.
 | TD-R17 | Qué conserva la copia del perfil de la postulación al anonimizar (antes TD-019) | Privacidad | S2 | 2026-11-24 | #34 | Decisión D5 resuelta: la copia pierde `canonical_text` y `canonical_hash`; las fotos del score nunca guardan texto del candidato. En el TDD de `matching` y en el modelo de datos, con su criterio de aceptación. |
 | TD-R18 | Redacción de datos personales del texto libre antes del embedding (antes TD-021) | Privacidad | S2 | 2026-11-24 | #34 | `PiiRedactor` y un `EmbeddableText` que solo se construye redactado; `EmbeddingClientPort` solo acepta ese tipo, así que el compilador lo garantiza. Queda TD-027 para los nombres propios. |
 | TD-R19 | Índice `idx_outbox_aggregate` sin lector (antes TD-009) | Rendimiento | S4 | 2026-11-24 | #34 | Descartada: el nuevo reclamo lo usa para comprobar si un agregado tiene un evento en vuelo. |
+| TD-R20 | Un solo hilo para todas las tareas programadas (antes TD-002) | Concurrencia | S3 | 2026-11-24 | #35 | Planificador de cuatro hilos configurable (`SCHEDULER_POOL_SIZE`). Prueba de que una tarea lenta no retrasa a otra; lo necesitaba el trabajador de embeddings, que llama a Ollama durante segundos. |
+| TD-R21 | Sin métricas de frescura de los embeddings (parte de TD-029) | Operación | S3 | 2026-11-24 | #35 | Histograma edición→vector con el objetivo de 120 s como cubo, edad del trabajo listo más viejo y profundidad por estado; tres alertas probadas con `promtool` y tres paneles. La medición con un Ollama real sigue abierta en TD-029. |
 
 ## 7. Deuda aceptada
 
@@ -311,8 +325,9 @@ Corte: 24-nov-2026.
 | Versión | Fecha | Cambio |
 |---|---|---|
 | 1.0 | 2026-11-24 | Registro inicial: 26 fichas abiertas o planificadas de la auditoría, 8 resueltas con su evidencia y 5 aceptadas con fecha de revisión. |
-| 1.1 | 2026-11-24 | Se pagan TD-003, TD-004, TD-006, TD-007 y TD-008 (PR #33) y pasan a resueltas como TD-R09 a TD-R13; TD-R14 registra el límite implícito que apareció al pagar TD-004 y su arreglo. Quedan 17 abiertas o planificadas, 19 resueltas y 6 aceptadas. |
-| 1.2 | 2026-11-24 | Se pagan TD-001, TD-018, TD-019 y TD-021 (PR #34) y pasan a resueltas como TD-R15 a TD-R18; TD-009 se descarta (TD-R19) porque el nuevo reclamo usa su índice. Entran TD-027 (nombres propios sin redactar) y TD-A06 (bloqueo de reclamo). Quedan 17 abiertas o planificadas, 19 resueltas y 6 aceptadas. |
+| 1.1 | 2026-11-24 | Se pagan TD-003, TD-004, TD-006, TD-007 y TD-008 (PR #33) y pasan a resueltas como TD-R09 a TD-R13; TD-R14 registra el límite implícito que apareció al pagar TD-004 y su arreglo. Quedan 18 abiertas o planificadas, 21 resueltas y 6 aceptadas. |
+| 1.2 | 2026-11-24 | Se pagan TD-001, TD-018, TD-019 y TD-021 (PR #34) y pasan a resueltas como TD-R15 a TD-R18; TD-009 se descarta (TD-R19) porque el nuevo reclamo usa su índice. Entran TD-027 (nombres propios sin redactar) y TD-A06 (bloqueo de reclamo). Quedan 18 abiertas o planificadas, 21 resueltas y 6 aceptadas. |
+| 1.3 | 2026-11-24 | Se paga TD-002 (PR #35, TD-R20) porque el trabajador de embeddings lo exigía. Entran TD-028 (el lado de la vacante de `embedentity`) y TD-029 (medición con un Ollama real); las métricas de frescura de TD-029 se pagan en el mismo PR (TD-R21). Quedan 18 abiertas o planificadas, 21 resueltas y 6 aceptadas. |
 
 ## 9. Plantilla de ficha
 

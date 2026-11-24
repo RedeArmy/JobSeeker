@@ -31,3 +31,78 @@ tests:
       - eval_time: 4m
         alertname: JobSeekerDown
         exp_alerts: []
+  # ---- matching: frescura de los embeddings ----
+  - interval: 15s
+    # Cola atascada: el trabajo listo más viejo espera más de 120 s de forma sostenida.
+    input_series:
+      - series: 'jobseeker_matching_queue_oldest_age_seconds{job="jobseeker"}'
+        values: "300+0x60"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: MatchingEmbeddingQueueStalled
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: MatchingEmbeddingQueueStalled
+        exp_alerts:
+          - exp_labels: { severity: warning }
+            exp_annotations:
+              summary: "La cola de embeddings está atascada"
+              description: "El trabajo de embedding listo más viejo lleva más de 120 s esperando durante 5 minutos: Ollama caído o saturado, o el trabajador detenido."
+  - interval: 15s
+    # Una cola sana (segundos de espera) no alerta.
+    input_series:
+      - series: 'jobseeker_matching_queue_oldest_age_seconds{job="jobseeker"}'
+        values: "8+0x60"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: MatchingEmbeddingQueueStalled
+        exp_alerts: []
+  - interval: 15s
+    # Trabajos fallidos que nadie revisa.
+    input_series:
+      - series: 'jobseeker_matching_queue_depth{job="jobseeker", status="failed"}'
+        values: "2+0x100"
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: MatchingEmbeddingJobsFailed
+        exp_alerts: []
+      - eval_time: 11m
+        alertname: MatchingEmbeddingJobsFailed
+        exp_alerts:
+          - exp_labels: { severity: warning }
+            exp_annotations:
+              summary: "Hay trabajos de embedding fallidos"
+              description: "Hay trabajos de la cola de embeddings en FAILED desde hace más de 10 minutos; ya no se reintentan y requieren revisión."
+  - interval: 15s
+    # Frescura incumplida: todo lo observado cae por encima de 120 s.
+    input_series:
+      - series: 'jobseeker_matching_freshness_seconds_bucket{job="jobseeker", le="120"}'
+        values: "0+0x200"
+      - series: 'jobseeker_matching_freshness_seconds_bucket{job="jobseeker", le="300"}'
+        values: "0+10x200"
+      - series: 'jobseeker_matching_freshness_seconds_bucket{job="jobseeker", le="+Inf"}'
+        values: "0+10x200"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: MatchingFreshnessObjectiveMissed
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: MatchingFreshnessObjectiveMissed
+        exp_alerts:
+          - exp_labels: { severity: warning }
+            exp_annotations:
+              summary: "No se cumple el objetivo de frescura de matching"
+              description: "El p95 del tiempo entre una edición y su vector supera los 120 s (ADR-0017, decisión 10) desde hace 15 minutos."
+  - interval: 15s
+    # Frescura cumplida: casi todo cae dentro de 120 s, el p95 queda por debajo.
+    input_series:
+      - series: 'jobseeker_matching_freshness_seconds_bucket{job="jobseeker", le="120"}'
+        values: "0+10x200"
+      - series: 'jobseeker_matching_freshness_seconds_bucket{job="jobseeker", le="300"}'
+        values: "0+10x200"
+      - series: 'jobseeker_matching_freshness_seconds_bucket{job="jobseeker", le="+Inf"}'
+        values: "0+10x200"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: MatchingFreshnessObjectiveMissed
+        exp_alerts: []

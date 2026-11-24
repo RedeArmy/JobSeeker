@@ -1,5 +1,6 @@
 package com.usac.jobseeker.matching.infrastructure.adapter.out.persistence;
 
+import com.usac.jobseeker.common.domain.model.AccountId;
 import com.usac.jobseeker.matching.application.usecase.embedentity.EmbeddingStorePort;
 import com.usac.jobseeker.matching.application.usecase.embedentity.JobEmbeddingState;
 import com.usac.jobseeker.matching.application.usecase.embedentity.ProfileEmbeddingState;
@@ -30,6 +31,8 @@ public class JdbcEmbeddingRepository implements EmbeddingStorePort, CandidateRet
    * El parámetro de la copia (`discoverable` o `published`), el mismo nombre en todas las
    * consultas.
    */
+  private static final String ACCOUNT = "account";
+
   private static final String FLAG = "flag";
 
   private final JdbcClient jdbc;
@@ -62,38 +65,109 @@ public class JdbcEmbeddingRepository implements EmbeddingStorePort, CandidateRet
         .optional();
   }
 
+  // Una cuenta anonimizada tiene una lápida en `profile_embedding_accounts`: ninguna de estas dos
+  // escrituras puede dejar nada de ella, ni siquiera la de un cálculo que ya estaba en curso cuando
+  // llegó la anonimización (BR-DATA-05). La condición va en la propia sentencia, no en una lectura
+  // previa, para que no haya una ventana entre comprobar y escribir.
+  private static final String NOT_ANONYMIZED =
+      " where not exists (select 1 from profile_embedding_accounts a"
+          + " where a.candidate_profile_id = :id and a.anonymized_at is not null)";
+
   // En un conflicto solo se reemplaza el bloque del vector: la copia de `discoverable` se deja como
   // está, porque el evento de descubribilidad es posterior al snapshot que leyó quien calculó el
   // vector y revertirlo reabriría un perfil que su dueño ya ocultó.
   @Override
-  public void saveProfileEmbedding(
+  public boolean saveProfileEmbedding(
       CandidateProfileId id, boolean discoverableIfNew, EntityEmbedding embedding) {
-    jdbc.sql(
-            "insert into profile_embeddings (candidate_profile_id, discoverable, embedding,"
-                + " embedding_model, embedding_dim, embedding_content_hash, embedding_truncated,"
-                + " embedding_computed_at) values (:id, :flag, cast(:vector as vector), :model,"
-                + " :dim, :hash, :truncated, :computedAt)"
-                + " on conflict (candidate_profile_id) do update set"
-                + " embedding = excluded.embedding, embedding_model = excluded.embedding_model,"
-                + " embedding_dim = excluded.embedding_dim,"
-                + " embedding_content_hash = excluded.embedding_content_hash,"
-                + " embedding_truncated = excluded.embedding_truncated,"
-                + " embedding_computed_at = excluded.embedding_computed_at, updated_at = now()")
-        .param("id", id.value())
-        .param(FLAG, discoverableIfNew)
-        .params(embeddingParams(embedding))
-        .update();
+    return jdbc.sql(
+                "insert into profile_embeddings (candidate_profile_id, discoverable, embedding,"
+                    + " embedding_model, embedding_dim, embedding_content_hash, embedding_truncated,"
+                    + " embedding_computed_at) select :id, :flag, cast(:vector as vector), :model,"
+                    + " :dim, :hash, :truncated, :computedAt"
+                    + NOT_ANONYMIZED
+                    + " on conflict (candidate_profile_id) do update set"
+                    + " embedding = excluded.embedding, embedding_model = excluded.embedding_model,"
+                    + " embedding_dim = excluded.embedding_dim,"
+                    + " embedding_content_hash = excluded.embedding_content_hash,"
+                    + " embedding_truncated = excluded.embedding_truncated,"
+                    + " embedding_computed_at = excluded.embedding_computed_at, updated_at = now()")
+            .param("id", id.value())
+            .param(FLAG, discoverableIfNew)
+            .params(embeddingParams(embedding))
+            .update()
+        == 1;
   }
 
   @Override
-  public void setProfileDiscoverable(CandidateProfileId id, boolean discoverable) {
+  public boolean setProfileDiscoverable(CandidateProfileId id, boolean discoverable) {
+    return jdbc.sql(
+                "insert into profile_embeddings (candidate_profile_id, discoverable)"
+                    + " select :id, :flag"
+                    + NOT_ANONYMIZED
+                    + " on conflict (candidate_profile_id)"
+                    + " do update set discoverable = excluded.discoverable, updated_at = now()")
+            .param("id", id.value())
+            .param(FLAG, discoverable)
+            .update()
+        == 1;
+  }
+
+  // Si la cuenta ya tiene lápida solo se completa el perfil que faltaba, y se devuelve `false`.
+  @Override
+  public boolean registerProfile(AccountId accountId, CandidateProfileId id) {
     jdbc.sql(
-            "insert into profile_embeddings (candidate_profile_id, discoverable)"
-                + " values (:id, :flag) on conflict (candidate_profile_id)"
-                + " do update set discoverable = excluded.discoverable, updated_at = now()")
+            "insert into profile_embedding_accounts (account_id, candidate_profile_id)"
+                + " values (:account, :id) on conflict (account_id) do update set"
+                + " candidate_profile_id = coalesce(profile_embedding_accounts.candidate_profile_id,"
+                + " excluded.candidate_profile_id)")
+        .param(ACCOUNT, accountId.value())
         .param("id", id.value())
-        .param(FLAG, discoverable)
         .update();
+    return jdbc.sql(
+            "select anonymized_at is null from profile_embedding_accounts"
+                + " where account_id = :account")
+        .param(ACCOUNT, accountId.value())
+        .query(Boolean.class)
+        .single();
+  }
+
+  @Override
+  public Optional<CandidateProfileId> findProfileIdByAccount(AccountId accountId) {
+    return jdbc.sql(
+            "select candidate_profile_id from profile_embedding_accounts"
+                + " where account_id = :account and anonymized_at is null"
+                + " and candidate_profile_id is not null")
+        .param(ACCOUNT, accountId.value())
+        .query((rows, n) -> new CandidateProfileId(rows.getObject(1, UUID.class)))
+        .optional();
+  }
+
+  // La lápida se pone aunque `matching` no conociera el perfil: un cálculo en curso que lo registre
+  // después se encuentra la cuenta ya anonimizada y no escribe nada.
+  @Override
+  public boolean anonymizeProfile(AccountId accountId) {
+    boolean newlyBuried =
+        jdbc.sql(
+                    "insert into profile_embedding_accounts (account_id, anonymized_at)"
+                        + " values (:account, now()) on conflict (account_id) do update set"
+                        + " anonymized_at = now()"
+                        + " where profile_embedding_accounts.anonymized_at is null")
+                .param(ACCOUNT, accountId.value())
+                .update()
+            == 1;
+    boolean cleared =
+        jdbc.sql(
+                    "update profile_embeddings set discoverable = false, embedding = null,"
+                        + " embedding_model = null, embedding_dim = null,"
+                        + " embedding_content_hash = null, embedding_truncated = false,"
+                        + " embedding_computed_at = null, updated_at = now()"
+                        + " where candidate_profile_id = (select candidate_profile_id"
+                        + " from profile_embedding_accounts where account_id = :account)"
+                        + " and (embedding is not null or discoverable)")
+                .param(ACCOUNT, accountId.value())
+                .update()
+            == 1;
+    return newlyBuried || cleared;
   }
 
   @Override

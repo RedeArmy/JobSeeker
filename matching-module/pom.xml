@@ -35,6 +35,28 @@
             <groupId>org.springframework</groupId>
             <artifactId>spring-context</artifactId>
         </dependency>
+        <!-- Lectura pública de `cv` (su snapshot): matching depende de cv, nunca al revés (ARCH-06). Solo la
+             toca el adaptador `infrastructure.adapter.out.cv` (ARCH-04). -->
+        <dependency>
+            <groupId>com.usac.jobseeker</groupId>
+            <artifactId>cv-module</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- Configuración enlazada (`jobseeker.matching.*`) y JSON del cliente de Ollama: la plataforma
+             base, sin dependencias nuevas. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot</artifactId>
+        </dependency>
+        <!-- Medidores de frescura (TD-029): solo la API de Micrometer; el registro lo aporta `app`. -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>tools.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
         <!-- Log estructurado de los casos de uso (ADR-0012): solo la API, el motor lo pone `app`. -->
         <dependency>
             <groupId>org.slf4j</groupId>

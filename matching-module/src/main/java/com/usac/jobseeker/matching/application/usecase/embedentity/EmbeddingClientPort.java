@@ -14,5 +14,8 @@ public interface EmbeddingClientPort {
   /** El vector del texto, el modelo que lo produjo y si el texto se truncó. */
   record Embedded(EmbeddingVector vector, String model, boolean truncated) {}
 
+  /** El modelo que este cliente usa; si cambia, los vectores guardados dejan de ser vigentes. */
+  String model();
+
   Embedded embed(EmbeddableText text);
 }
