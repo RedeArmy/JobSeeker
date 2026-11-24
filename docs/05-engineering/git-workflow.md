@@ -74,4 +74,4 @@ La protección de `main` es un *ruleset* de GitHub versionado en `.github/rulese
 
 ## 7. Preguntas abiertas
 
-- ~~¿Se requiere una plantilla de PR que incluya el checklist de `definition-of-done.md`?~~ **Resuelta en noviembre de 2026:** sí; existe en `.github/PULL_REQUEST_TEMPLATE.md`, con los 16 criterios, para que el self-review de la sección 5 quede visible en el historial.
+- ~~¿Se requiere una plantilla de PR que incluya el checklist de `definition-of-done.md`?~~ **Resuelta en noviembre de 2026:** sí; existe en `.github/PULL_REQUEST_TEMPLATE.md`, con los 17 criterios, para que el self-review de la sección 5 quede visible en el historial.
