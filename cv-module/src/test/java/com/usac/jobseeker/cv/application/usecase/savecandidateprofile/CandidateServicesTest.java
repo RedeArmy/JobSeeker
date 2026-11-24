@@ -103,6 +103,7 @@ class CandidateServicesTest {
   private final List<OutboxEvent> events = new ArrayList<>();
   private final List<String> metrics = new ArrayList<>();
   private boolean isCandidate = true;
+  private int capabilityChecks;
   private boolean hasProfessional = true;
   private Instant now = Instant.parse("2026-11-23T10:00:00Z");
 
@@ -119,7 +120,10 @@ class CandidateServicesTest {
       new CandidateChange(
           db,
           db,
-          a -> isCandidate,
+          a -> {
+            capabilityChecks++;
+            return isCandidate;
+          },
           events::add,
           (useCase, outcome) -> metrics.add(useCase + ":" + outcome),
           Clock.fixed(now, ZoneOffset.UTC),
@@ -292,6 +296,27 @@ class CandidateServicesTest {
         .anyMatch(p -> p.contains(ProfileUpdated.CHANGE_SKILLS))
         .anyMatch(p -> p.contains(ProfileUpdated.CHANGE_LANGUAGES))
         .anyMatch(p -> p.contains(ProfileUpdated.CHANGE_WORK_AUTHORIZATIONS));
+  }
+
+  // TD-003: antes cada reemplazo preguntaba dos veces la capacidad, una consulta idéntica de más.
+  @Test
+  void replacingAnyOfTheThreeSetsChecksTheCapabilityExactlyOnce() {
+    created();
+    capabilityChecks = 0;
+
+    skills.execute(
+        new ReplaceCandidateSkillsCommand(account, 1, List.of(new CandidateSkill("Java", 4))));
+    int forSkills = capabilityChecks;
+    capabilityChecks = 0;
+    languages.execute(
+        new ReplaceCandidateLanguagesCommand(
+            account, 2, List.of(new CandidateLanguage("en", LanguageProficiency.B2))));
+    int forLanguages = capabilityChecks;
+    capabilityChecks = 0;
+    authorizations.execute(new ReplaceWorkAuthorizationsCommand(account, 3, List.of("GT")));
+    int forAuthorizations = capabilityChecks;
+
+    assertThat(List.of(forSkills, forLanguages, forAuthorizations)).containsOnly(1);
   }
 
   @Test

@@ -26,7 +26,6 @@ public class JdbcCandidateCollectionsRepository
         WorkAuthorizationsStorePort {
 
   private static final String PROFILE = "profile";
-  private static final String ID = "id";
 
   private final JdbcClient jdbc;
 
@@ -72,48 +71,69 @@ public class JdbcCandidateCollectionsRepository
     return new CandidateCollections(skills, languages, authorizations);
   }
 
+  // Una sola sentencia por conjunto, con `unnest` sobre arreglos paralelos: antes eran N
+  // inserciones
+  // (hasta 100 viajes a la base de datos en una petición) dentro de la transacción que mantiene el
+  // bloqueo de la fila del perfil. Un conjunto vacío no inserta nada.
   @Override
   public void replaceSkills(CandidateProfileId profileId, List<CandidateSkill> items) {
     clear("candidate_skills", profileId);
-    for (CandidateSkill skill : items) {
-      jdbc.sql(
-              "insert into candidate_skills (id, candidate_profile_id, raw_name, proficiency)"
-                  + " values (:id, :profile, :name, :level)")
-          .param(ID, UUID.randomUUID())
-          .param(PROFILE, profileId.value())
-          .param("name", skill.name())
-          .param("level", skill.level())
-          .update();
+    if (items.isEmpty()) {
+      return;
     }
+    jdbc.sql(
+            "insert into candidate_skills (id, candidate_profile_id, raw_name, proficiency)"
+                + " select t.id, :profile, t.name, t.level"
+                + " from unnest(cast(:ids as uuid[]), cast(:names as text[]),"
+                + " cast(:levels as integer[])) as t(id, name, level)")
+        .param(PROFILE, profileId.value())
+        .param("ids", newIds(items.size()))
+        .param("names", items.stream().map(CandidateSkill::name).toArray(String[]::new))
+        .param("levels", items.stream().map(CandidateSkill::level).toArray(Integer[]::new))
+        .update();
   }
 
   @Override
   public void replaceLanguages(CandidateProfileId profileId, List<CandidateLanguage> items) {
     clear("candidate_languages", profileId);
-    for (CandidateLanguage language : items) {
-      jdbc.sql(
-              "insert into candidate_languages (id, candidate_profile_id, language, proficiency)"
-                  + " values (:id, :profile, :language, :level)")
-          .param(ID, UUID.randomUUID())
-          .param(PROFILE, profileId.value())
-          .param("language", language.language())
-          .param("level", language.proficiency().name())
-          .update();
+    if (items.isEmpty()) {
+      return;
     }
+    jdbc.sql(
+            "insert into candidate_languages (id, candidate_profile_id, language, proficiency)"
+                + " select t.id, :profile, t.language, t.level"
+                + " from unnest(cast(:ids as uuid[]), cast(:languages as text[]),"
+                + " cast(:levels as text[])) as t(id, language, level)")
+        .param(PROFILE, profileId.value())
+        .param("ids", newIds(items.size()))
+        .param("languages", items.stream().map(CandidateLanguage::language).toArray(String[]::new))
+        .param("levels", items.stream().map(l -> l.proficiency().name()).toArray(String[]::new))
+        .update();
   }
 
   @Override
   public void replaceWorkAuthorizations(CandidateProfileId profileId, List<String> items) {
     clear("candidate_work_authorizations", profileId);
-    for (String country : items) {
-      jdbc.sql(
-              "insert into candidate_work_authorizations (id, candidate_profile_id, country)"
-                  + " values (:id, :profile, :country)")
-          .param(ID, UUID.randomUUID())
-          .param(PROFILE, profileId.value())
-          .param("country", country)
-          .update();
+    if (items.isEmpty()) {
+      return;
     }
+    jdbc.sql(
+            "insert into candidate_work_authorizations (id, candidate_profile_id, country)"
+                + " select t.id, :profile, t.country"
+                + " from unnest(cast(:ids as uuid[]), cast(:countries as text[]))"
+                + " as t(id, country)")
+        .param(PROFILE, profileId.value())
+        .param("ids", newIds(items.size()))
+        .param("countries", items.toArray(String[]::new))
+        .update();
+  }
+
+  private static UUID[] newIds(int count) {
+    UUID[] ids = new UUID[count];
+    for (int i = 0; i < count; i++) {
+      ids[i] = UUID.randomUUID();
+    }
+    return ids;
   }
 
   private void clear(String table, CandidateProfileId profileId) {

@@ -48,7 +48,8 @@ public class GetMyCandidateProfileService implements GetMyCandidateProfileUseCas
             .map(p -> CandidateProfileView.of(p, collections.findByProfileId(p.id())));
     String outcome = view.isPresent() ? "found" : "not_created";
     metrics.count(USE_CASE, outcome);
-    LOG.info(
+    // DEBUG y no INFO: es la línea más frecuente del sistema y la métrica ya cuenta cada lectura.
+    LOG.debug(
         "event=candidate_profile_viewed outcome={} Consulta del propio perfil de candidato",
         outcome);
     return view;

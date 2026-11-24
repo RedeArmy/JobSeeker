@@ -100,6 +100,10 @@ public class CandidateChange {
   /**
    * Reemplaza un conjunto del perfil y devuelve el perfil completo.
    *
+   * <p>Precondición: el llamador ya comprobó la capacidad con {@link #requireCandidate}, antes de
+   * validar los datos, para que quien no puede actuar no sepa qué reglas incumpliría (BR-ACCT-04).
+   * No se repite aquí: era una consulta idéntica a `accounts` por cada escritura.
+   *
    * @param change tipo de cambio que lleva el evento
    * @param unchanged dice si el conjunto pedido es igual al que ya está guardado; si lo es, no se
    *     avanza la versión ni se emite evento, para que un reenvío no provoque recálculos del score
@@ -113,7 +117,6 @@ public class CandidateChange {
       String change,
       Predicate<CandidateCollections> unchanged,
       Mutation mutation) {
-    requireCandidate(useCase, account);
     // Sin perfil de candidato no hay conjunto que reemplazar; para quien pregunta es lo mismo que
     // un recurso inexistente.
     CandidateProfile current = requireProfile(useCase, account);

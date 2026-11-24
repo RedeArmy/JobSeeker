@@ -13,6 +13,7 @@ import io.lettuce.core.codec.RedisCodec;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
@@ -37,7 +38,8 @@ class Bucket4jRedisRateLimiter implements RateLimiter {
   private final Supplier<StatefulRedisConnection<byte[], byte[]>> connector;
   private final MeterRegistry meters;
   private final LongSupplier nanoClock;
-  private LettuceBasedProxyManager<byte[]> buckets;
+  // AtomicReference y no `volatile`: la lectura de la ruta caliente no toma ningún monitor.
+  private final AtomicReference<LettuceBasedProxyManager<byte[]>> buckets = new AtomicReference<>();
   private long nextConnectionAttempt;
   private long lastUnavailableLog;
   private boolean unavailableLogged;
@@ -64,27 +66,38 @@ class Bucket4jRedisRateLimiter implements RateLimiter {
         System::nanoTime);
   }
 
-  // Registra el retroceso ante cualquier fallo de conexión y relanza: el llamador decide qué hacer.
+  // Ruta caliente: se llama una o dos veces por petición, así que una vez conectado no debe tomar
+  // ningún monitor (con hilos virtuales, además, un `synchronized` fijaría el hilo portador).
+  private LettuceBasedProxyManager<byte[]> connectedBuckets() {
+    LettuceBasedProxyManager<byte[]> ready = buckets.get();
+    return ready != null ? ready : connect();
+  }
+
+  // Ruta fría: solo el primer uso y los reintentos tras un fallo. Registra el retroceso ante
+  // cualquier fallo de conexión y relanza: el llamador decide qué hacer.
   @SuppressWarnings("PMD.AvoidCatchingGenericException")
-  private synchronized LettuceBasedProxyManager<byte[]> connectedBuckets() {
-    if (buckets == null) {
-      long now = nanoClock.getAsLong();
-      if (now - nextConnectionAttempt < 0) {
-        throw new IllegalStateException("Redis sin responder; se reintenta en unos segundos");
-      }
-      try {
-        buckets =
-            LettuceBasedProxyManager.builderFor(connector.get())
-                .withExpirationStrategy(
-                    ExpirationAfterWriteStrategy.basedOnTimeForRefillingBucketUpToMax(
-                        Duration.ofMinutes(1)))
-                .build();
-      } catch (RuntimeException failure) {
-        nextConnectionAttempt = now + RECONNECT_BACKOFF.toNanos();
-        throw failure;
-      }
+  private synchronized LettuceBasedProxyManager<byte[]> connect() {
+    LettuceBasedProxyManager<byte[]> ready = buckets.get();
+    if (ready != null) {
+      return ready;
     }
-    return buckets;
+    long now = nanoClock.getAsLong();
+    if (now - nextConnectionAttempt < 0) {
+      throw new IllegalStateException("Redis sin responder; se reintenta en unos segundos");
+    }
+    try {
+      ready =
+          LettuceBasedProxyManager.builderFor(connector.get())
+              .withExpirationStrategy(
+                  ExpirationAfterWriteStrategy.basedOnTimeForRefillingBucketUpToMax(
+                      Duration.ofMinutes(1)))
+              .build();
+      buckets.set(ready);
+      return ready;
+    } catch (RuntimeException failure) {
+      nextConnectionAttempt = now + RECONNECT_BACKOFF.toNanos();
+      throw failure;
+    }
   }
 
   // Cualquier fallo del almacén (conexión, tiempo de espera, protocolo) deja pasar la petición: ver
