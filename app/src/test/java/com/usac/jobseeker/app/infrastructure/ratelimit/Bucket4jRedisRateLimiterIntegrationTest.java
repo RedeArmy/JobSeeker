@@ -103,6 +103,41 @@ class Bucket4jRedisRateLimiterIntegrationTest {
     assertThat(SharedRedis.template().hasKey("ratelimit:read:" + key)).isTrue();
   }
 
+  // La ruta caliente no toma ningún monitor: una vez conectado, un hilo que tenga el monitor del
+  // limitador (como lo tendría uno reconectando o registrando una caída) no frena a las peticiones.
+  @Test
+  void onceConnectedARequestDoesNotWaitForAThreadHoldingTheLimiterMonitor() throws Exception {
+    String key = key();
+    limiter.tryConsume("read", TEN_PER_MINUTE, key);
+    CountDownLatch holding = new CountDownLatch(1);
+    CountDownLatch release = new CountDownLatch(1);
+    Thread holder =
+        new Thread(
+            () -> {
+              synchronized (limiter) {
+                holding.countDown();
+                try {
+                  release.await();
+                } catch (InterruptedException interrupted) {
+                  Thread.currentThread().interrupt();
+                }
+              }
+            });
+    holder.start();
+    holding.await();
+    ExecutorService pool = Executors.newSingleThreadExecutor();
+    try {
+      Future<Boolean> request =
+          pool.submit(() -> limiter.tryConsume("read", TEN_PER_MINUTE, key).allowed());
+
+      assertThat(request.get(5, TimeUnit.SECONDS)).isTrue();
+    } finally {
+      release.countDown();
+      holder.join();
+      pool.shutdownNow();
+    }
+  }
+
   @Test
   void aBurstOfSimultaneousRequestsNeverGrantsMoreThanTheCapacity() throws Exception {
     String key = key();
