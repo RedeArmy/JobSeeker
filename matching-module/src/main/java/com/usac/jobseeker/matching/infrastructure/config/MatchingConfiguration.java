@@ -3,15 +3,21 @@ package com.usac.jobseeker.matching.infrastructure.config;
 import com.usac.jobseeker.common.application.observability.UseCaseMetricsPort;
 import com.usac.jobseeker.common.application.outbox.OutboxEventConsumer;
 import com.usac.jobseeker.matching.application.usecase.embedentity.CandidateSignalsReader;
+import com.usac.jobseeker.matching.application.usecase.embedentity.EmbedJobService;
+import com.usac.jobseeker.matching.application.usecase.embedentity.EmbedJobUseCase;
 import com.usac.jobseeker.matching.application.usecase.embedentity.EmbedProfileService;
 import com.usac.jobseeker.matching.application.usecase.embedentity.EmbedProfileUseCase;
 import com.usac.jobseeker.matching.application.usecase.embedentity.EmbeddingClientPort;
 import com.usac.jobseeker.matching.application.usecase.embedentity.EmbeddingFreshnessPort;
 import com.usac.jobseeker.matching.application.usecase.embedentity.EmbeddingQueuePolicy;
+import com.usac.jobseeker.matching.application.usecase.embedentity.HandleJobEventService;
+import com.usac.jobseeker.matching.application.usecase.embedentity.HandleJobEventUseCase;
 import com.usac.jobseeker.matching.application.usecase.embedentity.HandleProfileEventService;
 import com.usac.jobseeker.matching.application.usecase.embedentity.HandleProfileEventUseCase;
+import com.usac.jobseeker.matching.application.usecase.embedentity.JobSignalsReader;
 import com.usac.jobseeker.matching.application.usecase.embedentity.ProcessEmbeddingQueueService;
 import com.usac.jobseeker.matching.application.usecase.embedentity.ProcessEmbeddingQueueUseCase;
+import com.usac.jobseeker.matching.infrastructure.adapter.in.event.JobEventsConsumer;
 import com.usac.jobseeker.matching.infrastructure.adapter.in.event.ProfileEventsConsumer;
 import com.usac.jobseeker.matching.infrastructure.adapter.in.job.EmbeddingWorker;
 import com.usac.jobseeker.matching.infrastructure.adapter.out.ai.OllamaEmbeddingClient;
@@ -82,6 +88,24 @@ class MatchingConfiguration {
   }
 
   @Bean
+  EmbedJobUseCase embedJobUseCase(
+      JobSignalsReader reader,
+      EmbeddingClientPort client,
+      JdbcEmbeddingRepository store,
+      UseCaseMetricsPort metrics,
+      MatchingProperties properties) {
+    return new EmbedJobService(
+        reader, client, store, metrics, Clock.systemUTC(), properties.embedding().maxCharacters());
+  }
+
+  @Bean
+  HandleJobEventUseCase handleJobEventUseCase(
+      JdbcEmbeddingWorkQueue queue, UseCaseMetricsPort metrics, MatchingProperties properties) {
+    return new HandleJobEventService(
+        queue, metrics, Clock.systemUTC(), properties.queue().window());
+  }
+
+  @Bean
   HandleProfileEventUseCase handleProfileEventUseCase(
       JdbcEmbeddingWorkQueue queue,
       JdbcEmbeddingRepository store,
@@ -94,14 +118,16 @@ class MatchingConfiguration {
   @Bean
   ProcessEmbeddingQueueUseCase processEmbeddingQueueUseCase(
       JdbcEmbeddingWorkQueue queue,
-      EmbedProfileUseCase embed,
+      EmbedProfileUseCase embedProfile,
+      EmbedJobUseCase embedJob,
       UseCaseMetricsPort metrics,
       EmbeddingFreshnessPort freshness,
       MatchingProperties properties) {
     MatchingProperties.Queue q = properties.queue();
     return new ProcessEmbeddingQueueService(
         queue,
-        embed,
+        embedProfile,
+        embedJob,
         new EmbeddingQueuePolicy(
             q.batchSize(), q.lease(), q.maxAttempts(), q.baseBackoff(), q.maxBackoff()),
         metrics,
@@ -115,6 +141,11 @@ class MatchingConfiguration {
   @Bean
   OutboxEventConsumer profileEventsConsumer(HandleProfileEventUseCase handler) {
     return new ProfileEventsConsumer(handler);
+  }
+
+  @Bean
+  OutboxEventConsumer jobEventsConsumer(HandleJobEventUseCase handler) {
+    return new JobEventsConsumer(handler);
   }
 
   @Bean

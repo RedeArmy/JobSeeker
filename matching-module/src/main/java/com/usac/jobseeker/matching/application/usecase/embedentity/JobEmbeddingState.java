@@ -5,10 +5,11 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Lo que `matching` sabe de una vacante: la copia de si está publicada y los metadatos de su
- * vector.
+ * Lo que `matching` sabe de una vacante: las copias de si está publicada y de si está en revisión,
+ * y los metadatos de su vector.
  */
-public record JobEmbeddingState(boolean published, Optional<EmbeddingMeta> embedding) {
+public record JobEmbeddingState(
+    boolean published, boolean reviewing, Optional<EmbeddingMeta> embedding) {
 
   public JobEmbeddingState {
     Objects.requireNonNull(embedding, "embedding");

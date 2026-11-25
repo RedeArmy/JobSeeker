@@ -1,6 +1,8 @@
 package com.usac.jobseeker.matching.application.usecase.embedentity;
 
 import com.usac.jobseeker.common.application.observability.UseCaseMetricsPort;
+import com.usac.jobseeker.common.domain.model.AccountId;
+import com.usac.jobseeker.matching.domain.model.JobPostingId;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
@@ -29,7 +31,8 @@ public class ProcessEmbeddingQueueService implements ProcessEmbeddingQueueUseCas
   private static final String USE_CASE = "process_embedding_queue";
 
   private final EmbeddingWorkQueuePort queue;
-  private final EmbedProfileUseCase embed;
+  private final EmbedProfileUseCase embedProfile;
+  private final EmbedJobUseCase embedJob;
   private final EmbeddingQueuePolicy policy;
   private final UseCaseMetricsPort metrics;
   private final EmbeddingFreshnessPort freshness;
@@ -37,13 +40,15 @@ public class ProcessEmbeddingQueueService implements ProcessEmbeddingQueueUseCas
 
   public ProcessEmbeddingQueueService(
       EmbeddingWorkQueuePort queue,
-      EmbedProfileUseCase embed,
+      EmbedProfileUseCase embedProfile,
+      EmbedJobUseCase embedJob,
       EmbeddingQueuePolicy policy,
       UseCaseMetricsPort metrics,
       EmbeddingFreshnessPort freshness,
       Clock clock) {
     this.queue = Objects.requireNonNull(queue, "queue");
-    this.embed = Objects.requireNonNull(embed, "embed");
+    this.embedProfile = Objects.requireNonNull(embedProfile, "embedProfile");
+    this.embedJob = Objects.requireNonNull(embedJob, "embedJob");
     this.policy = Objects.requireNonNull(policy, "policy");
     this.metrics = Objects.requireNonNull(metrics, "metrics");
     this.freshness = Objects.requireNonNull(freshness, "freshness");
@@ -63,7 +68,7 @@ public class ProcessEmbeddingQueueService implements ProcessEmbeddingQueueUseCas
   @SuppressWarnings("PMD.AvoidCatchingGenericException")
   private void run(EmbeddingWorkQueuePort.Job job) {
     try {
-      embed.execute(new EmbedProfileCommand(job.account()));
+      calculate(job);
       queue.complete(job);
       metrics.count(USE_CASE, "done");
       // Solo un cálculo terminado mide la frescura: un fallo no la cumple ni la incumple todavía.
@@ -72,14 +77,22 @@ public class ProcessEmbeddingQueueService implements ProcessEmbeddingQueueUseCas
       queue.fail(job);
       metrics.count(USE_CASE, "rejected");
       LOG.error(
-          "event=embedding_rejected Un perfil no se pudo embeber y queda para revisión", rejected);
+          "event=embedding_rejected Una entidad no se pudo embeber y queda para revisión",
+          rejected);
     } catch (EmbeddingUnavailableException _) {
       retry(job, "unavailable");
       LOG.warn("event=embedding_unavailable El modelo de embeddings no respondió; se reintenta");
     } catch (RuntimeException unexpected) {
       retry(job, "error");
-      LOG.error(
-          "event=embedding_failed Fallo inesperado al embeber un perfil; se reintenta", unexpected);
+      LOG.error("event=embedding_failed Fallo inesperado al embeber; se reintenta", unexpected);
+    }
+  }
+
+  // Perfiles y vacantes comparten cola, trabajador y reintentos; solo cambia qué se calcula.
+  private void calculate(EmbeddingWorkQueuePort.Job job) {
+    switch (job.entity()) {
+      case PROFILE -> embedProfile.execute(new EmbedProfileCommand(new AccountId(job.key())));
+      case JOB -> embedJob.execute(new EmbedJobCommand(new JobPostingId(job.key())));
     }
   }
 
