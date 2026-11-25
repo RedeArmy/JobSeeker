@@ -4,7 +4,7 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | 🟡 En revisión |
-| **Versión** | 1.6 — se paga parte de TD-030; entra TD-032 |
+| **Versión** | 1.7 — se paga el canal de verificación de TD-032 |
 | **Fecha** | 24 de noviembre de 2026 |
 | **Dueño del documento** | Responsable del proyecto |
 | **Revisión del registro** | Al cerrar cada sprint y antes de cada hito de la hoja de ruta |
@@ -56,7 +56,7 @@ Corte: 24-nov-2026.
 | S4 Baja | 5 |
 | **Total** | **19** |
 
-- **Abiertas:** 17 · **Planificadas:** 2 · **Resueltas:** 23 · **Aceptadas:** 6.
+- **Abiertas:** 16 · **Planificadas:** 3 · **Resueltas:** 24 · **Aceptadas:** 6.
 - **S2 abiertas con disparador próximo** (decidir el siguiente sprint): TD-012 (antes de `suggestcandidatesforjob`) y TD-005 y TD-016 (primer despliegue), más TD-020 (antes de usuarios reales).
 - **Métricas a seguir en cada revisión:** deuda abierta por severidad, edad de las S2 en días, número de cierres por sprint, aceptadas vencidas.
 
@@ -78,11 +78,11 @@ Corte: 24-nov-2026.
 | TD-027 | Los nombres propios del texto libre no se redactan antes del embedding | Privacidad | S3 | L | Medida | Abierta | Antes de embeber perfiles reales (`embedentity`) |
 | TD-028 | El lado de la vacante de `embedentity` no existe: `JobSignals` y `job_embeddings` | Arquitectura | S3 | L | Leída | Abierta | TDD de `job` y primer módulo `job` con código |
 | TD-029 | Sin medición de `embedentity` con un Ollama real | Operación | S3 | S | Leída | Abierta | Un Ollama con el modelo vigente disponible (ADR-0018, protocolo de 300 pares) |
-| TD-032 | Nadie verifica a los reclutadores, y las sugerencias aún no exigen la verificación | Seguridad | S2 | L | Leída | Abierta | Procedimiento de verificación decidido por el dueño; sub-paso de sugerencias de `matching` |
 | TD-023 | Fin de soporte de Spring Boot 4.1 (31-jul-2027) | Plataforma | S3 | L | Medida | Planificada | 2027-04-30 (inicio de la subida) |
 | TD-024 | El `Dockerfile` compila con una imagen de Java 26 | Operación | S4 | XS | Leída | Abierta | Oportunista |
 | TD-025 | La purga de la bandeja usa `Instant.now()` | Código | S4 | XS | Leída | Abierta | Oportunista |
 | TD-026 | Habilidades sin enlace a la taxonomía | Dominio | S4 | L | Medida | Planificada | Sub-paso de enlazado de ADR-0019 |
+| TD-033 | Las sugerencias de candidatos aún no exigen un reclutador verificado ni la cuota diaria | Seguridad | S2 | M | Leída | Planificada | Sub-paso 6 de `matching` (`suggestcandidatesforjob`) |
 
 ### Fichas
 
@@ -240,17 +240,6 @@ Corte: 24-nov-2026.
 - **Criterio de cierre:** Una medición archivada con el modelo vigente y el p95 observado frente al objetivo.
 - **Referencias:** `docs/03-architecture/adr/0018-embedding-model-selection-and-versioning.md`
 
-#### TD-032 — Nadie verifica a los reclutadores, y las sugerencias aún no exigen la verificación
-
-**Seguridad** · **S2 Alta** · esfuerzo **L** · confianza **Leída** · **Abierta**
-
-- **Evidencia:** `changerecruiterverification` existe y está probado, pero ninguna ruta ni proceso lo llama: toda cuenta reclutadora queda `UNVERIFIED` y solo se verifica tocando la base. Y las sugerencias de candidatos (que aún no existen) deberán exigir `VERIFIED` (REQ-R-10, REQ-R-11): ese es el control central contra el raspado de datos (T-N1).
-- **Interés (qué cuesta no pagarla):** Hoy el riesgo está acotado por el tope de vacantes sin verificar, pero el producto no puede ofrecer ni a un reclutador legítimo el tope alto, y la protección fuerte contra el raspado no existe todavía.
-- **Disparador:** Procedimiento de verificación decidido por el dueño; sub-paso de sugerencias de `matching`.
-- **Remediación propuesta:** Decidir el procedimiento (correo corporativo verificado, revisión manual o ambos), darle un canal (un flujo en `auth` o una operación de respaldo) y, al construir las sugerencias, exigir `VERIFIED` más la cuota diaria de perfiles vistos (REQ-R-11).
-- **Criterio de cierre:** Una cuenta pasa a `VERIFIED` por un canal real, con auditoría, y las sugerencias responden `403 RECRUITER_NOT_VERIFIED` a una sin verificar, con una prueba de punta a punta.
-- **Referencias:** `docs/03-architecture/tdd/job-module.md` §10.2; `docs/03-architecture/architecture-review-2026-11/01-competencia-y-requerimientos.md` REQ-R-10
-
 #### TD-023 — Fin de soporte de Spring Boot 4.1 (31-jul-2027)
 
 **Plataforma** · **S3 Media** · esfuerzo **L** · confianza **Medida** · **Planificada**
@@ -295,6 +284,17 @@ Corte: 24-nov-2026.
 - **Criterio de cierre:** Controles D1–D4 verificados.
 - **Referencias:** `docs/03-architecture/adr/0019-skills-taxonomy-and-normalization.md`
 
+#### TD-033 — Las sugerencias de candidatos aún no exigen un reclutador verificado ni la cuota diaria
+
+**Seguridad** · **S2 Alta** · esfuerzo **M** · confianza **Leída** · **Planificada**
+
+- **Evidencia:** Los sugeridos no existen todavía. Cuando se construyan, sin esta exigencia un reclutador sin verificar, o suspendido, podría recorrer candidatos descubribles: es la amenaza T-N1.
+- **Interés (qué cuesta no pagarla):** El tope de publicaciones acota las vacantes señuelo, pero el control fuerte contra el raspado de datos de candidatos es exigir `VERIFIED` y limitar los perfiles vistos por día.
+- **Disparador:** Sub-paso 6 de `matching` (`suggestcandidatesforjob`).
+- **Remediación propuesta:** Al construir `suggestcandidatesforjob`: preguntar la verificación por el caso de uso `getrecruiterverification`, responder `403 RECRUITER_NOT_VERIFIED` a quien no sea `VERIFIED`, y llevar la cuota diaria de perfiles únicos vistos en Redis con su registro en `profile_view_log` (REQ-R-11), fallando cerrado si Redis no responde.
+- **Criterio de cierre:** Un reclutador sin verificar o suspendido recibe `403` al pedir sugeridos, y uno verificado recibe `429` al pasar la cuota, con pruebas de punta a punta.
+- **Referencias:** `docs/03-architecture/tdd/matching-module.md` §10; `docs/03-architecture/architecture-review-2026-11/01-competencia-y-requerimientos.md` REQ-R-10 y REQ-R-11
+
 ## 6. Deuda resuelta
 
 | ID | Título | Tipo | Sev | Fecha | PR o decisión | Cómo se resolvió |
@@ -322,6 +322,7 @@ Corte: 24-nov-2026.
 | TD-R21 | Sin métricas de frescura de los embeddings (parte de TD-029) | Operación | S3 | 2026-11-24 | #35 | Histograma edición→vector con el objetivo de 120 s como cubo, edad del trabajo listo más viejo y profundidad por estado; tres alertas probadas con `promtool` y tres paneles. La medición con un Ollama real sigue abierta en TD-029. |
 | TD-R22 | Cualquier reclutador podía publicar sin límite (antes TD-030, parte) | Seguridad | S2 | 2026-11-24 | #38 | Verificación de la cuenta (`UNVERIFIED`, `VERIFIED`, `SUSPENDED`) en `auth`, topes de vacantes publicadas por confianza (2 y 100 por defecto) y puerta al publicar o reabrir, con candado por reclutador contra la carrera. 25 pruebas de punta a punta, una repetida en 25 rondas; sin el candado falla en la ronda 4. Lo que queda (quién verifica y las sugerencias) es TD-032. |
 | TD-R23 | Reglas de formato repetidas en `cv` y a punto de repetirse en `job` (antes TD-031) | Código | S4 | 2026-11-24 | #36 | `FormatRules` y `SalaryRules` en `common`, con pruebas propias; se borró `CandidateRules` de `cv` y la validación del salario quedó en un solo lugar, para que `job` las use en vez de copiarlas. Las pruebas existentes de `cv` pasan sin cambios. De paso, una moneda inexistente ya no deja el salario marcado como utilizable. |
+| TD-R26 | Nadie verificaba a los reclutadores (antes TD-032, parte) | Seguridad | S2 | 2026-11-25 | #41 | Canal `PUT /api/v1/admin/recruiters/{id}/verification` solo para operadores (lista de configuración, vacía por defecto; `404` para quien no lo es), sin decidir sobre uno mismo y con cada cambio en `audit_log` en la misma transacción, sin datos personales. Verificar sube el tope de publicación de TD-030: probado de punta a punta. La vía automática por correo queda para cuando haya proveedor de correo; las sugerencias que exijan `VERIFIED` son TD-033. |
 
 ## 7. Deuda aceptada
 
@@ -345,6 +346,7 @@ Corte: 24-nov-2026.
 | 1.4 | 2026-11-24 | Se paga TD-031 (reglas de formato repetidas en `cv` y a punto de repetirse en `job`, PR #36, TD-R23): se encontró y se pagó en el mismo cambio. Quedan 18 abiertas o planificadas, 22 resueltas y 6 aceptadas. |
 | 1.5 | 2026-11-24 | Entra TD-030 (verificación de reclutador y cuotas antes de publicar, D1 del TDD de `job`), que dejó el primer corte de `job` (PR #37). Quedan 19 abiertas o planificadas, 22 resueltas y 6 aceptadas. |
 | 1.6 | 2026-11-24 | Se paga la parte de TD-030 que se podía cerrar (puerta de publicar con topes por confianza, PR #38, TD-R22). Lo que queda pasa a TD-032: nadie verifica a los reclutadores y las sugerencias aún no exigen la verificación. Quedan 19 abiertas o planificadas, 23 resueltas y 6 aceptadas. |
+| 1.7 | 2026-11-25 | Se paga el canal de verificación de TD-032 (PR #41, TD-R26): un operador verifica, suspende o devuelve a «sin verificar», con auditoría. Entra TD-033: las sugerencias, cuando existan, deben exigir `VERIFIED` y la cuota diaria. Quedan 19 abiertas o planificadas, 24 resueltas y 6 aceptadas. |
 
 ## 9. Plantilla de ficha
 
