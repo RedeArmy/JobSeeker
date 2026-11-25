@@ -3,6 +3,9 @@
 jobseeker:
   matching:
     # Candidatos sugeridos (REQ-R-11): cuántos perfiles únicos puede ver un reclutador verificado por ventana.
+    # Recuperación vectorial (TD-012): candidatos que explora el índice HNSW por consulta.
+    retrieval:
+      ef-search: ${MATCHING_RETRIEVAL_EF_SEARCH:100}
     suggestions:
       view-quota: ${MATCHING_PROFILE_VIEW_QUOTA:200}
     embedding:

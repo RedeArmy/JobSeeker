@@ -50,8 +50,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 class MatchingConfiguration {
 
   @Bean
-  JdbcEmbeddingRepository jdbcEmbeddingRepository(JdbcClient jdbc) {
-    return new JdbcEmbeddingRepository(jdbc);
+  JdbcEmbeddingRepository jdbcEmbeddingRepository(JdbcClient jdbc, MatchingProperties properties) {
+    return new JdbcEmbeddingRepository(jdbc, properties.retrieval().efSearch());
   }
 
   @Bean
