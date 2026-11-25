@@ -210,7 +210,7 @@ Pasar a `PUBLISHED`, sea desde borrador o reabriendo una cerrada, cruza una puer
 - **La puerta va después de validar la transición**: un publicar inválido (sin habilidad, par que no existe) se dice antes que el tope, para no revelar el cupo.
 - **Ante la duda no se publica**: una cuenta que `auth` no reconoce como reclutadora activa se trata como suspendida.
 
-**Lo que esto no cierra:** quién y cómo pasa una cuenta a `VERIFIED` (correo corporativo o revisión manual, REQ-R-10), y que las sugerencias de candidatos exijan `VERIFIED` (REQ-R-10, REQ-R-11). Ambos son TD-032: el caso de uso existe y está probado, pero hoy nadie lo llama.
+**Quién verifica:** un operador, por `PUT /api/v1/admin/recruiters/{id}/verification` (`auth`, `reviewrecruiter`, BR-ACCT-11), con auditoría. Es **revisión manual**: la vía automática por correo corporativo verificado (REQ-R-10) necesita un proveedor de correo (ADR-0022) y queda para después. **Lo que esto no cierra:** que las sugerencias de candidatos exijan `VERIFIED` más la cuota diaria de perfiles vistos (REQ-R-10, REQ-R-11): las sugerencias aún no existen y es TD-033.
 
 **Pendiente de esta ola:** `listjobpostings` (sub-paso 5), que necesita el filtro de visibilidad en SQL; el consumo de `getjobsignals` en `matching` (`JobSignals`, `job_embeddings`; TD-028); y el procedimiento que verifica a un reclutador (TD-032), porque la puerta de publicar de §10.2 ya funciona pero hoy nadie pasa una cuenta a `VERIFIED`.
 

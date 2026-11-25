@@ -58,6 +58,11 @@ jobseeker:
       secret: ${CLAVARIS_WEBHOOK_SECRET:}
       previous-secret: ${CLAVARIS_WEBHOOK_SECRET_PREVIOUS:}
       tolerance: ${CLAVARIS_WEBHOOK_TOLERANCE_SECONDS:300}s
+    # Operadores de la plataforma (BR-ACCT-11): las cuentas que pueden verificar a un reclutador. Una lista de
+    # identificadores de cuenta (el `sub` de Clavaris) separados por comas. Vacía por defecto: sin ella nadie
+    # es operador y el canal de verificación responde como si no existiera.
+    operators:
+      account-ids: ${AUTH_OPERATOR_ACCOUNT_IDS:}
     session:
       idle-timeout: ${SESSION_IDLE_TIMEOUT_MINUTES:30}m
       absolute-timeout: ${SESSION_ABSOLUTE_TIMEOUT_HOURS:8}h

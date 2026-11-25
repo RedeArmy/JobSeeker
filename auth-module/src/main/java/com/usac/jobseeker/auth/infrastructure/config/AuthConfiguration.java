@@ -12,13 +12,17 @@ import com.usac.jobseeker.auth.application.usecase.provisionaccount.ProvisionAcc
 import com.usac.jobseeker.auth.application.usecase.provisionaccount.ProvisionAccountUseCase;
 import com.usac.jobseeker.auth.application.usecase.resolveactor.ResolveActorService;
 import com.usac.jobseeker.auth.application.usecase.resolveactor.ResolveActorUseCase;
+import com.usac.jobseeker.auth.application.usecase.reviewrecruiter.ReviewRecruiterService;
+import com.usac.jobseeker.auth.application.usecase.reviewrecruiter.ReviewRecruiterUseCase;
 import com.usac.jobseeker.auth.infrastructure.adapter.out.persistence.JdbcAccountRepository;
 import com.usac.jobseeker.auth.infrastructure.adapter.out.persistence.JdbcIdentityStateRepository;
 import com.usac.jobseeker.auth.infrastructure.adapter.out.persistence.JdbcRecruiterVerificationRepository;
 import com.usac.jobseeker.common.application.account.AccountChangeObserver;
+import com.usac.jobseeker.common.application.audit.AuditPort;
 import com.usac.jobseeker.common.application.idempotency.ProcessedEventsPort;
 import com.usac.jobseeker.common.application.observability.UseCaseMetricsPort;
 import com.usac.jobseeker.common.application.outbox.DomainEventPublisherPort;
+import com.usac.jobseeker.common.application.security.OperatorPolicyPort;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -86,5 +90,14 @@ class AuthConfiguration {
   ChangeRecruiterVerificationUseCase changeRecruiterVerificationUseCase(
       JdbcRecruiterVerificationRepository repository, UseCaseMetricsPort metrics) {
     return new ChangeRecruiterVerificationService(repository, metrics);
+  }
+
+  @Bean
+  ReviewRecruiterUseCase reviewRecruiterUseCase(
+      OperatorPolicyPort operators,
+      ChangeRecruiterVerificationUseCase change,
+      AuditPort audit,
+      UseCaseMetricsPort metrics) {
+    return new ReviewRecruiterService(operators, change, audit, metrics);
   }
 }

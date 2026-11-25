@@ -130,7 +130,7 @@ El desglose lleva `completeness`, `α` y la marca de **no calibrado** mientras n
 | 3 | 🟡 **Perfiles hechos (24-nov-2026); vacantes pendientes.** `embedentity` para perfiles, la cola, el trabajador, el adaptador de Ollama y el adaptador de lectura de `cv`. Detalle y desvíos de este documento en §10.1. Falta el lado de la vacante, que depende de `job` | `cv` sub-paso 5 (`getprofilesnapshot`), TDD de `job`, ADR-0018 con modelo definitivo |
 | 4 | `recomputescoresforentity` y los consumidores de la bandeja | 3 |
 | 5 | `explainscore` y el «qué pasaría si»; el endpoint del score | 2 |
-| 6 | `suggestcandidatesforjob` y el índice HNSW parcial | 3, D1 |
+| 6 | `suggestcandidatesforjob` y el índice HNSW parcial. **Debe exigir que el reclutador sea `VERIFIED`** (`403 RECRUITER_NOT_VERIFIED`) y respetar la cuota diaria de perfiles vistos (`429 QUOTA_EXCEEDED`, REQ-R-10 y REQ-R-11): es el control central contra el raspado de datos de candidatos (amenaza T-N1, TD-033) | 3, D1, TD-032 |
 | 7 | `snapshotapplicationprofile` y `migratealgorithmversion` | postulación mínima de `ats` |
 | — | Normalización de habilidades en el cálculo | ADR-0019 aprobado y el caso de uso de `cv` |
 
