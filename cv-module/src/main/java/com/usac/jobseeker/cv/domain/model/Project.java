@@ -2,6 +2,7 @@ package com.usac.jobseeker.cv.domain.model;
 
 import com.usac.jobseeker.common.domain.error.FieldViolation;
 import com.usac.jobseeker.common.domain.error.ValidationFailedException;
+import com.usac.jobseeker.common.domain.rules.FormatRules;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,13 +38,13 @@ public record Project(
       LocalDate endDate,
       String url) {
     List<FieldViolation> violations = new ArrayList<>();
-    String cleanName = TextRules.singleLine("name", name, NAME_MAX, true, violations);
+    String cleanName = FormatRules.singleLine("name", name, NAME_MAX, true, violations);
     String cleanDescription =
-        TextRules.multiLine("description", description, DESCRIPTION_MAX, violations);
+        FormatRules.multiLine("description", description, DESCRIPTION_MAX, false, violations);
     if (type == null) {
       violations.add(new FieldViolation("type", "REQUIRED"));
     }
-    String cleanRole = TextRules.singleLine("role", role, NAME_MAX, false, violations);
+    String cleanRole = FormatRules.singleLine("role", role, NAME_MAX, false, violations);
     LocalDate start = TextRules.date("startDate", startDate, false, violations);
     LocalDate end = TextRules.date("endDate", endDate, false, violations);
     TextRules.order("endDate", start, end, violations);

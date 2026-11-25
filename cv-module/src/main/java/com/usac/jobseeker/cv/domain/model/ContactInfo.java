@@ -2,6 +2,7 @@ package com.usac.jobseeker.cv.domain.model;
 
 import com.usac.jobseeker.common.domain.error.FieldViolation;
 import com.usac.jobseeker.common.domain.error.ValidationFailedException;
+import com.usac.jobseeker.common.domain.rules.FormatRules;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -31,16 +32,16 @@ public record ContactInfo(String email, String phone) {
   static ContactInfo of(String email, String phone, List<FieldViolation> violations) {
     String cleanEmail = email == null ? "" : email.strip();
     if (cleanEmail.isEmpty()) {
-      violations.add(new FieldViolation(EMAIL_FIELD, CandidateRules.REQUIRED));
+      violations.add(new FieldViolation(EMAIL_FIELD, FormatRules.REQUIRED));
     } else if (cleanEmail.codePointCount(0, cleanEmail.length()) > EMAIL_MAX) {
-      violations.add(new FieldViolation(EMAIL_FIELD, CandidateRules.TOO_LONG));
-    } else if (TextRules.hasForbiddenControl(cleanEmail, false)
+      violations.add(new FieldViolation(EMAIL_FIELD, FormatRules.TOO_LONG));
+    } else if (FormatRules.hasForbiddenControl(cleanEmail, false)
         || !EMAIL_SHAPE.matcher(cleanEmail).matches()) {
       violations.add(new FieldViolation(EMAIL_FIELD, "INVALID_EMAIL"));
     }
     String stripped = phone == null ? "" : phone.strip();
     if (stripped.length() > PHONE_MAX) {
-      violations.add(new FieldViolation("contactPhone", CandidateRules.TOO_LONG));
+      violations.add(new FieldViolation("contactPhone", FormatRules.TOO_LONG));
     } else if (!stripped.isEmpty() && !PHONE_SHAPE.matcher(stripped).matches()) {
       violations.add(new FieldViolation("contactPhone", "INVALID_PHONE"));
     }

@@ -2,6 +2,7 @@ package com.usac.jobseeker.cv.domain.model;
 
 import com.usac.jobseeker.common.domain.error.FieldViolation;
 import com.usac.jobseeker.common.domain.error.ValidationFailedException;
+import com.usac.jobseeker.common.domain.rules.FormatRules;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,7 +42,7 @@ public record CandidateDetails(
     List<FieldViolation> violations = new ArrayList<>();
     ContactInfo contact = ContactInfo.of(contactEmail, contactPhone, violations);
     String country =
-        CandidateRules.country("countryOfResidence", countryOfResidence, false, violations);
+        FormatRules.country("countryOfResidence", countryOfResidence, false, violations);
     SalaryExpectation salary =
         SalaryExpectation.of(salaryMin, salaryMax, salaryCurrency, salaryPeriod, violations);
     if (!violations.isEmpty()) {
