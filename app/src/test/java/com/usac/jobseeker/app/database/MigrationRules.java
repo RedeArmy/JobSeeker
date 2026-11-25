@@ -232,6 +232,7 @@ final class MigrationRules {
         owners,
         "job",
         "job_postings",
+        "job_requirements",
         "eligibility_rules",
         "candidate_invitations",
         "job_posting_scheduled_transitions",
