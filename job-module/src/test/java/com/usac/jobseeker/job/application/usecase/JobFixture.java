@@ -118,10 +118,13 @@ public final class JobFixture {
       postings.put(posting.id(), posting);
     }
 
+    /** Simula que otra edición se adelantó entre leer y escribir. */
+    public boolean loseTheRace;
+
     @Override
     public boolean updateIfVersion(JobPosting posting, long expectedVersion) {
       JobPosting stored = postings.get(posting.id());
-      if (stored == null || stored.version() != expectedVersion) {
+      if (loseTheRace || stored == null || stored.version() != expectedVersion) {
         return false;
       }
       postings.put(posting.id(), posting);

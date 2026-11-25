@@ -4,6 +4,8 @@ import com.usac.jobseeker.common.domain.model.AccountId;
 import com.usac.jobseeker.job.application.support.JobChange;
 import com.usac.jobseeker.job.domain.model.JobPostingId;
 import com.usac.jobseeker.job.domain.model.JobRequirementDraft;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -20,7 +22,13 @@ public record ManageJobRequirementsCommand(
   public ManageJobRequirementsCommand {
     Objects.requireNonNull(owner, "owner");
     Objects.requireNonNull(id, "id");
-    requirements = requirements == null ? List.of() : List.copyOf(requirements);
+    // `List.copyOf` rechaza los nulos y un `[null]` del cliente llegaría como un 500; la validación
+    // del
+    // conjunto lo convierte en un 400 que dice qué posición falta.
+    requirements =
+        requirements == null
+            ? List.of()
+            : Collections.unmodifiableList(new ArrayList<>(requirements));
     JobChange.requireValidVersion(expectedVersion);
   }
 }

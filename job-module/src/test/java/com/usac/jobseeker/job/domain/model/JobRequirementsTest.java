@@ -211,4 +211,161 @@ class JobRequirementsTest {
                     null))
         .isInstanceOf(IllegalArgumentException.class);
   }
+
+  // Cada campo que no es del tipo se rechaza por separado: ninguno se ignora en silencio.
+  @Test
+  void everyForeignFieldIsRejectedForEveryType() {
+    for (JobRequirementDraft draft :
+        List.of(
+            // SKILL con un campo de otro tipo
+            new JobRequirementDraft(
+                RequirementType.SKILL,
+                false,
+                "Java",
+                null,
+                EducationLevel.BACHELOR,
+                null,
+                null,
+                null),
+            new JobRequirementDraft(
+                RequirementType.SKILL, false, "Java", null, null, 3, null, null),
+            new JobRequirementDraft(
+                RequirementType.SKILL, false, "Java", null, null, null, "en", null),
+            new JobRequirementDraft(
+                RequirementType.SKILL,
+                false,
+                "Java",
+                null,
+                null,
+                null,
+                null,
+                LanguageProficiency.B1),
+            // EDUCATION
+            new JobRequirementDraft(
+                RequirementType.EDUCATION,
+                false,
+                "Java",
+                null,
+                EducationLevel.BACHELOR,
+                null,
+                null,
+                null),
+            new JobRequirementDraft(
+                RequirementType.EDUCATION,
+                false,
+                null,
+                2,
+                EducationLevel.BACHELOR,
+                null,
+                null,
+                null),
+            new JobRequirementDraft(
+                RequirementType.EDUCATION,
+                false,
+                null,
+                null,
+                EducationLevel.BACHELOR,
+                3,
+                null,
+                null),
+            new JobRequirementDraft(
+                RequirementType.EDUCATION,
+                false,
+                null,
+                null,
+                EducationLevel.BACHELOR,
+                null,
+                "en",
+                null),
+            new JobRequirementDraft(
+                RequirementType.EDUCATION,
+                false,
+                null,
+                null,
+                EducationLevel.BACHELOR,
+                null,
+                null,
+                LanguageProficiency.A1),
+            // EXPERIENCE_YEARS
+            new JobRequirementDraft(
+                RequirementType.EXPERIENCE_YEARS, false, "Java", null, null, 3, null, null),
+            new JobRequirementDraft(
+                RequirementType.EXPERIENCE_YEARS, false, null, 2, null, 3, null, null),
+            new JobRequirementDraft(
+                RequirementType.EXPERIENCE_YEARS,
+                false,
+                null,
+                null,
+                EducationLevel.BACHELOR,
+                3,
+                null,
+                null),
+            new JobRequirementDraft(
+                RequirementType.EXPERIENCE_YEARS, false, null, null, null, 3, "en", null),
+            new JobRequirementDraft(
+                RequirementType.EXPERIENCE_YEARS,
+                false,
+                null,
+                null,
+                null,
+                3,
+                null,
+                LanguageProficiency.B1),
+            // LANGUAGE
+            new JobRequirementDraft(
+                RequirementType.LANGUAGE,
+                false,
+                "Java",
+                null,
+                null,
+                null,
+                "en",
+                LanguageProficiency.B2),
+            new JobRequirementDraft(
+                RequirementType.LANGUAGE, false, null, 2, null, null, "en", LanguageProficiency.B2),
+            new JobRequirementDraft(
+                RequirementType.LANGUAGE,
+                false,
+                null,
+                null,
+                EducationLevel.BACHELOR,
+                null,
+                "en",
+                LanguageProficiency.B2),
+            new JobRequirementDraft(
+                RequirementType.LANGUAGE,
+                false,
+                null,
+                null,
+                null,
+                3,
+                "en",
+                LanguageProficiency.B2))) {
+      assertThat(violationsOf(draft))
+          .as(draft.toString())
+          .containsExactly(v("requirements[0].type", "FIELD_NOT_FOR_TYPE"));
+    }
+  }
+
+  @Test
+  void aNullElementIsATypeMissingNotACrash() {
+    var withNull = new ArrayList<JobRequirementDraft>();
+    withNull.add(null);
+
+    assertThatThrownBy(() -> JobRequirements.of(withNull))
+        .isInstanceOfSatisfying(
+            ValidationFailedException.class,
+            failure ->
+                assertThat(failure.violations())
+                    .containsExactly(v("requirements[0].type", "REQUIRED")));
+  }
+
+  // Un mismo error en dos elementos se reporta una vez por elemento, no una vez en total.
+  @Test
+  void eachBadElementReportsItsOwnPosition() {
+    assertThat(violationsOf(years(0), years(70)))
+        .containsExactly(
+            v("requirements[0].minYears", "OUT_OF_RANGE"),
+            v("requirements[1].minYears", "OUT_OF_RANGE"));
+  }
 }

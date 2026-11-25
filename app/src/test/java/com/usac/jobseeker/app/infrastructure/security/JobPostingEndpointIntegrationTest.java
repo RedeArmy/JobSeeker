@@ -255,6 +255,22 @@ class JobPostingEndpointIntegrationTest {
         .andExpect(status().isBadRequest());
   }
 
+  // Un `[null]` del cliente es un dato inválido (400 con la posición), no un error interno (500).
+  @Test
+  void aNullRequirementInTheBodyIsA400NotA500() throws Exception {
+    UUID owner = recruiter();
+    String id = createDraft(owner);
+
+    mvc.perform(
+            json(
+                put(POSTINGS + "/" + id + "/requirements"),
+                owner,
+                "{\"requirements\":[null],\"version\":1}"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath(ERROR_CODE).value("VALIDATION_FAILED"))
+        .andExpect(jsonPath("$.error.details[0].field").value("requirements[0].type"));
+  }
+
   @Test
   void aPublishedPostingCannotLoseItsLastSkill() throws Exception {
     UUID owner = recruiter();

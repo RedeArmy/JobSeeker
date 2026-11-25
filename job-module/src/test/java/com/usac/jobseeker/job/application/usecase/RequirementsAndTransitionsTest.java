@@ -247,4 +247,13 @@ class RequirementsAndTransitionsTest {
     assertThat(f.events)
         .allSatisfy(e -> assertThat(e.aggregateType()).isEqualTo(JobPostingEvents.AGGREGATE_TYPE));
   }
+
+  @Test
+  void aCommandWithoutAListMeansAnEmptySetNotAnError() {
+    JobPostingView draft = f.draft();
+    var command = new ManageJobRequirementsCommand(f.owner, draft.posting().id(), 1, null);
+
+    assertThat(command.requirements()).isEmpty();
+    assertThat(requirements.execute(command).requirements()).isEmpty();
+  }
 }

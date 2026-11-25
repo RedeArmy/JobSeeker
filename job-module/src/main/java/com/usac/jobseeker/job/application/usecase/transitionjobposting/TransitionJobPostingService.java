@@ -54,7 +54,10 @@ public class TransitionJobPostingService implements TransitionJobPostingUseCase 
     return new JobPostingView(moved, requirements, true);
   }
 
-  private static String eventFor(JobStatus from, JobStatus to) {
+  // Visible al paquete para probar las ramas que el dueño no alcanza por esta puerta (archivar es
+  // del
+  // sistema, y ninguna transición vuelve a borrador): la tabla de eventos queda completa y probada.
+  static String eventFor(JobStatus from, JobStatus to) {
     return switch (to) {
       case PUBLISHED ->
           from == JobStatus.CLOSED ? JobPostingEvents.REOPENED : JobPostingEvents.PUBLISHED;

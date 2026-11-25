@@ -152,4 +152,17 @@ class CreateAndUpdateJobPostingTest {
     assertThatThrownBy(() -> new UpdateJobPostingCommand(f.owner, id, -1, input))
         .isInstanceOf(ValidationFailedException.class);
   }
+
+  // El caso de uso leyó la versión vigente, pero otra edición se adelantó antes de escribir.
+  @Test
+  void aWriteThatLosesTheRaceAfterReadingIsStaleAndLeavesNoEvent() {
+    JobPostingView published = JobStates.published(f);
+    f.events.clear();
+    f.store.loseTheRace = true;
+    var command = edit(published, JobFixture.input("Otro"));
+
+    assertThatThrownBy(() -> update.execute(command)).isInstanceOf(StaleStateException.class);
+    assertThat(f.events).isEmpty();
+    assertThat(f.metrics).last().isEqualTo("update_job_posting:stale");
+  }
 }
