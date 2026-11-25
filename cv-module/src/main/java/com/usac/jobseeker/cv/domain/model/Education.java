@@ -2,6 +2,7 @@ package com.usac.jobseeker.cv.domain.model;
 
 import com.usac.jobseeker.common.domain.error.FieldViolation;
 import com.usac.jobseeker.common.domain.error.ValidationFailedException;
+import com.usac.jobseeker.common.domain.rules.FormatRules;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,8 +36,8 @@ public record Education(
       LocalDate completionDate) {
     List<FieldViolation> violations = new ArrayList<>();
     String cleanInstitution =
-        TextRules.singleLine("institution", institution, NAME_MAX, true, violations);
-    String cleanDegree = TextRules.singleLine("degree", degree, NAME_MAX, true, violations);
+        FormatRules.singleLine("institution", institution, NAME_MAX, true, violations);
+    String cleanDegree = FormatRules.singleLine("degree", degree, NAME_MAX, true, violations);
     LocalDate completion = TextRules.date("completionDate", completionDate, false, violations);
     if (!violations.isEmpty()) {
       throw new ValidationFailedException(violations);

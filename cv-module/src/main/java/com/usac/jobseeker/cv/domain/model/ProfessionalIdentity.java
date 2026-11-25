@@ -2,6 +2,7 @@ package com.usac.jobseeker.cv.domain.model;
 
 import com.usac.jobseeker.common.domain.error.FieldViolation;
 import com.usac.jobseeker.common.domain.error.ValidationFailedException;
+import com.usac.jobseeker.common.domain.rules.FormatRules;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -27,9 +28,9 @@ public record ProfessionalIdentity(String fullName, String headline, String bio)
    */
   public static ProfessionalIdentity of(String fullName, String headline, String bio) {
     List<FieldViolation> violations = new ArrayList<>();
-    String name = TextRules.singleLine("fullName", fullName, FULL_NAME_MAX, true, violations);
-    String title = TextRules.singleLine("headline", headline, HEADLINE_MAX, false, violations);
-    String about = TextRules.multiLine("bio", bio, BIO_MAX, violations);
+    String name = FormatRules.singleLine("fullName", fullName, FULL_NAME_MAX, true, violations);
+    String title = FormatRules.singleLine("headline", headline, HEADLINE_MAX, false, violations);
+    String about = FormatRules.multiLine("bio", bio, BIO_MAX, false, violations);
     if (!violations.isEmpty()) {
       throw new ValidationFailedException(violations);
     }

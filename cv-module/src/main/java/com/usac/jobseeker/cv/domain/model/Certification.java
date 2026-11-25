@@ -2,6 +2,7 @@ package com.usac.jobseeker.cv.domain.model;
 
 import com.usac.jobseeker.common.domain.error.FieldViolation;
 import com.usac.jobseeker.common.domain.error.ValidationFailedException;
+import com.usac.jobseeker.common.domain.rules.FormatRules;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -32,9 +33,9 @@ public record Certification(
       LocalDate expirationDate,
       String credentialUrl) {
     List<FieldViolation> violations = new ArrayList<>();
-    String cleanName = TextRules.singleLine("name", name, NAME_MAX, true, violations);
+    String cleanName = FormatRules.singleLine("name", name, NAME_MAX, true, violations);
     String cleanIssuer =
-        TextRules.singleLine(
+        FormatRules.singleLine(
             "issuingOrganization", issuingOrganization, NAME_MAX, true, violations);
     LocalDate issue = TextRules.date("issueDate", issueDate, false, violations);
     LocalDate expiration = TextRules.date("expirationDate", expirationDate, false, violations);

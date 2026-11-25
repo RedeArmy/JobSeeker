@@ -2,6 +2,7 @@ package com.usac.jobseeker.cv.domain.model;
 
 import com.usac.jobseeker.common.domain.error.FieldViolation;
 import com.usac.jobseeker.common.domain.error.ValidationFailedException;
+import com.usac.jobseeker.common.domain.rules.FormatRules;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -24,13 +25,13 @@ public final class WorkAuthorizations {
     List<String> clean = new ArrayList<>();
     Set<String> seen = new HashSet<>();
     if (drafts.size() > MAX_PER_PROFILE) {
-      violations.add(new FieldViolation("workAuthorizations", CandidateRules.TOO_MANY));
+      violations.add(new FieldViolation("workAuthorizations", FormatRules.TOO_MANY));
     }
     for (int i = 0; i < drafts.size(); i++) {
       String field = "workAuthorizations[" + i + "]";
-      String code = CandidateRules.country(field, drafts.get(i), true, violations);
+      String code = FormatRules.country(field, drafts.get(i), true, violations);
       if (code != null && !seen.add(code)) {
-        violations.add(new FieldViolation(field, CandidateRules.DUPLICATE));
+        violations.add(new FieldViolation(field, FormatRules.DUPLICATE));
       }
       if (code != null) {
         clean.add(code);

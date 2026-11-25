@@ -2,6 +2,7 @@ package com.usac.jobseeker.cv.domain.model;
 
 import com.usac.jobseeker.common.domain.error.FieldViolation;
 import com.usac.jobseeker.common.domain.error.ValidationFailedException;
+import com.usac.jobseeker.common.domain.rules.FormatRules;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -22,17 +23,17 @@ public record CandidateLanguage(String language, LanguageProficiency proficiency
     List<CandidateLanguage> clean = new ArrayList<>();
     Set<String> seen = new HashSet<>();
     if (drafts.size() > MAX_PER_PROFILE) {
-      violations.add(new FieldViolation("languages", CandidateRules.TOO_MANY));
+      violations.add(new FieldViolation("languages", FormatRules.TOO_MANY));
     }
     for (int i = 0; i < drafts.size(); i++) {
       CandidateLanguage draft = drafts.get(i);
       String field = "languages[" + i + "]";
-      String code = CandidateRules.language(field + ".language", draft.language(), violations);
+      String code = FormatRules.language(field + ".language", draft.language(), violations);
       if (draft.proficiency() == null) {
-        violations.add(new FieldViolation(field + ".proficiency", CandidateRules.REQUIRED));
+        violations.add(new FieldViolation(field + ".proficiency", FormatRules.REQUIRED));
       }
       if (code != null && !seen.add(code)) {
-        violations.add(new FieldViolation(field + ".language", CandidateRules.DUPLICATE));
+        violations.add(new FieldViolation(field + ".language", FormatRules.DUPLICATE));
       }
       if (code != null && draft.proficiency() != null) {
         clean.add(new CandidateLanguage(code, draft.proficiency()));

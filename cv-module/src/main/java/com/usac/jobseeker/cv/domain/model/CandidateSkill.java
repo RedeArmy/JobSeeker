@@ -2,6 +2,7 @@ package com.usac.jobseeker.cv.domain.model;
 
 import com.usac.jobseeker.common.domain.error.FieldViolation;
 import com.usac.jobseeker.common.domain.error.ValidationFailedException;
+import com.usac.jobseeker.common.domain.rules.FormatRules;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -34,18 +35,19 @@ public record CandidateSkill(String name, Integer level) {
     List<CandidateSkill> clean = new ArrayList<>();
     Set<String> seen = new HashSet<>();
     if (drafts.size() > MAX_PER_PROFILE) {
-      violations.add(new FieldViolation("skills", CandidateRules.TOO_MANY));
+      violations.add(new FieldViolation("skills", FormatRules.TOO_MANY));
     }
     for (int i = 0; i < drafts.size(); i++) {
       CandidateSkill draft = drafts.get(i);
       String field = "skills[" + i + "]";
-      String name = TextRules.singleLine(field + ".name", draft.name(), NAME_MAX, true, violations);
+      String name =
+          FormatRules.singleLine(field + ".name", draft.name(), NAME_MAX, true, violations);
       Integer level = draft.level();
       if (level != null && (level < LEVEL_MIN || level > LEVEL_MAX)) {
         violations.add(new FieldViolation(field + ".level", "OUT_OF_RANGE"));
       }
-      if (name != null && !seen.add(CandidateRules.sameSkillKey(name))) {
-        violations.add(new FieldViolation(field + ".name", CandidateRules.DUPLICATE));
+      if (name != null && !seen.add(FormatRules.sameKey(name))) {
+        violations.add(new FieldViolation(field + ".name", FormatRules.DUPLICATE));
       }
       if (name != null) {
         clean.add(new CandidateSkill(name, level));

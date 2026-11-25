@@ -4,7 +4,7 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | 🟡 En revisión |
-| **Versión** | 1.3 — se paga TD-002 y entran TD-028 y TD-029 |
+| **Versión** | 1.4 — se paga TD-031 |
 | **Fecha** | 24 de noviembre de 2026 |
 | **Dueño del documento** | Responsable del proyecto |
 | **Revisión del registro** | Al cerrar cada sprint y antes de cada hito de la hoja de ruta |
@@ -56,7 +56,7 @@ Corte: 24-nov-2026.
 | S4 Baja | 5 |
 | **Total** | **18** |
 
-- **Abiertas:** 16 · **Planificadas:** 2 · **Resueltas:** 21 · **Aceptadas:** 6.
+- **Abiertas:** 16 · **Planificadas:** 2 · **Resueltas:** 22 · **Aceptadas:** 6.
 - **S2 abiertas con disparador próximo** (decidir el siguiente sprint): TD-012 (antes de `suggestcandidatesforjob`) y TD-005 y TD-016 (primer despliegue), más TD-020 (antes de usuarios reales).
 - **Métricas a seguir en cada revisión:** deuda abierta por severidad, edad de las S2 en días, número de cierres por sprint, aceptadas vencidas.
 
@@ -308,6 +308,7 @@ Corte: 24-nov-2026.
 | TD-R19 | Índice `idx_outbox_aggregate` sin lector (antes TD-009) | Rendimiento | S4 | 2026-11-24 | #34 | Descartada: el nuevo reclamo lo usa para comprobar si un agregado tiene un evento en vuelo. |
 | TD-R20 | Un solo hilo para todas las tareas programadas (antes TD-002) | Concurrencia | S3 | 2026-11-24 | #35 | Planificador de cuatro hilos configurable (`SCHEDULER_POOL_SIZE`). Prueba de que una tarea lenta no retrasa a otra; lo necesitaba el trabajador de embeddings, que llama a Ollama durante segundos. |
 | TD-R21 | Sin métricas de frescura de los embeddings (parte de TD-029) | Operación | S3 | 2026-11-24 | #35 | Histograma edición→vector con el objetivo de 120 s como cubo, edad del trabajo listo más viejo y profundidad por estado; tres alertas probadas con `promtool` y tres paneles. La medición con un Ollama real sigue abierta en TD-029. |
+| TD-R23 | Reglas de formato repetidas en `cv` y a punto de repetirse en `job` (antes TD-031) | Código | S4 | 2026-11-24 | #36 | `FormatRules` y `SalaryRules` en `common`, con pruebas propias; se borró `CandidateRules` de `cv` y la validación del salario quedó en un solo lugar, para que `job` las use en vez de copiarlas. Las pruebas existentes de `cv` pasan sin cambios. De paso, una moneda inexistente ya no deja el salario marcado como utilizable. |
 
 ## 7. Deuda aceptada
 
@@ -328,6 +329,7 @@ Corte: 24-nov-2026.
 | 1.1 | 2026-11-24 | Se pagan TD-003, TD-004, TD-006, TD-007 y TD-008 (PR #33) y pasan a resueltas como TD-R09 a TD-R13; TD-R14 registra el límite implícito que apareció al pagar TD-004 y su arreglo. Quedan 18 abiertas o planificadas, 21 resueltas y 6 aceptadas. |
 | 1.2 | 2026-11-24 | Se pagan TD-001, TD-018, TD-019 y TD-021 (PR #34) y pasan a resueltas como TD-R15 a TD-R18; TD-009 se descarta (TD-R19) porque el nuevo reclamo usa su índice. Entran TD-027 (nombres propios sin redactar) y TD-A06 (bloqueo de reclamo). Quedan 18 abiertas o planificadas, 21 resueltas y 6 aceptadas. |
 | 1.3 | 2026-11-24 | Se paga TD-002 (PR #35, TD-R20) porque el trabajador de embeddings lo exigía. Entran TD-028 (el lado de la vacante de `embedentity`) y TD-029 (medición con un Ollama real); las métricas de frescura de TD-029 se pagan en el mismo PR (TD-R21). Quedan 18 abiertas o planificadas, 21 resueltas y 6 aceptadas. |
+| 1.4 | 2026-11-24 | Se paga TD-031 (reglas de formato repetidas en `cv` y a punto de repetirse en `job`, PR #36, TD-R23): se encontró y se pagó en el mismo cambio. Quedan 18 abiertas o planificadas, 22 resueltas y 6 aceptadas. |
 
 ## 9. Plantilla de ficha
 
