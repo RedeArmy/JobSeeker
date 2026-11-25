@@ -89,7 +89,7 @@ La VM de desarrollo no expone AVX/AVX2/FMA (§8.2 del doc 08): `llama.cpp` corre
 ## 4. Cómo repetir la medición de recall
 
 ```
-mvn -pl matching-module -am test -Dtest=RetrievalRecallMeasurement \
+mvn -pl matching-module -am test -Dtest=RetrievalRecallMeasurementTest \
     -Dretrieval.measure=true -Dretrieval.sizes=10000,30000 -Dretrieval.otherShare=0.9
 ```
 

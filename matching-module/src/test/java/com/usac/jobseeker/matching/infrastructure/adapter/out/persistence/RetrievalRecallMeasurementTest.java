@@ -1,10 +1,13 @@
 package com.usac.jobseeker.matching.infrastructure.adapter.out.persistence;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
+
 import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.NearestProfile;
 import com.usac.jobseeker.matching.domain.model.EmbeddingVector;
 import com.usac.jobseeker.matching.infrastructure.MatchingPostgres;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -21,13 +24,13 @@ import org.springframework.transaction.support.TransactionTemplate;
  * regresión: no corre salvo con `-Dretrieval.measure=true`. Imprime una tabla Markdown para el
  * informe `11-medicion-recuperacion-vectorial.md`.
  *
- * <p>Uso: `mvn -pl matching-module test -Dtest=RetrievalRecallMeasurement -Dretrieval.measure=true
- * -Dretrieval.sizes=10000,30000`. El corpus es sintético con geometría de embeddings reales (ver
- * {@link RetrievalCorpus}): mide planes, latencia y el efecto de las reglas de consulta, no la
- * calidad sobre perfiles reales.
+ * <p>Uso: `mvn -pl matching-module test -Dtest=RetrievalRecallMeasurementTest
+ * -Dretrieval.measure=true -Dretrieval.sizes=10000,30000`. El corpus es sintético con geometría de
+ * embeddings reales (ver {@link RetrievalCorpus}): mide planes, latencia y el efecto de las reglas
+ * de consulta, no la calidad sobre perfiles reales.
  */
 @EnabledIfSystemProperty(named = "retrieval.measure", matches = "true")
-class RetrievalRecallMeasurement {
+class RetrievalRecallMeasurementTest {
 
   private static final int QUERIES = 30;
   private static final int[] PAGES = {10, 20, 50};
@@ -62,14 +65,17 @@ class RetrievalRecallMeasurement {
           exact.add(exact(q, page));
         }
         for (int ef : EF) {
-          row(page, ef, true, queries, exact);
+          // Con la regla la página siempre sale completa: es lo que esta medición debe seguir
+          // mostrando.
+          assertThat(row(page, ef, true, queries, exact)).isCloseTo(page, within(0.001));
           row(page, ef, false, queries, exact);
         }
       }
     }
   }
 
-  private void row(
+  /** Imprime la fila y devuelve la media de filas devueltas por consulta. */
+  private double row(
       int page, int ef, boolean rule, List<EmbeddingVector> queries, List<Set<UUID>> exact) {
     var repository = new JdbcEmbeddingRepository(jdbc, ef);
     List<Double> times = new ArrayList<>();
@@ -90,7 +96,7 @@ class RetrievalRecallMeasurement {
       recall += (double) hit.size() / exact.get(i).size();
       rows += found.size();
     }
-    Collections.sort(times);
+    times.sort(Comparator.naturalOrder());
     report(
         "| %d | %d | %s | %.3f | %.1f | %.1f | %.1f |%n",
         page,
@@ -100,6 +106,7 @@ class RetrievalRecallMeasurement {
         rows / queries.size(),
         times.get(times.size() / 2),
         times.get((int) Math.ceil(times.size() * 0.95) - 1));
+    return rows / queries.size();
   }
 
   /** La consulta sin la regla: solo `ef_search`, como la dejaría pgvector por defecto. */

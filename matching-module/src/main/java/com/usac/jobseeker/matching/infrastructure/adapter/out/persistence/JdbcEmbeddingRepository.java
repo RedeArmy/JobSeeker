@@ -283,7 +283,10 @@ public class JdbcEmbeddingRepository implements EmbeddingStorePort, CandidateRet
     jdbc.sql(
             "select set_config('hnsw.iterative_scan', 'relaxed_order', true),"
                 + " set_config('hnsw.ef_search', :ef, true)")
-        .param("ef", String.valueOf(Math.min(MAX_EF_SEARCH, Math.max(efSearch, limit))))
+        .param(
+            "ef",
+            String.valueOf(
+                Math.clamp(efSearch, limit > MAX_EF_SEARCH ? MAX_EF_SEARCH : limit, MAX_EF_SEARCH)))
         .query()
         .singleRow();
     return jdbc.sql(

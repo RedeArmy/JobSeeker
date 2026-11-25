@@ -1,6 +1,7 @@
 package com.usac.jobseeker.matching.infrastructure.adapter.out.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.NearestProfile;
 import com.usac.jobseeker.matching.domain.model.EmbeddingVector;
@@ -92,18 +93,16 @@ class JdbcEmbeddingRetrievalRecallTest {
         status -> {
           JDBC.sql("set local enable_indexscan = off").update();
           JDBC.sql("set local enable_bitmapscan = off").update();
-          Set<UUID> found =
-              new HashSet<>(
-                  JDBC.sql(
-                          "select candidate_profile_id from profile_embeddings where discoverable"
-                              + " and embedding is not null and embedding_model = :model"
-                              + " order by embedding <=> cast(:q as vector) limit :limit")
-                      .param("model", RetrievalCorpus.MODEL)
-                      .param("q", RetrievalCorpus.literal(query.values()))
-                      .param("limit", limit)
-                      .query(UUID.class)
-                      .list());
-          return found;
+          return new HashSet<>(
+              JDBC.sql(
+                      "select candidate_profile_id from profile_embeddings where discoverable"
+                          + " and embedding is not null and embedding_model = :model"
+                          + " order by embedding <=> cast(:q as vector) limit :limit")
+                  .param("model", RetrievalCorpus.MODEL)
+                  .param("q", RetrievalCorpus.literal(query.values()))
+                  .param("limit", limit)
+                  .query(UUID.class)
+                  .list());
         });
   }
 
@@ -200,6 +199,28 @@ class JdbcEmbeddingRetrievalRecallTest {
         status -> {
           repository.nearestDiscoverable(corpus.query(), RetrievalCorpus.MODEL, 50);
           assertThat(setting(JDBC, "hnsw.ef_search")).isEqualTo("50");
+        });
+  }
+
+  @Test
+  void theConstructorRefusesAnEfSearchOutsideWhatPgvectorAccepts() {
+    assertThatThrownBy(() -> new JdbcEmbeddingRepository(JDBC, 0))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> new JdbcEmbeddingRepository(JDBC, 1001))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThat(new JdbcEmbeddingRepository(JDBC, 1)).isNotNull();
+    assertThat(new JdbcEmbeddingRepository(JDBC, 1000)).isNotNull();
+  }
+
+  // Una página mayor que el máximo de pgvector no debe romper la consulta: se acota a 1000.
+  @Test
+  void aPageLargerThanThePgvectorMaximumClampsEfSearch() {
+    var repository = new JdbcEmbeddingRepository(JDBC, 100);
+
+    TX.executeWithoutResult(
+        status -> {
+          repository.nearestDiscoverable(corpus.query(), RetrievalCorpus.MODEL, 2000);
+          assertThat(setting(JDBC, "hnsw.ef_search")).isEqualTo("1000");
         });
   }
 
