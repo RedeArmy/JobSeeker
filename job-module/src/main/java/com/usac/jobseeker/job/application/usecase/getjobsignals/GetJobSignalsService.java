@@ -4,6 +4,7 @@ import com.usac.jobseeker.common.application.observability.UseCaseMetricsPort;
 import com.usac.jobseeker.job.application.support.JobPostingStorePort;
 import com.usac.jobseeker.job.application.support.JobRequirementsStorePort;
 import com.usac.jobseeker.job.domain.model.JobPosting;
+import com.usac.jobseeker.job.domain.model.JobPostingId;
 import com.usac.jobseeker.job.domain.model.JobRequirement;
 import com.usac.jobseeker.job.domain.model.JobStatus;
 import com.usac.jobseeker.job.domain.model.SalaryRange;
@@ -42,7 +43,7 @@ public class GetJobSignalsService implements GetJobSignalsUseCase {
   public Optional<JobSnapshot> execute(GetJobSignalsQuery query) {
     Optional<JobSnapshot> snapshot =
         postings
-            .findById(query.id())
+            .findById(new JobPostingId(query.jobPostingId()))
             .filter(posting -> posting.status() != JobStatus.DRAFT)
             .map(posting -> project(posting, requirements.findByPosting(posting.id())));
     metrics.count(USE_CASE, snapshot.isPresent() ? "found" : "unavailable");

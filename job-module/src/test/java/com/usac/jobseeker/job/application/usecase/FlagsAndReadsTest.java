@@ -153,7 +153,7 @@ class FlagsAndReadsTest {
     JobPostingView published = JobStates.published(f);
 
     JobSnapshot snapshot =
-        signals.execute(new GetJobSignalsQuery(published.posting().id())).orElseThrow();
+        signals.execute(new GetJobSignalsQuery(published.posting().id().value())).orElseThrow();
 
     assertThat(snapshot.jobPostingId()).isEqualTo(published.posting().id().value());
     assertThat(snapshot.version()).isEqualTo(published.posting().version());
@@ -179,17 +179,17 @@ class FlagsAndReadsTest {
     JobPostingView deletedDraft = f.draft();
     JobStates.transition(f, deletedDraft, com.usac.jobseeker.job.domain.model.JobStatus.DELETED);
 
-    assertThat(signals.execute(new GetJobSignalsQuery(draft.posting().id()))).isEmpty();
-    assertThat(signals.execute(new GetJobSignalsQuery(deletedDraft.posting().id()))).isEmpty();
-    assertThat(signals.execute(new GetJobSignalsQuery(new JobPostingId(UUID.randomUUID()))))
+    assertThat(signals.execute(new GetJobSignalsQuery(draft.posting().id().value()))).isEmpty();
+    assertThat(signals.execute(new GetJobSignalsQuery(deletedDraft.posting().id().value())))
         .isEmpty();
+    assertThat(signals.execute(new GetJobSignalsQuery(UUID.randomUUID()))).isEmpty();
   }
 
   @Test
   void aClosedPostingStillHasSignalsSoExistingScoresStayExplainable() {
     JobPostingView closed = JobStates.closed(f);
 
-    assertThat(signals.execute(new GetJobSignalsQuery(closed.posting().id())))
+    assertThat(signals.execute(new GetJobSignalsQuery(closed.posting().id().value())))
         .get()
         .extracting(JobSnapshot::status)
         .isEqualTo("CLOSED");
@@ -250,7 +250,7 @@ class FlagsAndReadsTest {
     JobPostingView published = JobStates.transition(f, withRequirements, JobStatus.PUBLISHED);
 
     JobSnapshot snapshot =
-        signals.execute(new GetJobSignalsQuery(published.posting().id())).orElseThrow();
+        signals.execute(new GetJobSignalsQuery(published.posting().id().value())).orElseThrow();
 
     assertThat(snapshot.modality()).isEqualTo("HYBRID");
     assertThat(snapshot.country()).isEqualTo("GT");
@@ -285,7 +285,7 @@ class FlagsAndReadsTest {
     JobPostingView published = JobStates.transition(f, withSkill, JobStatus.PUBLISHED);
 
     JobSnapshot snapshot =
-        signals.execute(new GetJobSignalsQuery(published.posting().id())).orElseThrow();
+        signals.execute(new GetJobSignalsQuery(published.posting().id().value())).orElseThrow();
 
     assertThat(snapshot.modality()).isNull();
     assertThat(snapshot.salary()).isNull();
