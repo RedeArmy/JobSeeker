@@ -76,11 +76,11 @@ create table job_requirements (
     -- SKILL: nombre en texto hasta la taxonomía (ADR-0019); `skill_id` espera esa tabla y aún no tiene FK.
     skill_name text,
     skill_id uuid,
-    min_level smallint,
+    min_level integer,
     -- EDUCATION
     education_level text,
     -- EXPERIENCE_YEARS
-    min_years smallint,
+    min_years integer,
     -- LANGUAGE (ISO 639-1)
     language text,
     min_proficiency text,

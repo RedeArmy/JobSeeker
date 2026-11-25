@@ -459,9 +459,9 @@ Requisitos estructurados de la vacante (BR-JOB-02), hijos del agregado `JobPosti
 | position | integer | NOT NULL, ≥ 0, UNIQUE con `job_posting_id` | Orden en que el reclutador los escribió |
 | skill_name | text | SKILL: NOT NULL, ≤ 100 | Nombre en texto libre hasta la taxonomía (ADR-0019) |
 | skill_id | uuid | NULL, sin FK todavía | Espera la tabla `skills` de ADR-0019 |
-| min_level | smallint | SKILL: NULL o 1 a 4 | Nivel mínimo de la habilidad |
+| min_level | integer | SKILL: NULL o 1 a 4 | Nivel mínimo de la habilidad |
 | education_level | text | EDUCATION: NOT NULL | Nivel académico mínimo (misma escala que `cv`) |
-| min_years | smallint | EXPERIENCE_YEARS: 1 a 60 | Años mínimos |
+| min_years | integer | EXPERIENCE_YEARS: 1 a 60 | Años mínimos |
 | language | text | LANGUAGE: ISO 639-1, 2 letras | Idioma |
 | min_proficiency | text | LANGUAGE: A1 a C2 o NATIVE | Nivel mínimo |
 
