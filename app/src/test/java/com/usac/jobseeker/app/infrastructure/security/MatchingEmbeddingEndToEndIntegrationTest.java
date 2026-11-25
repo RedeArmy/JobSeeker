@@ -421,4 +421,273 @@ class MatchingEmbeddingEndToEndIntegrationTest {
 
     assertThat(OLLAMA_CALLS.get()).isZero();
   }
+
+  // ---- vacantes (TD-028): las mismas piezas, desde la API de `job` ----
+
+  private static final String JOBS = "/api/v1/job/postings";
+  private static final String JOB_DESCRIPTION =
+      "Servicios backend. Contacto: reclutador@empresa.test";
+
+  private static String jobBody(String title, String country, int version) {
+    String salary =
+        "MX".equals(country)
+            ? ",\"salaryMin\":1000,\"salaryMax\":1500,\"salaryCurrency\":\"USD\",\"salaryPeriod\":\"MONTH\""
+            : "";
+    return "{\"title\":\""
+        + title
+        + "\",\"description\":\""
+        + JOB_DESCRIPTION
+        + "\",\"modality\":\"REMOTE\",\"country\":\""
+        + country
+        + "\""
+        + salary
+        + ",\"version\":"
+        + version
+        + "}";
+  }
+
+  /** Un borrador con su habilidad, sin publicar: versión 2. */
+  private String draftJob(UUID owner, String title) throws Exception {
+    var created =
+        mvc.perform(json(post(JOBS), owner, jobBody(title, "GT", 0)))
+            .andExpect(status().isCreated())
+            .andReturn();
+    String id =
+        com.jayway.jsonpath.JsonPath.read(created.getResponse().getContentAsString(), "$.id");
+    mvc.perform(
+            json(
+                put(JOBS + "/" + id + "/requirements"),
+                owner,
+                "{\"requirements\":[{\"type\":\"SKILL\",\"skillName\":\"Java\",\"minLevel\":3,\"mandatory\":true}],\"version\":1}"))
+        .andExpect(status().isOk());
+    return id;
+  }
+
+  /** Una vacante publicada: versión 3. */
+  private String publishedJob(UUID owner, String title) throws Exception {
+    String id = draftJob(owner, title);
+    transition(owner, id, "PUBLISHED", 2);
+    return id;
+  }
+
+  private void transition(UUID owner, String id, String to, int version) throws Exception {
+    mvc.perform(
+            json(
+                post(JOBS + "/" + id + "/transitions"),
+                owner,
+                "{\"to\":\"" + to + "\",\"version\":" + version + "}"))
+        .andExpect(status().isOk());
+  }
+
+  private void editJob(UUID owner, String id, String title, String country, int version)
+      throws Exception {
+    mvc.perform(json(put(JOBS + "/" + id), owner, jobBody(title, country, version)))
+        .andExpect(status().isOk());
+  }
+
+  private Boolean jobHasVector(String id) {
+    return jdbc.queryForObject(
+        "select count(*) > 0 from job_embeddings where job_posting_id = ?::uuid and embedding is not null",
+        Boolean.class,
+        id);
+  }
+
+  private Boolean jobPublishedCopy(String id) {
+    return jdbc.queryForObject(
+        "select published from job_embeddings where job_posting_id = ?::uuid", Boolean.class, id);
+  }
+
+  private String jobStageCopy(String id) {
+    return jdbc.queryForObject(
+        "select recruiting_stage from job_embeddings where job_posting_id = ?::uuid",
+        String.class,
+        id);
+  }
+
+  @Test
+  void aPublishedJobEndsUpWithAVectorAndTheModelOnlySawRedactedText() throws Exception {
+    UUID owner = recruiter();
+    String id = publishedJob(owner, "Ingeniero Backend");
+
+    deliverEvents();
+    runWorker();
+
+    assertThat(jobHasVector(id)).isTrue();
+    assertThat(jobPublishedCopy(id)).isTrue();
+    assertThat(jobStageCopy(id)).isEqualTo("HIRING");
+    assertThat(OLLAMA_CALLS.get()).isEqualTo(1);
+    String sent = OLLAMA_BODIES.get(0);
+    assertThat(sent)
+        .contains("Ingeniero Backend", "Java", "[correo]", "\"truncate\":false")
+        .doesNotContain("reclutador@empresa.test", owner.toString());
+  }
+
+  // TDD de job §5, regla 6: un borrador no es candidato a puntuarse; ni siquiera emite evento.
+  @Test
+  void aDraftNeverReachesTheModelNorLeavesARow() throws Exception {
+    String id = draftJob(recruiter(), "Solo borrador");
+
+    deliverEvents();
+    runWorker();
+
+    assertThat(OLLAMA_CALLS.get()).isZero();
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from job_embeddings where job_posting_id = ?::uuid",
+                Integer.class,
+                id))
+        .isZero();
+  }
+
+  // Cerrar la saca de los candidatos pero conserva el vector (los puntajes se siguen explicando), y
+  // reabrir no llama al modelo: el contenido es el mismo.
+  @Test
+  void closingUnpublishesButKeepsTheVectorAndReopeningDoesNotCallTheModelAgain() throws Exception {
+    UUID owner = recruiter();
+    String id = publishedJob(owner, "Backend");
+    deliverEvents();
+    runWorker();
+    assertThat(OLLAMA_CALLS.get()).isOne();
+
+    transition(owner, id, "CLOSED", 3);
+    deliverEvents();
+    runWorker();
+
+    assertThat(jobPublishedCopy(id)).isFalse();
+    assertThat(jobHasVector(id)).isTrue();
+
+    transition(owner, id, "PUBLISHED", 4);
+    deliverEvents();
+    runWorker();
+
+    assertThat(jobPublishedCopy(id)).isTrue();
+    assertThat(OLLAMA_CALLS.get()).isOne();
+  }
+
+  // BR-MATCH-03: país y salario son dimensiones estructurales; cambiarlos no recalcula el vector.
+  @Test
+  void aJobChangeOfStructuredDataOnlyDoesNotCallTheModelAgain() throws Exception {
+    UUID owner = recruiter();
+    String id = publishedJob(owner, "Backend");
+    deliverEvents();
+    runWorker();
+
+    editJob(owner, id, "Backend", "MX", 3);
+    deliverEvents();
+    runWorker();
+
+    assertThat(OLLAMA_CALLS.get()).isOne();
+  }
+
+  @Test
+  void aChangeOfContentEmbedsAgainWithTheNewText() throws Exception {
+    UUID owner = recruiter();
+    String id = publishedJob(owner, "Backend");
+    deliverEvents();
+    runWorker();
+
+    editJob(owner, id, "Backend Senior", "GT", 3);
+    deliverEvents();
+    runWorker();
+
+    assertThat(OLLAMA_CALLS.get()).isEqualTo(2);
+    assertThat(OLLAMA_BODIES.get(1)).contains("Backend Senior");
+  }
+
+  @Test
+  void aBurstOfEditsIsOneModelCallWithTheLatestContent() throws Exception {
+    UUID owner = recruiter();
+    String id = publishedJob(owner, "Backend");
+    deliverEvents();
+    runWorker();
+
+    editJob(owner, id, "Titulo uno", "GT", 3);
+    editJob(owner, id, "Titulo dos", "GT", 4);
+    editJob(owner, id, "Titulo final", "GT", 5);
+    deliverEvents();
+    runWorker();
+
+    assertThat(OLLAMA_CALLS.get()).isEqualTo(2);
+    assertThat(OLLAMA_BODIES.get(1)).contains("Titulo final").doesNotContain("Titulo uno");
+  }
+
+  // BR-MATCH-08: REVIEWING solo cambia la copia de la etapa; el vector y la publicación siguen.
+  @Test
+  void reviewingOnlyChangesTheStageCopyAndHiringBringsItBack() throws Exception {
+    UUID owner = recruiter();
+    String id = publishedJob(owner, "Backend");
+    deliverEvents();
+    runWorker();
+
+    mvc.perform(
+            json(
+                put(JOBS + "/" + id + "/recruiting-stage"),
+                owner,
+                "{\"stage\":\"REVIEWING\",\"version\":3}"))
+        .andExpect(status().isOk());
+    deliverEvents();
+    runWorker();
+
+    assertThat(jobStageCopy(id)).isEqualTo("REVIEWING");
+    assertThat(jobPublishedCopy(id)).isTrue();
+    assertThat(jobHasVector(id)).isTrue();
+    assertThat(OLLAMA_CALLS.get()).isOne();
+
+    mvc.perform(
+            json(
+                put(JOBS + "/" + id + "/recruiting-stage"),
+                owner,
+                "{\"stage\":\"HIRING\",\"version\":4}"))
+        .andExpect(status().isOk());
+    deliverEvents();
+    runWorker();
+
+    assertThat(jobStageCopy(id)).isEqualTo("HIRING");
+  }
+
+  @Test
+  void aModelThatIsDownKeepsTheJobAndTheJobVectorAppearsWhenItComesBack() throws Exception {
+    String id = publishedJob(recruiter(), "Backend");
+    ollamaStatus = 503;
+
+    deliverEvents();
+    runWorker();
+
+    assertThat(jobHasVector(id)).isFalse();
+    assertThat(jobPublishedCopy(id)).isTrue();
+    assertThat(
+            jdbc.queryForObject(
+                "select attempts from matching_work_queue where entity_key = ?::uuid",
+                Integer.class,
+                id))
+        .isOne();
+
+    ollamaStatus = 200;
+    jdbc.update(
+        "update matching_work_queue set not_before = now() - interval '1 second' where entity_key = ?::uuid",
+        id);
+    runWorker();
+
+    assertThat(jobHasVector(id)).isTrue();
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from matching_work_queue where entity_key = ?::uuid",
+                Integer.class,
+                id))
+        .isZero();
+  }
+
+  // Perfiles y vacantes comparten cola y trabajador: una pasada atiende las dos.
+  @Test
+  void aProfileAndAJobInTheSameQueueAreBothEmbeddedByTheSameWorker() throws Exception {
+    UUID candidateId = candidateWithEverything();
+    String jobId = publishedJob(recruiter(), "Backend");
+
+    deliverEvents();
+    runWorker();
+
+    assertThat(hasVector(candidateId)).isTrue();
+    assertThat(jobHasVector(jobId)).isTrue();
+    assertThat(OLLAMA_CALLS.get()).isEqualTo(2);
+  }
 }

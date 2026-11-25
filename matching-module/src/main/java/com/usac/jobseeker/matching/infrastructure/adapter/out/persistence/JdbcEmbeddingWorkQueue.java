@@ -1,6 +1,6 @@
 package com.usac.jobseeker.matching.infrastructure.adapter.out.persistence;
 
-import com.usac.jobseeker.common.domain.model.AccountId;
+import com.usac.jobseeker.matching.application.usecase.embedentity.EmbeddingEntity;
 import com.usac.jobseeker.matching.application.usecase.embedentity.EmbeddingWorkQueuePort;
 import java.time.Duration;
 import java.time.Instant;
@@ -17,8 +17,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  */
 public class JdbcEmbeddingWorkQueue implements EmbeddingWorkQueuePort {
 
-  private static final String PROFILE = "PROFILE";
-  private static final String ACCOUNT = "account";
+  private static final String TYPE = "type";
+  private static final String KEY = "key";
   private static final String ID = "id";
 
   private final JdbcClient jdbc;
@@ -27,16 +27,17 @@ public class JdbcEmbeddingWorkQueue implements EmbeddingWorkQueuePort {
     this.jdbc = jdbc;
   }
 
-  // La fila es única por cuenta: pedir otra vez no la duplica, sube su generación (para que quien
+  // La fila es única por entidad (tipo y clave): pedir otra vez no la duplica, sube su generación
+  // (para que quien
   // la
   // está ejecutando no la dé por terminada) y conserva el inicio más temprano, de modo que una
   // ráfaga de ediciones no aplaza el cálculo indefinidamente. Si estaba FAILED, una edición nueva
   // la reactiva: puede ser justo lo que la arregla.
   @Override
-  public void request(AccountId account, Instant notBefore) {
+  public void request(EmbeddingEntity entity, UUID key, Instant notBefore) {
     jdbc.sql(
             "insert into matching_work_queue (id, entity_type, entity_key, not_before)"
-                + " values (:id, :type, :account, :notBefore)"
+                + " values (:id, :type, :key, :notBefore)"
                 + " on conflict (entity_type, entity_key) do update set"
                 + " generation = matching_work_queue.generation + 1,"
                 + " not_before = least(matching_work_queue.not_before, excluded.not_before),"
@@ -45,8 +46,8 @@ public class JdbcEmbeddingWorkQueue implements EmbeddingWorkQueuePort {
                 + " pending_since = case when matching_work_queue.status = 'FAILED' then now()"
                 + " else matching_work_queue.pending_since end, status = 'PENDING'")
         .param(ID, UUID.randomUUID())
-        .param("type", PROFILE)
-        .param(ACCOUNT, account.value())
+        .param(TYPE, entity.name())
+        .param(KEY, key)
         .param("notBefore", at(notBefore))
         .update();
   }
@@ -69,7 +70,8 @@ public class JdbcEmbeddingWorkQueue implements EmbeddingWorkQueuePort {
                 + " and not_before <= clock_timestamp()"
                 + " and (locked_until is null or locked_until <= clock_timestamp())"
                 + " order by not_before limit :limit for update skip locked) c"
-                + " where q.id = c.id returning q.id, q.entity_key, q.generation, q.attempts,"
+                + " where q.id = c.id returning q.id, q.entity_type, q.entity_key, q.generation,"
+                + " q.attempts,"
                 + " q.pending_since")
         .param("limit", limit)
         // pgjdbc no infiere el tipo de un `Duration`: se pasa en segundos.
@@ -78,7 +80,8 @@ public class JdbcEmbeddingWorkQueue implements EmbeddingWorkQueuePort {
             (rows, n) ->
                 new Job(
                     rows.getObject(ID, UUID.class),
-                    new AccountId(rows.getObject("entity_key", UUID.class)),
+                    EmbeddingEntity.valueOf(rows.getString("entity_type")),
+                    rows.getObject("entity_key", UUID.class),
                     rows.getLong("generation"),
                     rows.getInt("attempts"),
                     rows.getObject("pending_since", OffsetDateTime.class).toInstant()))
@@ -123,10 +126,10 @@ public class JdbcEmbeddingWorkQueue implements EmbeddingWorkQueuePort {
   }
 
   @Override
-  public void discard(AccountId account) {
-    jdbc.sql("delete from matching_work_queue where entity_type = :type and entity_key = :account")
-        .param("type", PROFILE)
-        .param(ACCOUNT, account.value())
+  public void discard(EmbeddingEntity entity, UUID key) {
+    jdbc.sql("delete from matching_work_queue where entity_type = :type and entity_key = :key")
+        .param(TYPE, entity.name())
+        .param(KEY, key)
         .update();
   }
 

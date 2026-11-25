@@ -42,6 +42,13 @@
             <artifactId>cv-module</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- Lectura pública de `job` (`getjobsignals`), solo desde la capa anticorrupción de salida (ARCH-04);
+             `job` no depende de `matching` (ARCH-06). -->
+        <dependency>
+            <groupId>com.usac.jobseeker</groupId>
+            <artifactId>job-module</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <!-- Configuración enlazada (`jobseeker.matching.*`) y JSON del cliente de Ollama: la plataforma
              base, sin dependencias nuevas. -->
         <dependency>

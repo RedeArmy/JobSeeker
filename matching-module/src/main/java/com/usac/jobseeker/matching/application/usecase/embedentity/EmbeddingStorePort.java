@@ -67,6 +67,10 @@ public interface EmbeddingStorePort {
   /** Igual que el del perfil: crea la fila con `publishedIfNew` o deja la copia como está. */
   void saveJobEmbedding(JobPostingId id, boolean publishedIfNew, EntityEmbedding embedding);
 
-  /** Fija la copia de «publicada»; crea la fila sin vector si no existía. */
-  void setJobPublished(JobPostingId id, boolean published);
+  /**
+   * Fija las copias de «publicada» y de «en revisión» (BR-MATCH-08); crea la fila sin vector si no
+   * existía. Los índices parciales solo pueden nombrar columnas de su propia tabla, por eso hay
+   * copia.
+   */
+  void setJobCopies(JobPostingId id, boolean published, boolean reviewing);
 }

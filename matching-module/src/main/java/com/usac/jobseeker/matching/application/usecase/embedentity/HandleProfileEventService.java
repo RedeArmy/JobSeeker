@@ -45,11 +45,14 @@ public class HandleProfileEventService implements HandleProfileEventUseCase {
   @Transactional
   public void execute(HandleProfileEventCommand command) {
     switch (command.kind()) {
-      case UPDATED -> queue.request(command.accountId(), clock.instant().plus(window));
-      case DISCOVERABILITY_CHANGED -> queue.request(command.accountId(), clock.instant());
+      case UPDATED ->
+          queue.request(
+              EmbeddingEntity.PROFILE, command.accountId().value(), clock.instant().plus(window));
+      case DISCOVERABILITY_CHANGED ->
+          queue.request(EmbeddingEntity.PROFILE, command.accountId().value(), clock.instant());
       case ANONYMIZED -> {
         store.anonymizeProfile(command.accountId());
-        queue.discard(command.accountId());
+        queue.discard(EmbeddingEntity.PROFILE, command.accountId().value());
       }
     }
     metrics.count(USE_CASE, command.kind().name().toLowerCase(Locale.ROOT));

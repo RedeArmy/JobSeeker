@@ -106,23 +106,45 @@ final class InMemoryEmbeddingStore implements EmbeddingStorePort {
     return embeddings.remove(id) != null;
   }
 
+  // ---- vacantes ----
+
+  /** Las copias que guarda `matching` de cada vacante: {publicada, en revisión}. */
+  final Map<JobPostingId, boolean[]> jobCopies = new HashMap<>();
+
+  final Map<JobPostingId, EntityEmbedding> jobEmbeddings = new HashMap<>();
+
   @Override
   public Optional<JobEmbeddingState> findJobState(JobPostingId id) {
-    throw new UnsupportedOperationException();
+    boolean[] copies = jobCopies.get(id);
+    if (copies == null) {
+      return Optional.empty();
+    }
+    return Optional.of(
+        new JobEmbeddingState(
+            copies[0],
+            copies[1],
+            Optional.ofNullable(jobEmbeddings.get(id))
+                .map(
+                    e ->
+                        new EmbeddingMeta(
+                            e.model(), e.contentHash(), e.truncated(), e.computedAt()))));
   }
 
   @Override
   public Optional<EntityEmbedding> findJobEmbedding(JobPostingId id) {
-    throw new UnsupportedOperationException();
+    return Optional.ofNullable(jobEmbeddings.get(id));
   }
 
   @Override
   public void saveJobEmbedding(JobPostingId id, boolean publishedIfNew, EntityEmbedding embedding) {
-    throw new UnsupportedOperationException();
+    operations.add("save-job");
+    jobCopies.computeIfAbsent(id, k -> new boolean[] {publishedIfNew, false});
+    jobEmbeddings.put(id, embedding);
   }
 
   @Override
-  public void setJobPublished(JobPostingId id, boolean published) {
-    throw new UnsupportedOperationException();
+  public void setJobCopies(JobPostingId id, boolean published, boolean reviewing) {
+    operations.add("copies-job");
+    jobCopies.put(id, new boolean[] {published, reviewing});
   }
 }

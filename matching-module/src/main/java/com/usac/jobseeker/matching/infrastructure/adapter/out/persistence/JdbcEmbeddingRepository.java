@@ -33,6 +33,7 @@ public class JdbcEmbeddingRepository implements EmbeddingStorePort, CandidateRet
    */
   private static final String ACCOUNT = "account";
 
+  private static final String REVIEWING = "REVIEWING";
   private static final String FLAG = "flag";
 
   private final JdbcClient jdbc;
@@ -188,10 +189,16 @@ public class JdbcEmbeddingRepository implements EmbeddingStorePort, CandidateRet
   @Override
   public Optional<JobEmbeddingState> findJobState(JobPostingId id) {
     return jdbc.sql(
-            "select published, embedding_model, embedding_content_hash, embedding_truncated,"
-                + " embedding_computed_at from job_embeddings where job_posting_id = :id")
+            "select published, recruiting_stage, embedding_model, embedding_content_hash,"
+                + " embedding_truncated, embedding_computed_at from job_embeddings"
+                + " where job_posting_id = :id")
         .param("id", id.value())
-        .query((rows, n) -> new JobEmbeddingState(rows.getBoolean("published"), metaOf(rows)))
+        .query(
+            (rows, n) ->
+                new JobEmbeddingState(
+                    rows.getBoolean("published"),
+                    REVIEWING.equals(rows.getString("recruiting_stage")),
+                    metaOf(rows)))
         .optional();
   }
 
@@ -226,13 +233,15 @@ public class JdbcEmbeddingRepository implements EmbeddingStorePort, CandidateRet
   }
 
   @Override
-  public void setJobPublished(JobPostingId id, boolean published) {
+  public void setJobCopies(JobPostingId id, boolean published, boolean reviewing) {
     jdbc.sql(
-            "insert into job_embeddings (job_posting_id, published) values (:id, :flag)"
-                + " on conflict (job_posting_id)"
-                + " do update set published = excluded.published, updated_at = now()")
+            "insert into job_embeddings (job_posting_id, published, recruiting_stage)"
+                + " values (:id, :flag, :stage) on conflict (job_posting_id)"
+                + " do update set published = excluded.published,"
+                + " recruiting_stage = excluded.recruiting_stage, updated_at = now()")
         .param("id", id.value())
         .param(FLAG, published)
+        .param("stage", reviewing ? REVIEWING : "HIRING")
         .update();
   }
 
