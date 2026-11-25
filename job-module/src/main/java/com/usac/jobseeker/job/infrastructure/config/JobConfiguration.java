@@ -13,6 +13,8 @@ import com.usac.jobseeker.job.application.usecase.getjobposting.GetJobPostingSer
 import com.usac.jobseeker.job.application.usecase.getjobposting.GetJobPostingUseCase;
 import com.usac.jobseeker.job.application.usecase.getjobsignals.GetJobSignalsService;
 import com.usac.jobseeker.job.application.usecase.getjobsignals.GetJobSignalsUseCase;
+import com.usac.jobseeker.job.application.usecase.getownedjobstate.GetOwnedJobStateService;
+import com.usac.jobseeker.job.application.usecase.getownedjobstate.GetOwnedJobStateUseCase;
 import com.usac.jobseeker.job.application.usecase.managejobrequirements.ManageJobRequirementsService;
 import com.usac.jobseeker.job.application.usecase.managejobrequirements.ManageJobRequirementsUseCase;
 import com.usac.jobseeker.job.application.usecase.setacceptingapplications.SetAcceptingApplicationsService;
@@ -110,6 +112,12 @@ class JobConfiguration {
   @Bean
   SetRecruitingStageUseCase setRecruitingStageUseCase(JobChange change) {
     return new SetRecruitingStageService(change, Clock.systemUTC());
+  }
+
+  @Bean
+  GetOwnedJobStateUseCase getOwnedJobStateUseCase(
+      JdbcJobPostingRepository postings, UseCaseMetricsPort metrics) {
+    return new GetOwnedJobStateService(postings, metrics);
   }
 
   @Bean
