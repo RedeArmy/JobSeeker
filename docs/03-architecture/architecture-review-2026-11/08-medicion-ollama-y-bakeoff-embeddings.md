@@ -191,6 +191,8 @@ Criterios secundarios entre los tres preseleccionados:
 1. Repetir §2 y esta adenda en hardware con **AVX2** (§7, punto 1). Es lo que cierra TD-029. **ADR-0026 debe exigir que el huésped lo exponga**: una VM que lo oculta hace el embedding unas cien veces más lento.
 2. Ejecutar la prueba repetible de abajo en ese hardware.
 
+> **Actualización (25-nov-2026):** el instrumento para esta medición ya existe y está probado: `scripts/eval/embedding_latency.py` (se niega a medir sin AVX2). Procedimiento en `11-medicion-recuperacion-vectorial-y-latencia-de-embeddings.md` §3.
+
 ### 8.4 La prueba repetible
 
 `OllamaEmbeddingClientRealTest` (`matching-module`) comprueba los contratos de §8.1 contra el Ollama que se indique y **se omite si no hay uno**, así que no afecta al `verify`:

@@ -4,7 +4,7 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | 🟡 En revisión |
-| **Versión** | 1.10 — se paga TD-033 |
+| **Versión** | 1.11 — se paga TD-012 |
 | **Fecha** | 24 de noviembre de 2026 |
 | **Dueño del documento** | Responsable del proyecto |
 | **Revisión del registro** | Al cerrar cada sprint y antes de cada hito de la hoja de ruta |
@@ -51,13 +51,13 @@ Corte: 24-nov-2026.
 | Severidad | Abiertas o planificadas |
 |---|---|
 | S1 Crítica | 0 |
-| S2 Alta | 5 |
+| S2 Alta | 4 |
 | S3 Media | 9 |
 | S4 Baja | 5 |
-| **Total** | **19** |
+| **Total** | **18** |
 
-- **Abiertas:** 16 · **Planificadas:** 3 · **Resueltas:** 27 · **Aceptadas:** 6.
-- **S2 abiertas con disparador próximo** (decidir el siguiente sprint): TD-012 (antes de dar sugeridos a usuarios reales) y TD-005 y TD-016 (primer despliegue), más TD-020 (antes de usuarios reales).
+- **Abiertas:** 15 · **Planificadas:** 3 · **Resueltas:** 28 · **Aceptadas:** 6.
+- **S2 abiertas con disparador próximo** (decidir el siguiente sprint): TD-005 y TD-016 (primer despliegue), más TD-020 (antes de usuarios reales).
 - **Métricas a seguir en cada revisión:** deuda abierta por severidad, edad de las S2 en días, número de cierres por sprint, aceptadas vencidas.
 
 ## 5. Registro de deuda abierta
@@ -67,7 +67,6 @@ Corte: 24-nov-2026.
 | TD-005 | Dimensionamiento de producción sin definir | Operación | S2 | S | Hipótesis | Abierta | Antes del primer despliegue (ADR-0026) |
 | TD-010 | Tablas sin escritor ni purga: `idempotency_keys` y `audit_log` | Arquitectura | S3 | M | Leída | Abierta | Primer endpoint con `Idempotency-Key` o primera acción auditable |
 | TD-011 | Marcado de la bandeja evento por evento | Rendimiento | S4 | S | Leída | Abierta | Con volumen |
-| TD-012 | Recuperación vectorial con filtros sin validar | Rendimiento | S2 | M | Hipótesis | Abierta | Cumplido: `suggestcandidatesforjob` ya existe; medir antes de dar sugeridos a usuarios reales |
 | TD-013 | Duplicación estructural en el módulo `cv` | Código | S3 | M | Medida | Abierta | Antes de añadir una quinta colección o repetir el patrón en `job` |
 | TD-014 | `Stamp` aplicado a medias | Código | S4 | XS | Medida | Abierta | Oportunista |
 | TD-015 | Persistencia JDBC sin ADR y con SQL repetido | Documentación / Código | S3 | S | Medida | Abierta | Antes del módulo `job` |
@@ -76,7 +75,7 @@ Corte: 24-nov-2026.
 | TD-020 | Lote de anonimización sin dueño; descubribilidad al apagar la capacidad | Cumplimiento | S2 | L | Leída | Abierta | Antes de tener usuarios reales |
 | TD-022 | Calibración y cobertura de ESCO sin datos reales; arnés fuera de CI | Pruebas | S3 | L | Medida | Abierta | Antes de fijar el modelo de embeddings (ADR-0018) |
 | TD-027 | Los nombres propios del texto libre no se redactan antes del embedding | Privacidad | S3 | L | Medida | Abierta | Antes de embeber perfiles reales (`embedentity`) |
-| TD-029 | La latencia de `embedentity` no está medida: la VM de desarrollo no expone AVX2 | Operación | S3 | S | Leída | Abierta | Hardware con AVX2 disponible (ADR-0026) y `docs/03-architecture/architecture-review-2026-11/08-medicion-ollama-y-bakeoff-embeddings.md` §7, punto 1 |
+| TD-029 | La latencia de `embedentity` no está medida: la VM de desarrollo no expone AVX2 | Operación | S3 | S | Leída | Abierta | Hardware con AVX2 disponible (ADR-0026); el instrumento ya existe |
 | TD-023 | Fin de soporte de Spring Boot 4.1 (31-jul-2027) | Plataforma | S3 | L | Medida | Planificada | 2027-04-30 (inicio de la subida) |
 | TD-024 | El `Dockerfile` compila con una imagen de Java 26 | Operación | S4 | XS | Leída | Abierta | Oportunista |
 | TD-025 | La purga de la bandeja usa `Instant.now()` | Código | S4 | XS | Leída | Abierta | Oportunista |
@@ -118,17 +117,6 @@ Corte: 24-nov-2026.
 - **Remediación propuesta:** `UPDATE ... WHERE id = ANY(:ids)` para los procesados.
 - **Criterio de cierre:** Pasada de 50 eventos con una sentencia de marcado.
 - **Referencias:** `docs/03-architecture/adr/0016-transactional-outbox-for-domain-events.md`
-
-#### TD-012 — Recuperación vectorial con filtros sin validar
-
-**Rendimiento** · **S2 Alta** · esfuerzo **M** · confianza **Hipótesis** · **Abierta**
-
-- **Evidencia:** `nearestDiscoverable` filtra por modelo y descubribilidad sobre un índice HNSW parcial; exclusión y cuenta activa se aplicarán después. Con `ef_search` por defecto (40) puede devolver menos filas que `limit`.
-- **Interés (qué cuesta no pagarla):** Sugeridos incompletos o con recall bajo sin que nada lo avise.
-- **Disparador:** Cumplido: `suggestcandidatesforjob` ya existe (PR #42); medir antes de dar sugeridos a usuarios reales.
-- **Remediación propuesta:** `EXPLAIN` con volumen realista, `hnsw.iterative_scan`, `ef_search` configurable y prueba de recall con el arnés de `scripts/eval`.
-- **Criterio de cierre:** Informe de recall@k y p95 con volumen realista, según ADR-0017.
-- **Referencias:** `docs/03-architecture/adr/0017-matching-v2-pipeline-calibration-and-freshness.md`
 
 #### TD-013 — Duplicación estructural en el módulo `cv`
 
@@ -222,12 +210,12 @@ Corte: 24-nov-2026.
 
 **Operación** · **S3 Media** · esfuerzo **S** · confianza **Leída** · **Abierta**
 
-- **Evidencia:** El contrato del cliente ya se validó contra un Ollama real (TD-R25), pero esta VM oculta AVX/AVX2: `llama.cpp` corre con SSE y un embedding de ~25 tokens tarda de 4 a 25 s (≈5 tokens/s). Un perfil de ~400 tokens son ~80 s más 30 s de ventana: ~110 s, al límite del objetivo de 120 s.
+- **Evidencia:** El contrato del cliente ya se validó contra un Ollama real (TD-R25) y el instrumento de medición existe y está probado (`scripts/eval/embedding_latency.py`, TD-R28), pero esta VM oculta AVX/AVX2 (verificado de nuevo el 25-nov-2026): `llama.cpp` corre con SSE y un embedding de ~25 tokens tarda de 4 a 25 s. Un perfil de ~400 tokens son ~80 s más 30 s de ventana: ~110 s, al límite del objetivo de 120 s.
 - **Interés (qué cuesta no pagarla):** El objetivo de frescura p95 ≤ 120 s está instrumentado y su contrato validado, pero no demostrado; y si ADR-0026 elige un huésped que oculta AVX2, el embedding será unas cien veces más lento sin que nada lo avise.
-- **Disparador:** Hardware con AVX2 disponible (ADR-0026) y `docs/03-architecture/architecture-review-2026-11/08-medicion-ollama-y-bakeoff-embeddings.md` §7, punto 1.
-- **Remediación propuesta:** Repetir la medición de §2 de ese documento en hardware con AVX2, con la prueba repetible `OllamaEmbeddingClientRealTest`, y comprobar si fijar `num_thread` por debajo de la cuota de CPU estabiliza los tiempos. Exigir en ADR-0026 que el huésped exponga AVX2.
+- **Disparador:** Hardware con AVX2 disponible (ADR-0026).
+- **Remediación propuesta:** Ejecutar `python3 -I scripts/eval/embedding_latency.py --repeats 20 --out latencia.json` en ese hardware (se niega a medir sin AVX2), archivar la tabla en el doc 08 §8 y comprobar con `--num-thread` si fijarlo por debajo de la cuota de CPU estabiliza los tiempos. Procedimiento en `11-medicion-recuperacion-vectorial-y-latencia-de-embeddings.md` §3.3.
 - **Criterio de cierre:** Una medición archivada en hardware con AVX2 con el modelo vigente, y el p95 observado frente al objetivo.
-- **Referencias:** `docs/03-architecture/architecture-review-2026-11/08-medicion-ollama-y-bakeoff-embeddings.md` §8
+- **Referencias:** `docs/03-architecture/architecture-review-2026-11/08-medicion-ollama-y-bakeoff-embeddings.md` §8; `11-medicion-recuperacion-vectorial-y-latencia-de-embeddings.md`
 
 #### TD-023 — Fin de soporte de Spring Boot 4.1 (31-jul-2027)
 
@@ -326,6 +314,7 @@ Corte: 24-nov-2026.
 | TD-R25 | Sin validar el contrato del cliente de embeddings con un Ollama real (parte de TD-029) | Operación | S3 | 2026-11-25 | #40 | `OllamaEmbeddingClientRealTest`, repetible con `OLLAMA_REAL_URL` y omitida por defecto, comprueba contra Ollama 0.40.17: dimensión 1024, norma 1, el 400 de `truncate=false` que el cliente trata como rechazo, que otra dimensión de columna se rechaza, que un servidor caído es no disponible y una sanidad semántica. Cambiar `truncate` a `true` la hace fallar. Quedó anotado que cambiar `num_ctx` o `num_thread` recarga el modelo. |
 | TD-R26 | Nadie verificaba a los reclutadores (antes TD-032, parte) | Seguridad | S2 | 2026-11-25 | #41 | Canal `PUT /api/v1/admin/recruiters/{id}/verification` solo para operadores (lista de configuración, vacía por defecto; `404` para quien no lo es), sin decidir sobre uno mismo y con cada cambio en `audit_log` en la misma transacción, sin datos personales. Verificar sube el tope de publicación de TD-030: probado de punta a punta. La vía automática por correo queda para cuando haya proveedor de correo; las sugerencias que exijan `VERIFIED` son TD-033. |
 | TD-R27 | Las sugerencias no exigían un reclutador verificado ni cuota de perfiles vistos (antes TD-033) | Seguridad | S2 | 2026-11-25 | #42 | `suggestcandidatesforjob` niega con `403` a quien no sea `VERIFIED` (antes de tocar la vacante), exige ser dueño de una vacante publicada y cuenta como visto cada perfil único mostrado (200 por 24 h, configurable, `429 QUOTA_EXCEEDED`), bajo un candado por reclutador y en la misma transacción que `profile_view_log`; la cuota vive en la base y no en Redis, así no hay un camino en que una caída la deje pasar. Endpoint con su propio límite de tasa (10/min). Probado de punta a punta; la respuesta no lleva similitud ni datos personales. |
+| TD-R28 | Recuperación vectorial con filtros sin validar ni aplicar (antes TD-012) | Rendimiento | S2 | 2026-11-25 | #43 | `nearestDiscoverable` fija `hnsw.iterative_scan = relaxed_order` y `ef_search` no menor que la página, local a la transacción y con reordenado exterior; `ef_search` configurable (100). Medido con la consulta real y el HNSW forzado (comprobado por `EXPLAIN`): con un 90 % de vectores de otro modelo, sin la regla una página de 50 devuelve 3,6 filas (recall 0,07) y con ella 50 filas con recall ≈ 0,95; sin coste de latencia medible (p50 ≈ 30 ms). Prueba de regresión y medición repetible en `11-medicion-recuperacion-vectorial-y-latencia-de-embeddings.md`. |
 
 ## 7. Deuda aceptada
 
@@ -353,6 +342,7 @@ Corte: 24-nov-2026.
 | 1.8 | 2026-11-25 | Se paga TD-028 (PR #39, TD-R24): el lado de la vacante de `embedentity`, desbloqueado por `getjobsignals` del #37. Quedan 18 abiertas o planificadas, 25 resueltas y 6 aceptadas. |
 | 1.9 | 2026-11-25 | Se paga la parte de contrato de TD-029 (PR #40, TD-R25): el cliente se validó contra un Ollama real. TD-029 sigue abierta con su alcance reducido a la latencia en hardware con AVX2. Quedan 18 abiertas o planificadas, 26 resueltas y 6 aceptadas. |
 | 1.10 | 2026-11-25 | Se paga TD-033 (PR #42, TD-R27): los sugeridos exigen un reclutador verificado y cuentan una cuota de perfiles únicos. Se confirma la verificación manual por operadores (ADR-0029). Entran TD-034 (puntaje, prioridad, exclusión y lectura enmascarada) y TD-035 (retención de `profile_view_log`); TD-012 ve cumplido su disparador. Quedan 19 abiertas o planificadas, 27 resueltas y 6 aceptadas. |
+| 1.11 | 2026-11-25 | Se paga TD-012 (PR #43, TD-R28): la regla de escaneo iterativo ya estaba medida pero no aplicada; ahora se aplica, se mide con la consulta real y la protege una prueba de regresión. TD-029 sigue abierta: la VM no tiene AVX2, pero el instrumento de medición ya existe y está probado. Quedan 18 abiertas o planificadas, 28 resueltas y 6 aceptadas. |
 
 ## 9. Plantilla de ficha
 
