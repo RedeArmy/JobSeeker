@@ -14,14 +14,14 @@ class EmbeddingStatesTest {
   @Test
   void aStateWithoutAnEmbeddingCarriesAnEmptyOptional() {
     assertThat(new ProfileEmbeddingState(true, Optional.empty()).embedding()).isEmpty();
-    assertThat(new JobEmbeddingState(false, Optional.empty()).embedding()).isEmpty();
+    assertThat(new JobEmbeddingState(false, false, Optional.empty()).embedding()).isEmpty();
   }
 
   @Test
   void aNullOptionalIsAProgrammingErrorAndIsRejected() {
     assertThatThrownBy(() -> new ProfileEmbeddingState(true, null))
         .isInstanceOf(NullPointerException.class);
-    assertThatThrownBy(() -> new JobEmbeddingState(true, null))
+    assertThatThrownBy(() -> new JobEmbeddingState(true, false, null))
         .isInstanceOf(NullPointerException.class);
   }
 

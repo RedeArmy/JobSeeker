@@ -399,7 +399,7 @@ class JdbcEmbeddingRepositoryTest {
   void thePublishedCopyFollowsTheSameRuleThatTheLaterEventWins() {
     JobPostingId id = job();
     repository.saveJobEmbedding(id, false, embedding(vector(1f)));
-    repository.setJobPublished(id, true);
+    repository.setJobCopies(id, true, false);
 
     repository.saveJobEmbedding(id, false, embedding(vector(0f, 1f)));
 
@@ -410,7 +410,7 @@ class JdbcEmbeddingRepositoryTest {
   void aPublishedEventBeforeTheFirstVectorCreatesTheRowWithoutOne() {
     JobPostingId id = job();
 
-    repository.setJobPublished(id, true);
+    repository.setJobCopies(id, true, false);
 
     assertThat(repository.findJobState(id))
         .get()
@@ -420,6 +420,55 @@ class JdbcEmbeddingRepositoryTest {
               assertThat(state.embedding()).isEmpty();
             });
     assertThat(repository.findJobEmbedding(id)).isEmpty();
+  }
+
+  // BR-MATCH-08: la etapa de reclutamiento es una copia que mantienen los eventos de `job`.
+  @Test
+  void theRecruitingStageIsACopyThatDefaultsToHiringAndFollowsTheLatestEvent() {
+    JobPostingId id = job();
+    repository.setJobCopies(id, true, false);
+    assertThat(repository.findJobState(id)).get().extracting(s -> s.reviewing()).isEqualTo(false);
+
+    repository.setJobCopies(id, true, true);
+    assertThat(repository.findJobState(id)).get().extracting(s -> s.reviewing()).isEqualTo(true);
+
+    repository.setJobCopies(id, true, false);
+    assertThat(repository.findJobState(id)).get().extracting(s -> s.reviewing()).isEqualTo(false);
+  }
+
+  @Test
+  void savingAVectorNeverChangesTheStageCopyOfAnExistingRow() {
+    JobPostingId id = job();
+    repository.setJobCopies(id, true, true);
+
+    repository.saveJobEmbedding(id, true, embedding(vector(1f)));
+
+    assertThat(repository.findJobState(id)).get().extracting(s -> s.reviewing()).isEqualTo(true);
+  }
+
+  @Test
+  void aNewRowCreatedBySavingAVectorStartsInHiring() {
+    JobPostingId id = job();
+
+    repository.saveJobEmbedding(id, true, embedding(vector(1f)));
+
+    assertThat(repository.findJobState(id)).get().extracting(s -> s.reviewing()).isEqualTo(false);
+  }
+
+  @Test
+  void theDatabaseRejectsAnUnknownStage() {
+    JobPostingId id = job();
+    repository.setJobCopies(id, true, false);
+
+    assertThatThrownBy(() -> setRawStage(id, "PAUSED"))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+  }
+
+  private void setRawStage(JobPostingId id, String stage) {
+    jdbc.sql("update job_embeddings set recruiting_stage = :stage where job_posting_id = :id")
+        .param("stage", stage)
+        .param("id", id.value())
+        .update();
   }
 
   // ---- conversión de texto ----

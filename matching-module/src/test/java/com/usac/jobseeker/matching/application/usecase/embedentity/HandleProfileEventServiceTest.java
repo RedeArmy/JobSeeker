@@ -28,7 +28,7 @@ class HandleProfileEventServiceTest {
   private final HandleProfileEventService service =
       new HandleProfileEventService(
           new EmbeddingWorkQueuePort() {
-            public void request(AccountId a, Instant notBefore) {
+            public void request(EmbeddingEntity entity, UUID key, Instant notBefore) {
               requests.add(notBefore.toString());
             }
 
@@ -48,7 +48,7 @@ class HandleProfileEventServiceTest {
               throw new UnsupportedOperationException();
             }
 
-            public void discard(AccountId a) {
+            public void discard(EmbeddingEntity entity, UUID key) {
               discarded.add("discard");
             }
           },

@@ -1,8 +1,11 @@
 package com.usac.jobseeker.matching.infrastructure.adapter.out.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.usac.jobseeker.common.domain.model.AccountId;
+import com.usac.jobseeker.matching.application.usecase.embedentity.EmbeddingEntity;
+import com.usac.jobseeker.matching.application.usecase.embedentity.EmbeddingWorkQueuePort;
 import com.usac.jobseeker.matching.infrastructure.MatchingPostgres;
 import java.time.Duration;
 import java.time.Instant;
@@ -56,7 +59,7 @@ class JdbcEmbeddingWorkQueueTest {
 
   @Test
   void aRequestBecomesOneJobThatCanBeClaimedOnceItsWindowPasses() {
-    queue.request(account, Instant.now().minusSeconds(1));
+    queue.request(EmbeddingEntity.PROFILE, account.value(), Instant.now().minusSeconds(1));
 
     var claimed = queue.claim(10, LEASE, 5);
 
@@ -64,7 +67,7 @@ class JdbcEmbeddingWorkQueueTest {
         .singleElement()
         .satisfies(
             job -> {
-              assertThat(job.account()).isEqualTo(account);
+              assertThat(new AccountId(job.key())).isEqualTo(account);
               assertThat(job.attempts()).isOne();
               assertThat(job.generation()).isOne();
             });
@@ -72,16 +75,16 @@ class JdbcEmbeddingWorkQueueTest {
 
   @Test
   void aJobInsideItsWindowIsNotClaimedYet() {
-    queue.request(account, Instant.now().plusSeconds(3600));
+    queue.request(EmbeddingEntity.PROFILE, account.value(), Instant.now().plusSeconds(3600));
 
     assertThat(queue.claim(10, LEASE, 5)).isEmpty();
   }
 
   @Test
   void manyRequestsForTheSameAccountAreOneJobAndKeepTheEarliestStart() {
-    queue.request(account, Instant.now().plusSeconds(3600));
-    queue.request(account, Instant.now().minusSeconds(1));
-    queue.request(account, Instant.now().plusSeconds(7200));
+    queue.request(EmbeddingEntity.PROFILE, account.value(), Instant.now().plusSeconds(3600));
+    queue.request(EmbeddingEntity.PROFILE, account.value(), Instant.now().minusSeconds(1));
+    queue.request(EmbeddingEntity.PROFILE, account.value(), Instant.now().plusSeconds(7200));
 
     assertThat(rows()).isOne();
     assertThat(queue.claim(10, LEASE, 5))
@@ -91,7 +94,7 @@ class JdbcEmbeddingWorkQueueTest {
 
   @Test
   void aClaimedJobIsLeasedSoNobodyElseClaimsIt() {
-    queue.request(account, Instant.now().minusSeconds(1));
+    queue.request(EmbeddingEntity.PROFILE, account.value(), Instant.now().minusSeconds(1));
     queue.claim(10, LEASE, 5);
 
     assertThat(queue.claim(10, LEASE, 5)).isEmpty();
@@ -99,7 +102,7 @@ class JdbcEmbeddingWorkQueueTest {
 
   @Test
   void whenTheLeaseExpiresTheJobIsClaimedAgainAndCountsTheAttempt() {
-    queue.request(account, Instant.now().minusSeconds(1));
+    queue.request(EmbeddingEntity.PROFILE, account.value(), Instant.now().minusSeconds(1));
     queue.claim(10, LEASE, 5);
     expireLease(account);
 
@@ -110,7 +113,7 @@ class JdbcEmbeddingWorkQueueTest {
 
   @Test
   void aJobThatKeepsKillingTheProcessEndsFailedInsteadOfBeingClaimedForever() {
-    queue.request(account, Instant.now().minusSeconds(1));
+    queue.request(EmbeddingEntity.PROFILE, account.value(), Instant.now().minusSeconds(1));
     for (int crash = 0; crash < 3; crash++) {
       queue.claim(10, LEASE, 3);
       expireLease(account);
@@ -122,7 +125,7 @@ class JdbcEmbeddingWorkQueueTest {
 
   @Test
   void completingAJobNobodyRequestedAgainDeletesIt() {
-    queue.request(account, Instant.now().minusSeconds(1));
+    queue.request(EmbeddingEntity.PROFILE, account.value(), Instant.now().minusSeconds(1));
     var job = queue.claim(10, LEASE, 5).get(0);
 
     queue.complete(job);
@@ -134,9 +137,9 @@ class JdbcEmbeddingWorkQueueTest {
   // ejecutarse.
   @Test
   void aRequestThatArrivesWhileTheJobRunsIsNotLost() {
-    queue.request(account, Instant.now().minusSeconds(1));
+    queue.request(EmbeddingEntity.PROFILE, account.value(), Instant.now().minusSeconds(1));
     var job = queue.claim(10, LEASE, 5).get(0);
-    queue.request(account, Instant.now().minusSeconds(1));
+    queue.request(EmbeddingEntity.PROFILE, account.value(), Instant.now().minusSeconds(1));
 
     queue.complete(job);
 
@@ -152,7 +155,7 @@ class JdbcEmbeddingWorkQueueTest {
 
   @Test
   void aRetryReleasesTheLeaseAndWaitsForItsTime() {
-    queue.request(account, Instant.now().minusSeconds(1));
+    queue.request(EmbeddingEntity.PROFILE, account.value(), Instant.now().minusSeconds(1));
     var job = queue.claim(10, LEASE, 5).get(0);
 
     queue.retryAt(job, Instant.now().plusSeconds(3600));
@@ -164,14 +167,14 @@ class JdbcEmbeddingWorkQueueTest {
 
   @Test
   void aFailedJobIsNeverClaimedAgainUntilANewRequestReactivatesIt() {
-    queue.request(account, Instant.now().minusSeconds(1));
+    queue.request(EmbeddingEntity.PROFILE, account.value(), Instant.now().minusSeconds(1));
     var job = queue.claim(10, LEASE, 5).get(0);
     queue.fail(job);
 
     assertThat(queue.claim(10, LEASE, 5)).isEmpty();
     assertThat(status(account)).isEqualTo("FAILED");
 
-    queue.request(account, Instant.now().minusSeconds(1));
+    queue.request(EmbeddingEntity.PROFILE, account.value(), Instant.now().minusSeconds(1));
 
     assertThat(queue.claim(10, LEASE, 5))
         .singleElement()
@@ -181,11 +184,11 @@ class JdbcEmbeddingWorkQueueTest {
   // La frescura se mide desde la edición sin atender más antigua, no desde la última.
   @Test
   void theJobKeepsTheEarliestUnattendedEditWhileRequestsAreCoalesced() {
-    queue.request(account, Instant.now().minusSeconds(1));
+    queue.request(EmbeddingEntity.PROFILE, account.value(), Instant.now().minusSeconds(1));
     jdbc.sql("update matching_work_queue set pending_since = now() - interval '90 seconds'")
         .update();
 
-    queue.request(account, Instant.now().minusSeconds(1));
+    queue.request(EmbeddingEntity.PROFILE, account.value(), Instant.now().minusSeconds(1));
     var job = queue.claim(10, LEASE, 5).get(0);
 
     assertThat(Duration.between(job.pendingSince(), Instant.now()).toSeconds())
@@ -194,11 +197,11 @@ class JdbcEmbeddingWorkQueueTest {
 
   @Test
   void aRequestThatArrivesWhileTheJobRunsRestartsTheClockForTheNextRun() {
-    queue.request(account, Instant.now().minusSeconds(1));
+    queue.request(EmbeddingEntity.PROFILE, account.value(), Instant.now().minusSeconds(1));
     jdbc.sql("update matching_work_queue set pending_since = now() - interval '90 seconds'")
         .update();
     var job = queue.claim(10, LEASE, 5).get(0);
-    queue.request(account, Instant.now().minusSeconds(1));
+    queue.request(EmbeddingEntity.PROFILE, account.value(), Instant.now().minusSeconds(1));
 
     queue.complete(job);
     var again = queue.claim(10, LEASE, 5).get(0);
@@ -208,12 +211,12 @@ class JdbcEmbeddingWorkQueueTest {
 
   @Test
   void aFailedJobReactivatedByAnEditStartsMeasuringFromThatEdit() {
-    queue.request(account, Instant.now().minusSeconds(1));
+    queue.request(EmbeddingEntity.PROFILE, account.value(), Instant.now().minusSeconds(1));
     var job = queue.claim(10, LEASE, 5).get(0);
     queue.fail(job);
     jdbc.sql("update matching_work_queue set pending_since = now() - interval '1 day'").update();
 
-    queue.request(account, Instant.now().minusSeconds(1));
+    queue.request(EmbeddingEntity.PROFILE, account.value(), Instant.now().minusSeconds(1));
     var again = queue.claim(10, LEASE, 5).get(0);
 
     assertThat(Duration.between(again.pendingSince(), Instant.now()).toSeconds()).isLessThan(30L);
@@ -221,10 +224,13 @@ class JdbcEmbeddingWorkQueueTest {
 
   @Test
   void discardingAnAccountRemovesItsPendingJob() {
-    queue.request(account, Instant.now().minusSeconds(1));
-    queue.request(new AccountId(UUID.randomUUID()), Instant.now().minusSeconds(1));
+    queue.request(EmbeddingEntity.PROFILE, account.value(), Instant.now().minusSeconds(1));
+    queue.request(
+        EmbeddingEntity.PROFILE,
+        new AccountId(UUID.randomUUID()).value(),
+        Instant.now().minusSeconds(1));
 
-    queue.discard(account);
+    queue.discard(EmbeddingEntity.PROFILE, account.value());
 
     assertThat(rows()).isOne();
   }
@@ -232,7 +238,10 @@ class JdbcEmbeddingWorkQueueTest {
   @Test
   void theBatchSizeBoundsHowManyJobsAreClaimed() {
     for (int i = 0; i < 12; i++) {
-      queue.request(new AccountId(UUID.randomUUID()), Instant.now().minusSeconds(1));
+      queue.request(
+          EmbeddingEntity.PROFILE,
+          new AccountId(UUID.randomUUID()).value(),
+          Instant.now().minusSeconds(1));
     }
 
     assertThat(queue.claim(5, LEASE, 5)).hasSize(5);
@@ -241,7 +250,10 @@ class JdbcEmbeddingWorkQueueTest {
   @Test
   void fourWorkersClaimingAtTheSameTimeNeverTakeTheSameJob() throws Exception {
     for (int i = 0; i < 40; i++) {
-      queue.request(new AccountId(UUID.randomUUID()), Instant.now().minusSeconds(1));
+      queue.request(
+          EmbeddingEntity.PROFILE,
+          new AccountId(UUID.randomUUID()).value(),
+          Instant.now().minusSeconds(1));
     }
     List<UUID> claimed = new CopyOnWriteArrayList<>();
     CountDownLatch together = new CountDownLatch(1);
@@ -268,5 +280,87 @@ class JdbcEmbeddingWorkQueueTest {
     }
 
     assertThat(claimed).hasSize(40).doesNotHaveDuplicates();
+  }
+
+  // ---- vacantes: comparten cola con los perfiles ----
+
+  @Test
+  void aJobIsQueuedClaimedAndCompletedLikeAProfile() {
+    UUID jobId = UUID.randomUUID();
+    queue.request(EmbeddingEntity.JOB, jobId, Instant.now().minusSeconds(1));
+
+    var claimed = queue.claim(10, LEASE, 5);
+
+    assertThat(claimed)
+        .singleElement()
+        .satisfies(
+            job -> {
+              assertThat(job.entity()).isEqualTo(EmbeddingEntity.JOB);
+              assertThat(job.key()).isEqualTo(jobId);
+            });
+    queue.complete(claimed.get(0));
+    assertThat(rows()).isZero();
+  }
+
+  // La fila es única por (tipo, clave): un perfil y una vacante con el mismo identificador no se
+  // pisan, aunque en la práctica los UUID nunca coinciden.
+  @Test
+  void aProfileAndAJobWithTheSameKeyAreTwoRows() {
+    UUID key = UUID.randomUUID();
+    queue.request(EmbeddingEntity.PROFILE, key, Instant.now().minusSeconds(1));
+    queue.request(EmbeddingEntity.JOB, key, Instant.now().minusSeconds(1));
+
+    var claimed = queue.claim(10, LEASE, 5);
+
+    assertThat(rows()).isEqualTo(2);
+    assertThat(claimed)
+        .extracting(EmbeddingWorkQueuePort.Job::entity)
+        .containsExactlyInAnyOrder(EmbeddingEntity.PROFILE, EmbeddingEntity.JOB);
+  }
+
+  @Test
+  void requestingAJobTwiceCoalescesItJustLikeAProfile() {
+    UUID jobId = UUID.randomUUID();
+    queue.request(EmbeddingEntity.JOB, jobId, Instant.now().minusSeconds(1));
+    queue.request(EmbeddingEntity.JOB, jobId, Instant.now().minusSeconds(1));
+
+    assertThat(rows()).isOne();
+  }
+
+  @Test
+  void discardingAProfileDoesNotDiscardAJobWithTheSameKey() {
+    UUID key = UUID.randomUUID();
+    queue.request(EmbeddingEntity.PROFILE, key, Instant.now());
+    queue.request(EmbeddingEntity.JOB, key, Instant.now());
+
+    queue.discard(EmbeddingEntity.PROFILE, key);
+
+    assertThat(rows()).isOne();
+    assertThat(jdbc.sql("select entity_type from matching_work_queue").query(String.class).single())
+        .isEqualTo("JOB");
+  }
+
+  // La migración ensanchó la restricción: las vacantes entran y un tipo desconocido sigue fuera.
+  @Test
+  void theDatabaseAcceptsJobsAndRejectsAnyOtherEntityType() {
+    jdbc.sql(
+            "insert into matching_work_queue (id, entity_type, entity_key, not_before)"
+                + " values (:id, 'JOB', :key, now())")
+        .param("id", UUID.randomUUID())
+        .param("key", UUID.randomUUID())
+        .update();
+
+    assertThatThrownBy(() -> insertWithType("APPLICATION"))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+  }
+
+  private void insertWithType(String type) {
+    jdbc.sql(
+            "insert into matching_work_queue (id, entity_type, entity_key, not_before)"
+                + " values (:id, :type, :key, now())")
+        .param("id", UUID.randomUUID())
+        .param("type", type)
+        .param("key", UUID.randomUUID())
+        .update();
   }
 }

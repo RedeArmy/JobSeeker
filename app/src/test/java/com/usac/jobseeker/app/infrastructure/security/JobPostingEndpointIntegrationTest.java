@@ -16,7 +16,6 @@ import com.usac.jobseeker.common.domain.model.RecruiterVerification;
 import com.usac.jobseeker.job.application.usecase.getjobsignals.GetJobSignalsQuery;
 import com.usac.jobseeker.job.application.usecase.getjobsignals.GetJobSignalsUseCase;
 import com.usac.jobseeker.job.application.usecase.getjobsignals.JobSnapshot;
-import com.usac.jobseeker.job.domain.model.JobPostingId;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -519,9 +518,7 @@ class JobPostingEndpointIntegrationTest {
     String id = createPublished(owner);
 
     JobSnapshot snapshot =
-        signals
-            .execute(new GetJobSignalsQuery(new JobPostingId(UUID.fromString(id))))
-            .orElseThrow();
+        signals.execute(new GetJobSignalsQuery(UUID.fromString(id))).orElseThrow();
 
     assertThat(snapshot.status()).isEqualTo("PUBLISHED");
     assertThat(snapshot.salary().currency()).isEqualTo("USD");
@@ -529,8 +526,7 @@ class JobPostingEndpointIntegrationTest {
         .singleElement()
         .satisfies(r -> assertThat(r.skillName()).isEqualTo("Java"));
     assertThat(snapshot.toString()).doesNotContain(owner.toString());
-    assertThat(signals.execute(new GetJobSignalsQuery(new JobPostingId(UUID.fromString(draft)))))
-        .isEmpty();
+    assertThat(signals.execute(new GetJobSignalsQuery(UUID.fromString(draft)))).isEmpty();
   }
 
   // ---- confianza en el reclutador: la puerta de publicar (REQ-R-10, amenaza T-N1) ----

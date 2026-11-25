@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.usac.jobseeker.common.domain.model.AccountId;
+import com.usac.jobseeker.matching.domain.model.JobPostingId;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -25,6 +26,8 @@ class ProcessEmbeddingQueueServiceTest {
   private final List<String> metrics = new ArrayList<>();
   private final List<Duration> freshness = new ArrayList<>();
   private final Map<AccountId, RuntimeException> failures = new HashMap<>();
+  private final Map<JobPostingId, RuntimeException> jobFailures = new HashMap<>();
+  private final List<JobPostingId> embeddedJobs = new ArrayList<>();
   private final EmbeddingQueuePolicy policy =
       new EmbeddingQueuePolicy(
           10, Duration.ofMinutes(5), 5, Duration.ofSeconds(5), Duration.ofMinutes(5));
@@ -32,7 +35,7 @@ class ProcessEmbeddingQueueServiceTest {
   private final ProcessEmbeddingQueueService service =
       new ProcessEmbeddingQueueService(
           new EmbeddingWorkQueuePort() {
-            public void request(AccountId a, Instant notBefore) {
+            public void request(EmbeddingEntity entity, UUID key, Instant notBefore) {
               throw new UnsupportedOperationException();
             }
 
@@ -52,7 +55,7 @@ class ProcessEmbeddingQueueServiceTest {
               outcomes.add("fail");
             }
 
-            public void discard(AccountId a) {
+            public void discard(EmbeddingEntity entity, UUID key) {
               throw new UnsupportedOperationException();
             }
           },
@@ -62,6 +65,14 @@ class ProcessEmbeddingQueueServiceTest {
               throw failure;
             }
             return EmbedProfileUseCase.Result.EMBEDDED;
+          },
+          command -> {
+            embeddedJobs.add(command.jobId());
+            RuntimeException failure = jobFailures.get(command.jobId());
+            if (failure != null) {
+              throw failure;
+            }
+            return EmbedJobUseCase.Result.EMBEDDED;
           },
           policy,
           (useCase, outcome) -> metrics.add(outcome),
@@ -73,10 +84,20 @@ class ProcessEmbeddingQueueServiceTest {
   }
 
   private EmbeddingWorkQueuePort.Job job(int attempts, Instant pendingSince) {
-    var account = new AccountId(UUID.randomUUID());
-    var job = new EmbeddingWorkQueuePort.Job(UUID.randomUUID(), account, 1, attempts, pendingSince);
+    return queued(EmbeddingEntity.PROFILE, attempts, pendingSince);
+  }
+
+  private EmbeddingWorkQueuePort.Job queued(
+      EmbeddingEntity entity, int attempts, Instant pendingSince) {
+    var job =
+        new EmbeddingWorkQueuePort.Job(
+            UUID.randomUUID(), entity, UUID.randomUUID(), 1, attempts, pendingSince);
     ready.add(job);
     return job;
+  }
+
+  private static AccountId accountOf(EmbeddingWorkQueuePort.Job job) {
+    return new AccountId(job.key());
   }
 
   @Test
@@ -91,8 +112,8 @@ class ProcessEmbeddingQueueServiceTest {
 
   @Test
   void anUnavailableModelSendsTheJobBackWithAnExponentialWait() {
-    failures.put(job(1).account(), new EmbeddingUnavailableException("no responde", null));
-    failures.put(job(3).account(), new EmbeddingUnavailableException("no responde", null));
+    failures.put(accountOf(job(1)), new EmbeddingUnavailableException("no responde", null));
+    failures.put(accountOf(job(3)), new EmbeddingUnavailableException("no responde", null));
 
     service.execute();
 
@@ -102,7 +123,7 @@ class ProcessEmbeddingQueueServiceTest {
 
   @Test
   void aRejectedJobGoesToReviewWithoutSpendingMoreAttempts() {
-    failures.put(job(1).account(), new EmbeddingRejectedException("fuera de contexto"));
+    failures.put(accountOf(job(1)), new EmbeddingRejectedException("fuera de contexto"));
 
     service.execute();
 
@@ -112,7 +133,7 @@ class ProcessEmbeddingQueueServiceTest {
 
   @Test
   void anUnexpectedErrorIsTreatedAsTransientSoTheJobIsNotLost() {
-    failures.put(job(1).account(), new IllegalStateException("algo raro"));
+    failures.put(accountOf(job(1)), new IllegalStateException("algo raro"));
 
     service.execute();
 
@@ -122,7 +143,7 @@ class ProcessEmbeddingQueueServiceTest {
 
   @Test
   void oneFailingJobDoesNotStopTheRestOfThePass() {
-    failures.put(job(1).account(), new EmbeddingUnavailableException("no responde", null));
+    failures.put(accountOf(job(1)), new EmbeddingUnavailableException("no responde", null));
     job(1);
     job(1);
 
@@ -144,9 +165,9 @@ class ProcessEmbeddingQueueServiceTest {
 
   @Test
   void aJobThatFailsOrIsRetriedRecordsNoFreshness() {
-    failures.put(job(1).account(), new EmbeddingUnavailableException("no responde", null));
-    failures.put(job(1).account(), new EmbeddingRejectedException("fuera de contexto"));
-    failures.put(job(1).account(), new IllegalStateException("raro"));
+    failures.put(accountOf(job(1)), new EmbeddingUnavailableException("no responde", null));
+    failures.put(accountOf(job(1)), new EmbeddingRejectedException("fuera de contexto"));
+    failures.put(accountOf(job(1)), new IllegalStateException("raro"));
 
     service.execute();
 
@@ -172,5 +193,66 @@ class ProcessEmbeddingQueueServiceTest {
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(() -> new EmbeddingQueuePolicy(1, minute, 1, five, two))
         .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  // ---- vacantes: comparten cola, trabajador y reintentos con los perfiles ----
+
+  @Test
+  void aJobEntityIsDispatchedToTheJobUseCaseAndNotToTheProfileOne() {
+    var job = queued(EmbeddingEntity.JOB, 1, NOW.minusSeconds(10));
+
+    assertThat(service.execute()).isOne();
+
+    assertThat(embeddedJobs).containsExactly(new JobPostingId(job.key()));
+    assertThat(outcomes).containsExactly("complete");
+    assertThat(metrics).containsExactly("done");
+  }
+
+  @Test
+  void aProfileJobNeverReachesTheJobUseCase() {
+    job(1);
+
+    service.execute();
+
+    assertThat(embeddedJobs).isEmpty();
+  }
+
+  @Test
+  void profilesAndJobsInTheSameBatchAreEachDispatchedByTheirKind() {
+    job(1);
+    var posting = queued(EmbeddingEntity.JOB, 1, NOW.minusSeconds(5));
+    job(1);
+
+    assertThat(service.execute()).isEqualTo(3);
+
+    assertThat(embeddedJobs).containsExactly(new JobPostingId(posting.key()));
+    assertThat(outcomes).containsExactly("complete", "complete", "complete");
+  }
+
+  // El mismo tratamiento de fallos: el modelo caído reintenta con retroceso y un rechazo no.
+  @Test
+  void aJobFollowsTheSameFailureRulesAsAProfile() {
+    var unavailable = queued(EmbeddingEntity.JOB, 1, NOW);
+    var rejected = queued(EmbeddingEntity.JOB, 1, NOW);
+    jobFailures.put(
+        new JobPostingId(unavailable.key()),
+        new EmbeddingUnavailableException("no responde", null));
+    jobFailures.put(
+        new JobPostingId(rejected.key()), new EmbeddingRejectedException("fuera de contexto"));
+
+    service.execute();
+
+    assertThat(outcomes).containsExactly("retry@5s", "fail");
+    assertThat(metrics).containsExactly("unavailable", "rejected");
+    assertThat(freshness).isEmpty();
+  }
+
+  @Test
+  void aFinishedJobRecordsHowLongItsEditWaitedLikeAProfile() {
+    queued(EmbeddingEntity.JOB, 1, NOW.minusSeconds(61));
+
+    service.execute();
+
+    assertThat(freshness).containsExactly(Duration.ofSeconds(61));
   }
 }
