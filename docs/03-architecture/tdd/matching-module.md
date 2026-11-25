@@ -127,14 +127,14 @@ El desglose lleva `completeness`, `α` y la marca de **no calibrado** mientras n
 |---|---|---|
 | 1 | Dominio puro: dimensiones, agregador, calibrador y explicación, con las pruebas de propiedades | ADR-0017 aprobado, D2 |
 | 2 | `calculatecompatibilityscore` con puertos y dobles en memoria; `compatibility_scores_current` y caché | 1 |
-| 3 | 🟡 **Perfiles hechos (24-nov-2026); vacantes pendientes.** `embedentity` para perfiles, la cola, el trabajador, el adaptador de Ollama y el adaptador de lectura de `cv`. Detalle y desvíos de este documento en §10.1. Falta el lado de la vacante, que depende de `job` | `cv` sub-paso 5 (`getprofilesnapshot`), TDD de `job`, ADR-0018 con modelo definitivo |
+| 3 | ✅ **Perfiles (24-nov-2026) y vacantes (25-nov-2026).** `embedentity` para perfiles y vacantes, la cola, el trabajador, el adaptador de Ollama y los adaptadores de lectura de `cv` y `job`. Detalle y desvíos de este documento en §10.1 | `cv` sub-paso 5 (`getprofilesnapshot`), TDD de `job`, ADR-0018 con modelo definitivo |
 | 4 | `recomputescoresforentity` y los consumidores de la bandeja | 3 |
 | 5 | `explainscore` y el «qué pasaría si»; el endpoint del score | 2 |
 | 6 | `suggestcandidatesforjob` y el índice HNSW parcial. **Debe exigir que el reclutador sea `VERIFIED`** (`403 RECRUITER_NOT_VERIFIED`) y respetar la cuota diaria de perfiles vistos (`429 QUOTA_EXCEEDED`, REQ-R-10 y REQ-R-11): es el control central contra el raspado de datos de candidatos (amenaza T-N1, TD-033) | 3, D1, TD-032 |
 | 7 | `snapshotapplicationprofile` y `migratealgorithmversion` | postulación mínima de `ats` |
 | — | Normalización de habilidades en el cálculo | ADR-0019 aprobado y el caso de uso de `cv` |
 
-### 10.1 Sub-paso 3 (perfiles): qué se construyó y en qué se desvió de este documento
+### 10.1 Sub-paso 3 (perfiles y vacantes): qué se construyó y en qué se desvió de este documento
 
 Se construyó el camino completo de un perfil, de la edición en `cv` al vector: el consumidor de la bandeja, la cola, el trabajador, el cálculo con su *hash*, el cliente de Ollama y la capa anticorrupción hacia `cv`. Decisiones que la primera versión de este documento no tenía:
 
@@ -148,7 +148,15 @@ Se construyó el camino completo de un perfil, de la edición en `cv` al vector:
 - **El trabajador tiene su propio hilo.** Se configuró un planificador con cuatro hilos (TD-002): una llamada lenta a Ollama no retrasa el sondeo de la bandeja.
 - **Rechazo frente a no disponible.** Un 4xx de Ollama o un vector de otra dimensión que la columna es un rechazo (FAILED, sin gastar intentos); un 5xx, un 429, un tiempo agotado o una conexión rechazada es «no disponible» y se reintenta. Ningún mensaje de error cita el texto del perfil.
 
-**Pendiente de este sub-paso, no implementado:** el lado de la vacante (`JobSignals`, `job_embeddings`), que espera al módulo `job`; la medición con un Ollama real (TD-029), porque las pruebas usan un servidor de prueba. **Sí se hicieron** las métricas de frescura de la cola: histograma `jobseeker_matching_freshness_seconds` (con 120 s como cubo), `jobseeker_matching_queue_oldest_age_seconds` y `jobseeker_matching_queue_depth{status}`, con tres alertas probadas con `promtool` y tres paneles. El tiempo hasta el *score* actualizado y los pares en `PENDING_EMBEDDING` quedan para el sub-paso 4, que es donde existe el score.
+**Lado de la vacante (TD-028, 25-nov-2026).** `embedentity` calcula también el vector de una vacante, con las mismas piezas y sin duplicar el trabajador:
+
+- **Una sola cola y un solo trabajador.** `matching_work_queue` admite `entity_type` `PROFILE` y `JOB`; el trabajo lleva su tipo y su clave (la cuenta de un perfil o el identificador de una vacante) y `ProcessEmbeddingQueue` despacha a `EmbedProfile` o a `EmbedJob`. Ventana de agrupación, arrendamiento, retroceso, rechazo frente a no disponible y métrica de frescura son los mismos.
+- **`JobSignals` y su lectura.** Es una proyección propia (`published`, `reviewing`, título, descripción y requisitos); la capa anticorrupción `…out.job.JobPostingSignalsReader` la construye con `getjobsignals` y es el único lugar de `matching` que nombra un tipo de `job`. País, modalidad y salario **no entran** en el texto que se embebe y llegarán con el puntaje. `job` no depende de `matching` (ARCH-06); `matching` depende de `job-module` solo desde ese adaptador.
+- **Siete eventos, dos clases.** `job.posting_updated` es `CONTENT_UPDATED` y espera la ventana de 30 s; publicar, reabrir, cerrar, archivar, eliminar y cambiar la etapa son `STATE_CHANGED` y se piden sin espera. El consumidor es de nivel disparado: el evento solo despierta, y el cálculo relee la vacante.
+- **Las copias se sincronizan antes de llamar al modelo.** Una vacante cerrada o archivada deja de ser candidata al instante y **conserva su vector** (los puntajes ya calculados se siguen pudiendo explicar); una eliminada, o un borrador descartado, también se despublica sin crear una fila vacía si `matching` no la conocía. Solo una vacante **publicada** se embebe: cerrar y reabrir no llama al modelo porque el contenido es el mismo (BR-MATCH-03).
+- **`recruiting_stage` es una copia** (migración `V20261125100000`): BR-MATCH-08 saca de la generación de sugeridos a una vacante en `REVIEWING` y esa decisión se toma en `matching` sin leer `job`. No cambia el vector ni la publicación.
+
+**Pendiente de este sub-paso, no implementado:** la medición con un Ollama real (TD-029), porque las pruebas usan un servidor de prueba. **Sí se hicieron** las métricas de frescura de la cola: histograma `jobseeker_matching_freshness_seconds` (con 120 s como cubo), `jobseeker_matching_queue_oldest_age_seconds` y `jobseeker_matching_queue_depth{status}`, con tres alertas probadas con `promtool` y tres paneles. El tiempo hasta el *score* actualizado y los pares en `PENDING_EMBEDDING` quedan para el sub-paso 4, que es donde existe el score.
 
 **Controles de aceptación de los ADR aprobados con condiciones**, que este orden debe cumplir: C1 (*recall* de la recuperación) en el sub-paso 6; C2 (calibración y evaluación separadas por vacante) y C5 (umbral contrafactual) en el arnés; C3 (declarar un dato que coincide nunca baja el puntaje) en el sub-paso 1; C4 (frescura medida con Ollama real) en el sub-paso 4; D1 a D4 de la taxonomía, con su sub-paso en `cv`.
 
