@@ -27,7 +27,7 @@ class RequirementsAndTransitionsTest {
   private final ManageJobRequirementsService requirements =
       new ManageJobRequirementsService(f.store, f.change, f.clock());
   private final TransitionJobPostingService transitions =
-      new TransitionJobPostingService(f.change, f.clock());
+      new TransitionJobPostingService(f.change, f.gate, f.clock());
 
   private ManageJobRequirementsCommand setOf(JobPostingView view, JobRequirementDraft... drafts) {
     return new ManageJobRequirementsCommand(

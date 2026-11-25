@@ -9,6 +9,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.jayway.jsonpath.JsonPath;
 import com.usac.jobseeker.app.InfrastructureTestConfiguration;
+import com.usac.jobseeker.auth.application.usecase.changerecruiterverification.ChangeRecruiterVerificationCommand;
+import com.usac.jobseeker.auth.application.usecase.changerecruiterverification.ChangeRecruiterVerificationUseCase;
+import com.usac.jobseeker.common.domain.model.AccountId;
+import com.usac.jobseeker.common.domain.model.RecruiterVerification;
 import com.usac.jobseeker.job.application.usecase.getjobsignals.GetJobSignalsQuery;
 import com.usac.jobseeker.job.application.usecase.getjobsignals.GetJobSignalsUseCase;
 import com.usac.jobseeker.job.application.usecase.getjobsignals.JobSnapshot;
@@ -58,6 +62,7 @@ class JobPostingEndpointIntegrationTest {
           + "\"minLevel\":3,\"mandatory\":true}],\"version\":%d}";
   private static final String TRANSITION = "{\"to\":\"%s\",\"version\":%d}";
   private static final String ERROR_CODE = "$.error.code";
+  private static final int ROUNDS = 25;
   private static final StubIssuer ISSUER = startIssuer();
   private static final TestTokens KEYS = TestTokens.withKey("kid-job");
 
@@ -74,6 +79,9 @@ class JobPostingEndpointIntegrationTest {
     registry.add("jobseeker.auth.clavaris.issuer-uri", ISSUER::issuerUri);
     registry.add("jobseeker.auth.clavaris.client-id", () -> TestTokens.CLIENT_ID);
     registry.add("jobseeker.auth.clavaris.client-secret", () -> "secreto-de-prueba");
+    // Topes pequeños y distintos para que el tope de una cuenta verificada se alcance en la prueba.
+    registry.add("jobseeker.job.publishing.unverified-max-published", () -> "2");
+    registry.add("jobseeker.job.publishing.verified-max-published", () -> "3");
   }
 
   @AfterAll
@@ -84,6 +92,7 @@ class JobPostingEndpointIntegrationTest {
   @Autowired private MockMvc mvc;
   @Autowired private JdbcTemplate jdbc;
   @Autowired private GetJobSignalsUseCase signals;
+  @Autowired private ChangeRecruiterVerificationUseCase verification;
 
   @BeforeEach
   void publishTheKeys() {
@@ -522,5 +531,198 @@ class JobPostingEndpointIntegrationTest {
     assertThat(snapshot.toString()).doesNotContain(owner.toString());
     assertThat(signals.execute(new GetJobSignalsQuery(new JobPostingId(UUID.fromString(draft)))))
         .isEmpty();
+  }
+
+  // ---- confianza en el reclutador: la puerta de publicar (REQ-R-10, amenaza T-N1) ----
+
+  /** Un borrador con una habilidad, listo para publicar: queda en la versión 2. */
+  private String draftWithSkill(UUID owner) throws Exception {
+    String id = createDraft(owner);
+    mvc.perform(json(put(POSTINGS + "/" + id + "/requirements"), owner, JAVA.formatted(1)))
+        .andExpect(status().isOk());
+    return id;
+  }
+
+  private org.springframework.test.web.servlet.ResultActions publish(String id, UUID owner)
+      throws Exception {
+    return mvc.perform(
+        json(
+            post(POSTINGS + "/" + id + "/transitions"),
+            owner,
+            TRANSITION.formatted("PUBLISHED", 2)));
+  }
+
+  private void setVerification(UUID account, RecruiterVerification value) {
+    verification.execute(new ChangeRecruiterVerificationCommand(new AccountId(account), value));
+  }
+
+  @Test
+  void anUnverifiedRecruiterPublishesUpToItsLimitAndThenIsToldToVerify() throws Exception {
+    UUID owner = recruiter();
+    String first = draftWithSkill(owner);
+    String second = draftWithSkill(owner);
+    String third = draftWithSkill(owner);
+
+    publish(first, owner).andExpect(status().isOk());
+    publish(second, owner).andExpect(status().isOk());
+    publish(third, owner)
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath(ERROR_CODE).value("RECRUITER_NOT_VERIFIED"));
+
+    // La denegada no cambió nada ni emitió evento; el borrador sigue siendo suyo.
+    mvc.perform(authed(get(POSTINGS + "/" + third), owner))
+        .andExpect(jsonPath("$.status").value("DRAFT"))
+        .andExpect(jsonPath("$.version").value(2));
+    assertThat(events(third, "job.posting_published")).isZero();
+  }
+
+  // Crear y editar borradores sigue libre aunque el tope esté lleno: solo publicar cruza la puerta.
+  @Test
+  void draftsStayFreeEvenWhenTheLimitIsReached() throws Exception {
+    UUID owner = recruiter();
+    publish(draftWithSkill(owner), owner).andExpect(status().isOk());
+    publish(draftWithSkill(owner), owner).andExpect(status().isOk());
+
+    String extra = createDraft(owner);
+
+    mvc.perform(
+            json(put(POSTINGS + "/" + extra), owner, BODY.formatted(1).replace("Backend", "Otro")))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  void verifyingTheAccountRaisesTheLimitAndClosingAPostingFreesASlot() throws Exception {
+    UUID owner = recruiter();
+    String a = draftWithSkill(owner);
+    String b = draftWithSkill(owner);
+    String c = draftWithSkill(owner);
+    publish(a, owner).andExpect(status().isOk());
+    publish(b, owner).andExpect(status().isOk());
+    publish(c, owner).andExpect(status().isForbidden());
+
+    setVerification(owner, RecruiterVerification.VERIFIED);
+    publish(c, owner).andExpect(status().isOk());
+
+    // Verificada, el tope es 3: la cuarta es una cuota agotada, no una cuenta sin verificar.
+    String d = draftWithSkill(owner);
+    publish(d, owner)
+        .andExpect(status().isTooManyRequests())
+        .andExpect(jsonPath(ERROR_CODE).value("QUOTA_EXCEEDED"));
+
+    mvc.perform(
+            json(
+                post(POSTINGS + "/" + a + "/transitions"),
+                owner,
+                TRANSITION.formatted("CLOSED", 3)))
+        .andExpect(status().isOk());
+    publish(d, owner).andExpect(status().isOk());
+  }
+
+  // Reabrir una cerrada ocupa cupo: cerrar y reabrir no es una forma de saltarse el tope.
+  @Test
+  void reopeningAClosedPostingGoesThroughTheSameLimit() throws Exception {
+    UUID owner = recruiter();
+    String a = draftWithSkill(owner);
+    publish(a, owner).andExpect(status().isOk());
+    mvc.perform(
+            json(
+                post(POSTINGS + "/" + a + "/transitions"),
+                owner,
+                TRANSITION.formatted("CLOSED", 3)))
+        .andExpect(status().isOk());
+    publish(draftWithSkill(owner), owner).andExpect(status().isOk());
+    publish(draftWithSkill(owner), owner).andExpect(status().isOk());
+
+    mvc.perform(
+            json(
+                post(POSTINGS + "/" + a + "/transitions"),
+                owner,
+                TRANSITION.formatted("PUBLISHED", 4)))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath(ERROR_CODE).value("RECRUITER_NOT_VERIFIED"));
+  }
+
+  @Test
+  void aSuspendedRecruiterCannotPublishAndAReinstatedOneCan() throws Exception {
+    UUID owner = recruiter();
+    String draft = draftWithSkill(owner);
+    setVerification(owner, RecruiterVerification.SUSPENDED);
+
+    publish(draft, owner)
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath(ERROR_CODE).value("RECRUITER_SUSPENDED"));
+
+    setVerification(owner, RecruiterVerification.VERIFIED);
+    publish(draft, owner).andExpect(status().isOk());
+  }
+
+  // El tope se cuenta por cuenta: lo publicado por otro reclutador no ocupa el cupo propio.
+  @Test
+  void theLimitIsPerRecruiter() throws Exception {
+    UUID busy = recruiter();
+    UUID other = recruiter();
+    publish(draftWithSkill(busy), busy).andExpect(status().isOk());
+    publish(draftWithSkill(busy), busy).andExpect(status().isOk());
+
+    publish(draftWithSkill(other), other).andExpect(status().isOk());
+  }
+
+  // Dos publicaciones simultáneas con un solo cupo libre: una gana y la otra recibe el tope. Sin el
+  // candado por reclutador ambas contarían «una menos que el tope» y pasarían las dos. La ventana
+  // de
+  // carrera dura milisegundos, así que se repite en varias rondas con una cuenta nueva cada una:
+  // una
+  // sola ronda casi nunca la alcanza y la prueba pasaría aunque el candado no existiera.
+  @Test
+  void twoSimultaneousPublicationsWithOneSlotLeftHaveExactlyOneWinnerInEveryRound()
+      throws Exception {
+    ExecutorService pool = Executors.newFixedThreadPool(2);
+    try {
+      for (int round = 0; round < ROUNDS; round++) {
+        UUID owner = recruiter();
+        publish(draftWithSkill(owner), owner).andExpect(status().isOk());
+        List<String> contenders = List.of(draftWithSkill(owner), draftWithSkill(owner));
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<Integer>> results = new ArrayList<>();
+        for (String id : contenders) {
+          Callable<Integer> call =
+              () -> {
+                start.await();
+                return publish(id, owner).andReturn().getResponse().getStatus();
+              };
+          results.add(pool.submit(call));
+        }
+        start.countDown();
+        List<Integer> statuses = new ArrayList<>();
+        for (Future<Integer> result : results) {
+          statuses.add(result.get());
+        }
+
+        assertThat(statuses).as("ronda %d".formatted(round)).containsExactlyInAnyOrder(200, 403);
+        assertThat(
+                jdbc.queryForObject(
+                    "select count(*) from job_postings where recruiter_account_id = ? and status ="
+                        + " 'PUBLISHED'",
+                    Integer.class,
+                    owner))
+            .isEqualTo(2);
+      }
+    } finally {
+      pool.shutdown();
+    }
+  }
+
+  @Test
+  void aNewRecruiterStartsUnverifiedAndOnlyARecruiterHasAVerification() throws Exception {
+    UUID owner = recruiter();
+    UUID onlyCandidate = candidate();
+
+    assertThat(
+            jdbc.queryForObject(
+                "select recruiter_verification from accounts where id = ?", String.class, owner))
+        .isEqualTo("UNVERIFIED");
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> setVerification(onlyCandidate, RecruiterVerification.VERIFIED))
+        .isInstanceOf(com.usac.jobseeker.common.domain.error.NotFoundException.class);
   }
 }

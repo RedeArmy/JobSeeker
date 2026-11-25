@@ -21,10 +21,18 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Los adaptadores JDBC de la vacante contra la tabla real que su migración crea (Postgres 17): el
@@ -164,6 +172,116 @@ class JdbcJobRepositoriesTest {
     assertThat(read.recruiterAccountId()).isEqualTo(owner);
     assertThat(read.createdAt()).isEqualTo(T0);
     assertThat(read.updatedAt()).isEqualTo(T1);
+  }
+
+  // ---- recuento de publicadas (REQ-R-10) ----
+
+  private JobPosting publishedOf(AccountId account) {
+    jdbc.sql(
+            "insert into accounts (id, is_recruiter_enabled) values (:id, true) on conflict do nothing")
+        .param("id", account.value())
+        .update();
+    JobPosting posting =
+        JobPosting.create(
+            new JobPostingId(UUID.randomUUID()),
+            account,
+            JobDetails.of("t", "d", null, null, null, null, null, null),
+            T0);
+    postings.insert(posting);
+    JobPosting published = posting.transition(JobStatus.PUBLISHED, Initiator.OWNER, true, T1);
+    postings.updateIfVersion(published, posting.version());
+    return published;
+  }
+
+  @Test
+  void onlyPublishedPostingsOfThatAccountAreCounted() {
+    AccountId other = new AccountId(UUID.randomUUID());
+    JobPosting kept = publishedOf(owner);
+    JobPosting toClose = publishedOf(owner);
+    publishedOf(other);
+    postings.insert(draft());
+    postings.updateIfVersion(
+        toClose.transition(JobStatus.CLOSED, Initiator.OWNER, true, T1.plusSeconds(1)),
+        toClose.version());
+
+    assertThat(postings.lockAndCountPublished(owner)).isOne();
+    assertThat(postings.lockAndCountPublished(other)).isOne();
+    assertThat(postings.lockAndCountPublished(new AccountId(UUID.randomUUID()))).isZero();
+    assertThat(kept.status()).isEqualTo(JobStatus.PUBLISHED);
+  }
+
+  // El candado pone en fila las publicaciones de una misma cuenta: la segunda espera a que la
+  // primera termine su transacción y entonces ve lo que la primera escribió.
+  @Test
+  void theCountLockMakesTwoTransactionsOfTheSameAccountTakeTurns() throws Exception {
+    DataSourceTransactionManager manager =
+        new DataSourceTransactionManager(JobPostgres.dataSource());
+    TransactionTemplate tx = new TransactionTemplate(manager);
+    CountDownLatch firstHoldsTheLock = new CountDownLatch(1);
+    CountDownLatch releaseFirst = new CountDownLatch(1);
+    ExecutorService pool = Executors.newFixedThreadPool(2);
+
+    Future<Long> first =
+        pool.submit(
+            () ->
+                tx.execute(
+                    status -> {
+                      long seen = postings.lockAndCountPublished(owner);
+                      firstHoldsTheLock.countDown();
+                      awaitQuietly(releaseFirst);
+                      publishedOf(owner);
+                      return seen;
+                    }));
+    assertThat(firstHoldsTheLock.await(10, TimeUnit.SECONDS)).isTrue();
+    Future<Long> second =
+        pool.submit(() -> tx.execute(status -> postings.lockAndCountPublished(owner)));
+
+    // Mientras la primera sostiene el candado, la segunda no termina.
+    assertThatThrownBy(() -> second.get(500, TimeUnit.MILLISECONDS))
+        .isInstanceOf(TimeoutException.class);
+    releaseFirst.countDown();
+
+    assertThat(first.get(10, TimeUnit.SECONDS)).isZero();
+    // La segunda entra después y ya ve la publicación de la primera.
+    assertThat(second.get(10, TimeUnit.SECONDS)).isOne();
+    pool.shutdown();
+  }
+
+  @Test
+  void twoDifferentAccountsDoNotBlockEachOther() throws Exception {
+    DataSourceTransactionManager manager =
+        new DataSourceTransactionManager(JobPostgres.dataSource());
+    TransactionTemplate tx = new TransactionTemplate(manager);
+    AccountId other = new AccountId(UUID.randomUUID());
+    publishedOf(other);
+    CountDownLatch firstHoldsTheLock = new CountDownLatch(1);
+    CountDownLatch releaseFirst = new CountDownLatch(1);
+    ExecutorService pool = Executors.newFixedThreadPool(2);
+    pool.submit(
+        () ->
+            tx.execute(
+                status -> {
+                  postings.lockAndCountPublished(owner);
+                  firstHoldsTheLock.countDown();
+                  awaitQuietly(releaseFirst);
+                  return null;
+                }));
+    assertThat(firstHoldsTheLock.await(10, TimeUnit.SECONDS)).isTrue();
+
+    Future<Long> second =
+        pool.submit(() -> tx.execute(status -> postings.lockAndCountPublished(other)));
+
+    assertThat(second.get(5, TimeUnit.SECONDS)).isOne();
+    releaseFirst.countDown();
+    pool.shutdown();
+  }
+
+  private static void awaitQuietly(CountDownLatch latch) {
+    try {
+      latch.await(10, TimeUnit.SECONDS);
+    } catch (InterruptedException _) {
+      Thread.currentThread().interrupt();
+    }
   }
 
   // ---- requisitos ----
