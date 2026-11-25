@@ -27,3 +27,7 @@ Thumbs.db
 
 # ---- Docker ----
 docker-compose.override.local.yml
+
+# Caché de bytecode de Python que generan los scripts de scripts/eval al probarlos
+__pycache__/
+*.pyc

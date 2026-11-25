@@ -35,11 +35,27 @@ public class JdbcEmbeddingRepository implements EmbeddingStorePort, CandidateRet
 
   private static final String REVIEWING = "REVIEWING";
   private static final String FLAG = "flag";
+  // Tope de `hnsw.ef_search` en pgvector.
+  private static final int MAX_EF_SEARCH = 1000;
+
+  /**
+   * `ef_search` por defecto: el recall@20 medido con 10.000 perfiles ya es ≈ 1 con 100 (TD-012).
+   */
+  public static final int DEFAULT_EF_SEARCH = 100;
 
   private final JdbcClient jdbc;
+  private final int efSearch;
 
   public JdbcEmbeddingRepository(JdbcClient jdbc) {
+    this(jdbc, DEFAULT_EF_SEARCH);
+  }
+
+  public JdbcEmbeddingRepository(JdbcClient jdbc, int efSearch) {
+    if (efSearch < 1 || efSearch > MAX_EF_SEARCH) {
+      throw new IllegalArgumentException("ef_search debe estar entre 1 y " + MAX_EF_SEARCH);
+    }
     this.jdbc = jdbc;
+    this.efSearch = efSearch;
   }
 
   // ---- perfiles ----
@@ -249,18 +265,38 @@ public class JdbcEmbeddingRepository implements EmbeddingStorePort, CandidateRet
 
   // `<=>` es la distancia coseno de pgvector; la similitud es `1 - distancia`. La condición
   // coincide
-  // con la del índice parcial para que pueda usarse, y el filtro por modelo evita comparar vectores
-  // de modelos distintos durante un cambio de modelo (data-model.md §5.1).
+  // con la del índice parcial para que pueda usarse; el filtro por modelo NO está en el índice y es
+  // un filtro adicional (data-model.md §5.1).
+  //
+  // TD-012: un filtro adicional se aplica después de recorrer el índice, y sin escaneo iterativo el
+  // recall@20 medido cae a 0,38 (`anexos/embeddings-esquema/recall`). Por eso se fija
+  // `hnsw.iterative_scan = relaxed_order`, y `ef_search` nunca por debajo de lo pedido para que una
+  // página de 50 no devuelva menos filas que `limit`. `set_config(.., true)` vale solo dentro de la
+  // transacción, así que el ajuste actúa en la del caso de uso y no se filtra a otras consultas del
+  // *pool*. `relaxed_order` puede entregar los resultados algo desordenados, de ahí el reordenado
+  // exterior (BR-MATCH-06 muestra un orden).
   @Override
   public List<NearestProfile> nearestDiscoverable(EmbeddingVector query, String model, int limit) {
     if (limit <= 0) {
       return List.of();
     }
+    jdbc.sql(
+            "select set_config('hnsw.iterative_scan', 'relaxed_order', true),"
+                + " set_config('hnsw.ef_search', :ef, true)")
+        .param(
+            "ef",
+            String.valueOf(
+                Math.clamp(efSearch, limit > MAX_EF_SEARCH ? MAX_EF_SEARCH : limit, MAX_EF_SEARCH)))
+        .query()
+        .singleRow();
     return jdbc.sql(
-            "select candidate_profile_id, 1 - (embedding <=> cast(:query as vector)) as similarity"
+            "select candidate_profile_id, similarity from ("
+                + " select candidate_profile_id, embedding <=> cast(:query as vector) as distance,"
+                + " 1 - (embedding <=> cast(:query as vector)) as similarity"
                 + " from profile_embeddings where discoverable and embedding is not null"
                 + " and embedding_model = :model"
-                + " order by embedding <=> cast(:query as vector) limit :limit")
+                + " order by embedding <=> cast(:query as vector) limit :limit) nearest"
+                + " order by distance")
         .param("query", toLiteral(query))
         .param("model", model)
         .param("limit", limit)

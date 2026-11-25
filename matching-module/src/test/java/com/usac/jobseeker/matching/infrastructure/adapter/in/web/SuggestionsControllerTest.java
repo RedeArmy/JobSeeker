@@ -33,7 +33,10 @@ class SuggestionsControllerTest {
             return new SuggestionsResult(SuggestionsResult.Status.OK, List.of(first, second), 7);
           },
           new MatchingProperties(
-              null, null, new MatchingProperties.Suggestions(200, Duration.ofHours(24), 50)));
+              null,
+              null,
+              new MatchingProperties.Suggestions(200, Duration.ofHours(24), 50),
+              new MatchingProperties.Retrieval(100)));
 
   @Test
   void theRecruiterComesFromTheTokenAndTheDefaultPageSizeIsTwenty() {
