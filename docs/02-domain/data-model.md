@@ -440,7 +440,30 @@ Deliberadamente **no** incluye ninguna columna de las orientadas a búsqueda de 
 | published_at | timestamptz | NULL | Momento de la transición `DRAFT → PUBLISHED` |
 | closed_at | timestamptz | NULL | Momento del cierre más reciente (`PUBLISHED → CLOSED`); base para calcular el vencimiento del archivado automático (`closed_at + archivalDelayDays`, BR-JOB-06). Se limpia (`NULL`) si la vacante se reabre (BR-JOB-07) |
 | archived_at | timestamptz | NULL | Momento del archivado automático (`CLOSED → ARCHIVED`, BR-JOB-06) |
-| deleted_at | timestamptz | NULL | Momento del soft-delete (`ARCHIVED → DELETED`, BR-JOB-09); su presencia es el tombstone — la fila nunca se borra físicamente |
+| deleted_at | timestamptz | NULL | Momento del soft-delete (`ARCHIVED → DELETED`, BR-JOB-09; también `DRAFT → DELETED` al descartar un borrador); su presencia es el tombstone — la fila nunca se borra físicamente. La restricción `ck_jp_deleted_at` obliga a que `status = 'DELETED'` y `deleted_at` aparezcan juntos |
+| version | bigint | NOT NULL DEFAULT 1, CHECK (>= 1) | Bloqueo optimista y *compare-and-set* de toda edición y transición (`tdd/job-module.md` §5, J1); sube con cada cambio, incluidos los requisitos y los ejes `accepting_applications` y `recruiting_stage` |
+| updated_at | timestamptz | NOT NULL DEFAULT now() | Última modificación |
+
+El estado y sus marcas de tiempo son coherentes por restricción: publicada, cerrada o archivada exigen `published_at`, y cerrada exige `closed_at` (`ck_jp_published_at`, `ck_jp_closed_at`).
+
+#### 4.6.1 `job_requirements` (contexto `job`)
+
+Requisitos estructurados de la vacante (BR-JOB-02), hijos del agregado `JobPosting`: se leen y reemplazan siempre con él. Cada tipo usa sus propias columnas, con un `CHECK` por tipo y otro que prohíbe columnas de un tipo ajeno; el modelo genérico `ruleType`/`criteria` del ADR-0007 es de las reglas de elegibilidad, no de esto (`tdd/job-module.md` §10.1).
+
+| Columna | Tipo | Restricciones | Descripción |
+|---|---|---|---|
+| id | uuid | PK | Identificador |
+| job_posting_id | uuid | FK → job_postings.id | Vacante dueña |
+| requirement_type | text | NOT NULL, CHECK IN ('SKILL','EDUCATION','EXPERIENCE_YEARS','LANGUAGE') | Tipo |
+| is_mandatory | boolean | NOT NULL DEFAULT false | Obligatorio o deseable |
+| position | integer | NOT NULL, ≥ 0, UNIQUE con `job_posting_id` | Orden en que el reclutador los escribió |
+| skill_name | text | SKILL: NOT NULL, ≤ 100 | Nombre en texto libre hasta la taxonomía (ADR-0019) |
+| skill_id | uuid | NULL, sin FK todavía | Espera la tabla `skills` de ADR-0019 |
+| min_level | smallint | SKILL: NULL o 1 a 4 | Nivel mínimo de la habilidad |
+| education_level | text | EDUCATION: NOT NULL | Nivel académico mínimo (misma escala que `cv`) |
+| min_years | smallint | EXPERIENCE_YEARS: 1 a 60 | Años mínimos |
+| language | text | LANGUAGE: ISO 639-1, 2 letras | Idioma |
+| min_proficiency | text | LANGUAGE: A1 a C2 o NATIVE | Nivel mínimo |
 
 ### 4.7 `compatibility_scores` (contexto `matching`)
 

@@ -4,7 +4,7 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | 🟡 En revisión |
-| **Versión** | 1.4 — se paga TD-031 |
+| **Versión** | 1.5 — entra TD-030 |
 | **Fecha** | 24 de noviembre de 2026 |
 | **Dueño del documento** | Responsable del proyecto |
 | **Revisión del registro** | Al cerrar cada sprint y antes de cada hito de la hoja de ruta |
@@ -51,12 +51,12 @@ Corte: 24-nov-2026.
 | Severidad | Abiertas o planificadas |
 |---|---|
 | S1 Crítica | 0 |
-| S2 Alta | 4 |
+| S2 Alta | 5 |
 | S3 Media | 9 |
 | S4 Baja | 5 |
-| **Total** | **18** |
+| **Total** | **19** |
 
-- **Abiertas:** 16 · **Planificadas:** 2 · **Resueltas:** 22 · **Aceptadas:** 6.
+- **Abiertas:** 17 · **Planificadas:** 2 · **Resueltas:** 22 · **Aceptadas:** 6.
 - **S2 abiertas con disparador próximo** (decidir el siguiente sprint): TD-012 (antes de `suggestcandidatesforjob`) y TD-005 y TD-016 (primer despliegue), más TD-020 (antes de usuarios reales).
 - **Métricas a seguir en cada revisión:** deuda abierta por severidad, edad de las S2 en días, número de cierres por sprint, aceptadas vencidas.
 
@@ -78,6 +78,7 @@ Corte: 24-nov-2026.
 | TD-027 | Los nombres propios del texto libre no se redactan antes del embedding | Privacidad | S3 | L | Medida | Abierta | Antes de embeber perfiles reales (`embedentity`) |
 | TD-028 | El lado de la vacante de `embedentity` no existe: `JobSignals` y `job_embeddings` | Arquitectura | S3 | L | Leída | Abierta | TDD de `job` y primer módulo `job` con código |
 | TD-029 | Sin medición de `embedentity` con un Ollama real | Operación | S3 | S | Leída | Abierta | Un Ollama con el modelo vigente disponible (ADR-0018, protocolo de 300 pares) |
+| TD-030 | Cualquier reclutador puede publicar: falta la verificación y las cuotas (D1 del TDD de `job`) | Seguridad | S2 | L | Leída | Abierta | Bloque «Verificación de reclutador y cuotas» (hallazgo F1) sin diseñar |
 | TD-023 | Fin de soporte de Spring Boot 4.1 (31-jul-2027) | Plataforma | S3 | L | Medida | Planificada | 2027-04-30 (inicio de la subida) |
 | TD-024 | El `Dockerfile` compila con una imagen de Java 26 | Operación | S4 | XS | Leída | Abierta | Oportunista |
 | TD-025 | La purga de la bandeja usa `Instant.now()` | Código | S4 | XS | Leída | Abierta | Oportunista |
@@ -239,6 +240,17 @@ Corte: 24-nov-2026.
 - **Criterio de cierre:** Una medición archivada con el modelo vigente y el p95 observado frente al objetivo.
 - **Referencias:** `docs/03-architecture/adr/0018-embedding-model-selection-and-versioning.md`
 
+#### TD-030 — Cualquier reclutador puede publicar: falta la verificación y las cuotas (D1 del TDD de `job`)
+
+**Seguridad** · **S2 Alta** · esfuerzo **L** · confianza **Leída** · **Abierta**
+
+- **Evidencia:** `transitionjobposting` solo exige la capacidad de reclutador (BR-JOB-01). Una cuenta recién habilitada publica sin límite ni verificación, y sus vacantes llegan a los listados de candidatos.
+- **Interés (qué cuesta no pagarla):** Spam y vacantes fraudulentas visibles para todos los candidatos desde el día uno; el costo de moderarlo después es mayor que el de diseñarlo ahora.
+- **Disparador:** Bloque «Verificación de reclutador y cuotas» (hallazgo F1) sin diseñar.
+- **Remediación propuesta:** Diseñar el bloque (verificación de la cuenta, cuota de vacantes publicadas por plan y tasa de publicación) y exigirlo solo al publicar: crear y editar borradores sigue libre (recomendación D1).
+- **Criterio de cierre:** Una cuenta no verificada recibe un error propio al publicar, con una prueba de punta a punta.
+- **Referencias:** `docs/03-architecture/tdd/job-module.md` §11
+
 #### TD-023 — Fin de soporte de Spring Boot 4.1 (31-jul-2027)
 
 **Plataforma** · **S3 Media** · esfuerzo **L** · confianza **Medida** · **Planificada**
@@ -330,6 +342,7 @@ Corte: 24-nov-2026.
 | 1.2 | 2026-11-24 | Se pagan TD-001, TD-018, TD-019 y TD-021 (PR #34) y pasan a resueltas como TD-R15 a TD-R18; TD-009 se descarta (TD-R19) porque el nuevo reclamo usa su índice. Entran TD-027 (nombres propios sin redactar) y TD-A06 (bloqueo de reclamo). Quedan 18 abiertas o planificadas, 21 resueltas y 6 aceptadas. |
 | 1.3 | 2026-11-24 | Se paga TD-002 (PR #35, TD-R20) porque el trabajador de embeddings lo exigía. Entran TD-028 (el lado de la vacante de `embedentity`) y TD-029 (medición con un Ollama real); las métricas de frescura de TD-029 se pagan en el mismo PR (TD-R21). Quedan 18 abiertas o planificadas, 21 resueltas y 6 aceptadas. |
 | 1.4 | 2026-11-24 | Se paga TD-031 (reglas de formato repetidas en `cv` y a punto de repetirse en `job`, PR #36, TD-R23): se encontró y se pagó en el mismo cambio. Quedan 18 abiertas o planificadas, 22 resueltas y 6 aceptadas. |
+| 1.5 | 2026-11-24 | Entra TD-030 (verificación de reclutador y cuotas antes de publicar, D1 del TDD de `job`), que dejó el primer corte de `job` (PR #37). Quedan 19 abiertas o planificadas, 22 resueltas y 6 aceptadas. |
 
 ## 9. Plantilla de ficha
 
