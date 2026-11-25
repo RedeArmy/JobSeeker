@@ -45,7 +45,8 @@ class RateLimitFilterTest {
             "login", new Policy(10, 10, MINUTE, KeyKind.IP),
             "webhook", new Policy(120, 120, MINUTE, KeyKind.IP),
             "write", new Policy(30, 30, MINUTE, KeyKind.ACCOUNT),
-            "read", new Policy(120, 120, MINUTE, KeyKind.ACCOUNT));
+            "read", new Policy(120, 120, MINUTE, KeyKind.ACCOUNT),
+            "suggestions", new Policy(10, 10, MINUTE, KeyKind.ACCOUNT));
     return new RateLimitFilter(stage, new RateLimitProperties(enabled, policies), limiter);
   }
 

@@ -10,8 +10,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * calibran con tráfico real sin volver a desplegar.
  *
  * @param enabled apagarlo solo es para diagnóstico; en producción siempre encendido
- * @param policies por nombre: `login`, `webhook`, `write` y `read` deben existir, porque el
- *     selector de rutas las asigna a toda petición
+ * @param policies por nombre: `login`, `webhook`, `write`, `read` y `suggestions` deben existir,
+ *     porque el selector de rutas las asigna a toda petición
  */
 @ConfigurationProperties("jobseeker.ratelimit")
 public record RateLimitProperties(
@@ -19,7 +19,7 @@ public record RateLimitProperties(
 
   /** Políticas que el selector de rutas asigna: sin una de ellas el arranque falla. */
   static final java.util.List<String> REQUIRED =
-      java.util.List.of("login", "webhook", "write", "read");
+      java.util.List.of("login", "webhook", "write", "read", "suggestions");
 
   /** Qué identifica a quien se limita. */
   public enum KeyKind {

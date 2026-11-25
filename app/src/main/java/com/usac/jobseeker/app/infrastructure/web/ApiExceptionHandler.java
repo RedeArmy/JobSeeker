@@ -8,6 +8,7 @@ import com.usac.jobseeker.common.domain.error.InvalidTransitionException;
 import com.usac.jobseeker.common.domain.error.NotFoundException;
 import com.usac.jobseeker.common.domain.error.PublishingDeniedException;
 import com.usac.jobseeker.common.domain.error.StaleStateException;
+import com.usac.jobseeker.common.domain.error.SuggestionsDeniedException;
 import com.usac.jobseeker.common.domain.error.ValidationFailedException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
@@ -135,6 +136,39 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                       request,
                       "QUOTA_EXCEEDED",
                       "Alcanzaste el máximo de vacantes publicadas; cierra alguna para publicar otra."));
+    };
+  }
+
+  /**
+   * La cuenta reclutadora no puede ver sugeridos (REQ-R-10, REQ-R-11): sin verificar o suspendida
+   * es 403, y haber agotado la cuota de perfiles únicos de la ventana es 429, como el resto de
+   * topes de uso. Los códigos son los mismos que los de publicar: la causa es la misma confianza.
+   */
+  @ExceptionHandler(SuggestionsDeniedException.class)
+  ResponseEntity<Object> suggestionsDenied(
+      SuggestionsDeniedException denied, HttpServletRequest request) {
+    return switch (denied.reason()) {
+      case NOT_VERIFIED ->
+          ResponseEntity.status(HttpStatus.FORBIDDEN)
+              .body(
+                  ErrorEnvelope.body(
+                      request,
+                      "RECRUITER_NOT_VERIFIED",
+                      "Tu cuenta de reclutador debe estar verificada para ver candidatos sugeridos."));
+      case SUSPENDED ->
+          ResponseEntity.status(HttpStatus.FORBIDDEN)
+              .body(
+                  ErrorEnvelope.body(
+                      request,
+                      "RECRUITER_SUSPENDED",
+                      "Tu cuenta de reclutador está suspendida y no puede ver candidatos."));
+      case QUOTA_EXCEEDED ->
+          ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+              .body(
+                  ErrorEnvelope.body(
+                      request,
+                      "QUOTA_EXCEEDED",
+                      "Alcanzaste el máximo de perfiles que puedes ver en 24 horas; vuelve más tarde."));
     };
   }
 

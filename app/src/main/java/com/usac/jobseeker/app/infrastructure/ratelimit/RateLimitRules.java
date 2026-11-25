@@ -16,6 +16,7 @@ final class RateLimitRules {
   static final String WEBHOOK = "webhook";
   static final String WRITE = "write";
   static final String READ = "read";
+  static final String SUGGESTIONS = "suggestions";
 
   private static final Set<String> SAFE_METHODS = Set.of("GET", "HEAD", "OPTIONS");
 
@@ -35,6 +36,12 @@ final class RateLimitRules {
     }
     if (path.equals(ClavarisWebhookFilter.PATH)) {
       return Optional.of(WEBHOOK);
+    }
+    // Los sugeridos son la superficie más sensible al raspado de datos de candidatos (amenaza
+    // T-N1):
+    // tienen su propio cubo, más estricto que el de lectura, además de la cuota de perfiles únicos.
+    if (path.startsWith("/api/v1/matching/jobs/") && path.endsWith("/suggestions")) {
+      return Optional.of(SUGGESTIONS);
     }
     return Optional.of(SAFE_METHODS.contains(request.getMethod()) ? READ : WRITE);
   }

@@ -29,7 +29,8 @@ class RateLimitRulesTest {
     "PUT, /api/v1/anything, write",
     "PATCH, /api/v1/anything, write",
     "DELETE, /api/v1/anything, write",
-    "POST, /app/logout, write"
+    "POST, /app/logout, write",
+    "GET, /api/v1/matching/jobs/7d1c1b5e-0000-4000-8000-000000000001/suggestions, suggestions"
   })
   void everyRouteGetsThePolicyOfItsKind(String method, String uri, String expected) {
     assertThat(policy(method, uri)).contains(expected);
