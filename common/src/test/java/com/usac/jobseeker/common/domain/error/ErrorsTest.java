@@ -75,4 +75,28 @@ class ErrorsTest {
     assertThat(new StaleStateException().getMessage())
         .isEqualTo("El recurso cambió desde que se leyó");
   }
+
+  // El mensaje no lleva el recurso ni los estados: un 409 no debe confirmar nada de lo ajeno.
+  @Test
+  void theInvalidTransitionCarriesNoDataOfTheResource() {
+    var exception = new InvalidTransitionException();
+
+    assertThat(exception.getMessage()).doesNotContain("PUBLISHED", "CLOSED", "DRAFT", "-");
+    assertThat(exception).isInstanceOf(RuntimeException.class);
+  }
+
+  @Test
+  void theInvalidStateCarriesNoDataOfTheResource() {
+    var exception = new InvalidStateException();
+
+    assertThat(exception.getMessage()).doesNotContain("PUBLISHED", "ARCHIVED", "DRAFT");
+    assertThat(exception).isInstanceOf(RuntimeException.class);
+  }
+
+  // Las dos son distintas de una versión vieja: volver a leer y reintentar no las arregla.
+  @Test
+  void neitherIsAStaleStateSoAClientDoesNotRetryThem() {
+    assertThat(new InvalidTransitionException()).isNotInstanceOf(StaleStateException.class);
+    assertThat(new InvalidStateException()).isNotInstanceOf(StaleStateException.class);
+  }
 }

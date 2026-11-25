@@ -4,7 +4,7 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | 🟡 En revisión |
-| **Versión** | 1.0 |
+| **Versión** | 1.1 (sub-pasos 1 a 4 y 6 de la Ola 1 construidos, §10.1) |
 | **Fecha** | 23-nov-2026 |
 | **Documentos relacionados** | ADR-0007 (modelo genérico `ruleType`/`criteria`), ADR-0016 (bandeja de salida), ADR-0027 (migraciones), `domain-model.md` §4.1, `data-model.md` §4.6, §4.11 y §4.13 a §4.15, `tdd/cv-module.md` §7 y §3.1, BR-JOB-01 a 21, BR-ELIG-01 a 13, BR-APPQ-01 a 09, BR-FUP-01 a 05, BR-VIS-07 y 08, BR-MATCH-08 |
 
@@ -144,9 +144,9 @@ Pendientes que este diseño exige, a incorporar al modelo con el sub-paso que lo
 
 | # | Qué | Por qué |
 |---|---|---|
-| J1 | `version bigint` en `job_postings` | Bloqueo optimista y *compare-and-set* (§5, regla 1) |
+| J1 | ✅ `version bigint` en `job_postings` | Bloqueo optimista y *compare-and-set* (§5, regla 1) |
 | J2 | `job_postings` **sin** columnas de embedding | Los vectores son de `matching` (`data-model.md` §4.7.1); `job` solo emite los eventos que mantienen la copia `published` |
-| J3 | `job_requirements` con la forma de `03-lld.md` §4 | Hoy solo está en el LLD, no en `data-model.md` (hallazgo D9 de la revisión) |
+| J3 | ✅ `job_requirements`, con columnas por tipo en vez de `criteria jsonb` (§10.1) | Estaba solo en el LLD, no en `data-model.md` (hallazgo D9 de la revisión) |
 
 ## 8. API
 
@@ -155,7 +155,7 @@ Rutas de ejemplo; el contrato lo genera springdoc (ADR-0010). Heredan convencion
 | Método y ruta | Caso de uso | Límite | Errores clave |
 |---|---|---|---|
 | `POST /api/v1/job/postings` | `createjobposting` | escritura | 400, 403 `FORBIDDEN_CAPABILITY` |
-| `GET`/`PUT /api/v1/job/postings/{id}` | `getjobposting`, `updatejobposting` | lectura / escritura | 404, 409 |
+| `GET`/`PUT /api/v1/job/postings/{id}` | `getjobposting`, `updatejobposting` | lectura / escritura | 404, 409 `STALE_STATE` / `INVALID_STATE` |
 | `PUT /api/v1/job/postings/{id}/requirements` | `managejobrequirements` | escritura | 400, 404 |
 | `POST /api/v1/job/postings/{id}/transitions` `{to}` | `transitionjobposting` | escritura | 409 `INVALID_TRANSITION` / `STALE_STATE`, 400 si falta un requisito para publicar |
 | `PUT /api/v1/job/postings/{id}/accepting-applications` y `…/recruiting-stage` | los dos `set…` | escritura | 404, 409 |
@@ -178,12 +178,27 @@ Las rutas de la Ola 2 y 3 se concretan al empezarlas. Las pantallas HTMX (`/app/
 
 | Sub-paso | Entrega | Depende de |
 |---|---|---|
-| 1 | Migración de `job_postings` (con J1; `closed_at` ya está en el modelo) y `job_requirements`; dominio y máquina de estados con su prueba exhaustiva | `cv` sub-paso 1 (ya hecho) |
-| 2 | `createjobposting`, `updatejobposting`, `getjobposting` y el controlador JSON | 1 |
-| 3 | `managejobrequirements` | 1, ADR-0019 (enlace de habilidades; hasta entonces, texto libre) |
-| 4 | `transitionjobposting`, `setacceptingapplications`, `setrecruitingstage` y sus eventos | 2 |
-| 5 | `listjobpostings` con el filtro de visibilidad en SQL | 4 |
-| 6 | `getjobsignals` para `matching` | 3, TDD de `matching` |
+| 1 | ✅ Migración de `job_postings` (con J1; `closed_at` ya está en el modelo) y `job_requirements`; dominio y máquina de estados con su prueba exhaustiva | `cv` sub-paso 1 (ya hecho) |
+| 2 | ✅ `createjobposting`, `updatejobposting`, `getjobposting` y el controlador JSON | 1 |
+| 3 | ✅ `managejobrequirements` (habilidades en texto libre hasta ADR-0019) | 1, ADR-0019 (enlace de habilidades; hasta entonces, texto libre) |
+| 4 | ✅ `transitionjobposting`, `setacceptingapplications`, `setrecruitingstage` y sus eventos | 2 |
+| 5 | ⏳ `listjobpostings` con el filtro de visibilidad en SQL | 4 |
+| 6 | ✅ `getjobsignals` para `matching` (la lectura; el consumo en `matching` es TD-028) | 3, TDD de `matching` |
+
+### 10.1 Sub-pasos 1 a 4 y 6: qué se construyó y en qué se desvió de este documento
+
+Se construyó la vacante con su ciclo de vida manual de punta a punta: migración, dominio, ocho casos de uso, el controlador JSON y la lectura para `matching`. Decisiones que la primera versión no tenía:
+
+- **La máquina de estados es una tabla con iniciador.** `JobStatus.canMoveTo(destino, iniciador)` distingue `OWNER` de `SYSTEM`: `CLOSED → ARCHIVED` existe pero solo la dispara el sistema (BR-JOB-14), así que pedirla por la API da `409 INVALID_TRANSITION`. La prueba recorre los 50 pares `(origen, destino, iniciador)` y solo pasan los seis de §3.1.
+- **Dos errores nuevos en `common`.** `INVALID_TRANSITION` (el par no existe o no lo puede hacer quien lo pide) e `INVALID_STATE` (editar una archivada, pausar las postulaciones de una cerrada). Ambos son 409 y distintos de `STALE_STATE`: volver a leer y reintentar no los arregla.
+- **Toda escritura es *compare-and-set* sobre la versión**, y la versión sube con **cada** cambio (datos, requisitos, estado, ejes). Pedir lo que ya está guardado no sube la versión ni emite evento (BR-MATCH-03). Dos cierres simultáneos tienen exactamente un ganador, con Postgres real.
+- **Publicar exige una habilidad o una formación** (BR-JOB-02 lo dice así; §3 decía «un requisito estructurado» a secas). Solo años de experiencia o un idioma no alcanzan, porque no bastan para puntuar. La regla vale también para seguir publicada: reemplazar los requisitos de una vacante publicada por un conjunto sin habilidad ni formación es `400`.
+- **`job_requirements` con columnas por tipo, no `criteria jsonb`** (resuelve J3). El conjunto de tipos es cerrado y pequeño, y un `CHECK` por tipo hace que la base rechace un requisito mal formado o con columnas de otro tipo. El modelo genérico del ADR-0007 sigue siendo el de las reglas de elegibilidad, que sí es un catálogo abierto a crecer.
+- **Eventos con identificador y versión, sin contenido.** `job.posting_published`, `_closed`, `_reopened`, `_archived`, `_deleted`, `_updated` y `job.recruiting_stage_changed`, con el tipo de agregado `JOB_POSTING` para que el orden de entrega sea por vacante. Un borrador no emite nada: `matching` solo se entera al publicar (§5, regla 6). Pausar las postulaciones no emite: no cambia el contenido ni el score.
+- **La lectura de una vacante ajena responde `404` también a quien no es candidato**, no `403`: un `403` confirmaría que la vacante existe (§5, regla 2). Un candidato recibe además un contrato más corto, sin versión, etapa, fechas de gestión ni quién la escribió.
+- **`getjobsignals` entrega todo lo que no es borrador ni eliminada**, con su estado. Una cerrada o archivada sigue teniendo señales para que los scores ya calculados se puedan explicar; `matching` decide qué hacer con cada estado.
+
+**Pendiente de esta ola:** `listjobpostings` (sub-paso 5), que necesita el filtro de visibilidad en SQL; el consumo de `getjobsignals` en `matching` (`JobSignals`, `job_embeddings`; TD-028); y la decisión D1 (verificación de reclutador para publicar), que depende de un bloque que aún no existe y queda registrada en el registro de deuda (TD-030).
 
 La Ola 2 empieza por `manageeligibilityrules` y `validatejobeligibility` (que ya tienen carpeta), después la invitación y por último las preguntas; la Ola 3, por el archivado.
 

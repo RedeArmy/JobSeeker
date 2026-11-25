@@ -3,6 +3,8 @@ package com.usac.jobseeker.app.infrastructure.web;
 import com.usac.jobseeker.app.infrastructure.security.ErrorEnvelope;
 import com.usac.jobseeker.common.domain.error.AlreadyExistsException;
 import com.usac.jobseeker.common.domain.error.ForbiddenCapabilityException;
+import com.usac.jobseeker.common.domain.error.InvalidStateException;
+import com.usac.jobseeker.common.domain.error.InvalidTransitionException;
 import com.usac.jobseeker.common.domain.error.NotFoundException;
 import com.usac.jobseeker.common.domain.error.StaleStateException;
 import com.usac.jobseeker.common.domain.error.ValidationFailedException;
@@ -77,6 +79,29 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                 request,
                 "STALE_STATE",
                 "El recurso cambió mientras lo editabas; vuelve a cargarlo."));
+  }
+
+  /**
+   * El par `(origen, destino)` no existe o no lo puede hacer quien lo pide: 409 con su propio
+   * código, porque volver a leer y reintentar no lo arregla (a diferencia de `STALE_STATE`).
+   */
+  @ExceptionHandler(InvalidTransitionException.class)
+  ResponseEntity<Object> invalidTransition(HttpServletRequest request) {
+    return ResponseEntity.status(HttpStatus.CONFLICT)
+        .body(
+            ErrorEnvelope.body(
+                request,
+                "INVALID_TRANSITION",
+                "Ese cambio de estado no es válido desde el estado actual."));
+  }
+
+  /** La operación no aplica al estado actual del recurso: 409 con su propio código. */
+  @ExceptionHandler(InvalidStateException.class)
+  ResponseEntity<Object> invalidState(HttpServletRequest request) {
+    return ResponseEntity.status(HttpStatus.CONFLICT)
+        .body(
+            ErrorEnvelope.body(
+                request, "INVALID_STATE", "La operación no aplica al estado actual del recurso."));
   }
 
   /** Lo que se quiso crear ya existe: 409 con su propio código, distinto de una versión vieja. */

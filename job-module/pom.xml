@@ -14,8 +14,87 @@
     <packaging>jar</packaging>
 
     <name>job-module</name>
-    <description>POM de marcador de posición del módulo job. Aún sin dependencias.</description>
+    <description>Módulo job: vacante y su ciclo de vida. Ver docs/03-architecture/tdd/job-module.md.</description>
 
-    <!-- Los starters de Spring Boot y las dependencias propias del módulo se añadirán más adelante. -->
+    <dependencies>
+        <dependency>
+            <groupId>com.usac.jobseeker</groupId>
+            <artifactId>common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- Solo para el adaptador de salida que pregunta las capacidades de la cuenta (ARCH-04: un módulo usa
+             de otro únicamente sus casos de uso, y solo desde infrastructure.adapter). auth no depende de job. -->
+        <dependency>
+            <groupId>com.usac.jobseeker</groupId>
+            <artifactId>auth-module</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- Transacciones en application (ADR-0015, ARCH-02); JDBC y configuración solo en infrastructure. -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-tx</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
+        </dependency>
+        <!-- Log estructurado de los casos de uso (ADR-0012): solo la API, el motor lo pone `app`. -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+        <!-- Adaptador de entrada web (ARCH-08: los controladores viven en infrastructure.adapter.in.web) y las
+             anotaciones de OpenAPI que lo documentan (ADR-0010); el generador (springdoc) vive solo en `app`. -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.swagger.core.v3</groupId>
+            <artifactId>swagger-annotations-jakarta</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- El adaptador JDBC se prueba en este módulo, contra la tabla real que su propia migración crea
+             (Postgres 17, ADR-0028): un módulo prueba sus adaptadores sin depender de `app`. -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 
 </project>

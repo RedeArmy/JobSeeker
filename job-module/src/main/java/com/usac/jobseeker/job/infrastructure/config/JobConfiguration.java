@@ -1,0 +1,105 @@
+package com.usac.jobseeker.job.infrastructure.config;
+
+import com.usac.jobseeker.common.application.observability.UseCaseMetricsPort;
+import com.usac.jobseeker.common.application.outbox.DomainEventPublisherPort;
+import com.usac.jobseeker.job.application.support.CapabilityPort;
+import com.usac.jobseeker.job.application.support.JobChange;
+import com.usac.jobseeker.job.application.usecase.createjobposting.CreateJobPostingService;
+import com.usac.jobseeker.job.application.usecase.createjobposting.CreateJobPostingUseCase;
+import com.usac.jobseeker.job.application.usecase.getjobposting.GetJobPostingService;
+import com.usac.jobseeker.job.application.usecase.getjobposting.GetJobPostingUseCase;
+import com.usac.jobseeker.job.application.usecase.getjobsignals.GetJobSignalsService;
+import com.usac.jobseeker.job.application.usecase.getjobsignals.GetJobSignalsUseCase;
+import com.usac.jobseeker.job.application.usecase.managejobrequirements.ManageJobRequirementsService;
+import com.usac.jobseeker.job.application.usecase.managejobrequirements.ManageJobRequirementsUseCase;
+import com.usac.jobseeker.job.application.usecase.setacceptingapplications.SetAcceptingApplicationsService;
+import com.usac.jobseeker.job.application.usecase.setacceptingapplications.SetAcceptingApplicationsUseCase;
+import com.usac.jobseeker.job.application.usecase.setrecruitingstage.SetRecruitingStageService;
+import com.usac.jobseeker.job.application.usecase.setrecruitingstage.SetRecruitingStageUseCase;
+import com.usac.jobseeker.job.application.usecase.transitionjobposting.TransitionJobPostingService;
+import com.usac.jobseeker.job.application.usecase.transitionjobposting.TransitionJobPostingUseCase;
+import com.usac.jobseeker.job.application.usecase.updatejobposting.UpdateJobPostingService;
+import com.usac.jobseeker.job.application.usecase.updatejobposting.UpdateJobPostingUseCase;
+import com.usac.jobseeker.job.infrastructure.adapter.out.persistence.JdbcJobPostingRepository;
+import com.usac.jobseeker.job.infrastructure.adapter.out.persistence.JdbcJobRequirementsRepository;
+import java.time.Clock;
+import java.util.UUID;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.core.simple.JdbcClient;
+
+/** Cablea los casos de uso de `job` como beans: `application` no lleva estereotipos (ADR-0015). */
+@Configuration(proxyBeanMethods = false)
+class JobConfiguration {
+
+  @Bean
+  JdbcJobPostingRepository jdbcJobPostingRepository(JdbcClient jdbc) {
+    return new JdbcJobPostingRepository(jdbc);
+  }
+
+  @Bean
+  JdbcJobRequirementsRepository jdbcJobRequirementsRepository(JdbcClient jdbc) {
+    return new JdbcJobRequirementsRepository(jdbc);
+  }
+
+  // La bandeja la aporta `app` (ADR-0016) y el reloj de dominio es el del sistema en UTC; los
+  // identificadores se generan aquí para que el caso de uso sea determinista en las pruebas.
+  @Bean
+  JobChange jobChange(
+      JdbcJobPostingRepository postings,
+      JdbcJobRequirementsRepository requirements,
+      CapabilityPort capabilities,
+      DomainEventPublisherPort events,
+      UseCaseMetricsPort metrics) {
+    return new JobChange(postings, requirements, capabilities, events, metrics, UUID::randomUUID);
+  }
+
+  @Bean
+  CreateJobPostingUseCase createJobPostingUseCase(
+      JdbcJobPostingRepository postings, JobChange change) {
+    return new CreateJobPostingService(postings, change, Clock.systemUTC(), UUID::randomUUID);
+  }
+
+  @Bean
+  UpdateJobPostingUseCase updateJobPostingUseCase(JobChange change) {
+    return new UpdateJobPostingService(change, Clock.systemUTC());
+  }
+
+  @Bean
+  GetJobPostingUseCase getJobPostingUseCase(
+      JdbcJobPostingRepository postings,
+      JdbcJobRequirementsRepository requirements,
+      CapabilityPort capabilities,
+      UseCaseMetricsPort metrics) {
+    return new GetJobPostingService(postings, requirements, capabilities, metrics);
+  }
+
+  @Bean
+  ManageJobRequirementsUseCase manageJobRequirementsUseCase(
+      JdbcJobRequirementsRepository requirements, JobChange change) {
+    return new ManageJobRequirementsService(requirements, change, Clock.systemUTC());
+  }
+
+  @Bean
+  TransitionJobPostingUseCase transitionJobPostingUseCase(JobChange change) {
+    return new TransitionJobPostingService(change, Clock.systemUTC());
+  }
+
+  @Bean
+  SetAcceptingApplicationsUseCase setAcceptingApplicationsUseCase(JobChange change) {
+    return new SetAcceptingApplicationsService(change, Clock.systemUTC());
+  }
+
+  @Bean
+  SetRecruitingStageUseCase setRecruitingStageUseCase(JobChange change) {
+    return new SetRecruitingStageService(change, Clock.systemUTC());
+  }
+
+  @Bean
+  GetJobSignalsUseCase getJobSignalsUseCase(
+      JdbcJobPostingRepository postings,
+      JdbcJobRequirementsRepository requirements,
+      UseCaseMetricsPort metrics) {
+    return new GetJobSignalsService(postings, requirements, metrics);
+  }
+}
