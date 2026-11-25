@@ -19,7 +19,6 @@ import com.usac.jobseeker.job.application.usecase.setrecruitingstage.SetRecruiti
 import com.usac.jobseeker.job.domain.event.JobPostingEvents;
 import com.usac.jobseeker.job.domain.model.JobPostingId;
 import com.usac.jobseeker.job.domain.model.RecruitingStage;
-import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -63,8 +62,9 @@ class FlagsAndReadsTest {
     JobPostingView same = accepting.execute(pause(published, true));
 
     assertThat(same.posting().version()).isEqualTo(published.posting().version());
-    assertThatThrownBy(() -> accepting.execute(pause(f.draft(), false)))
-        .isInstanceOf(InvalidStateException.class);
+    var onADraft = pause(f.draft(), false);
+
+    assertThatThrownBy(() -> accepting.execute(onADraft)).isInstanceOf(InvalidStateException.class);
   }
 
   // BR-MATCH-08: REVIEWING saca la vacante de los sugeridos, y matching debe enterarse.
@@ -111,9 +111,11 @@ class FlagsAndReadsTest {
     JobPostingView draft = f.draft();
     JobPostingView closed = JobStates.closed(f);
 
-    assertThatThrownBy(() -> get.execute(new GetJobPostingQuery(candidate, draft.posting().id())))
-        .isInstanceOf(NotFoundException.class);
-    JobPostingView seen = get.execute(new GetJobPostingQuery(candidate, closed.posting().id()));
+    var draftQuery = new GetJobPostingQuery(candidate, draft.posting().id());
+    var closedQuery = new GetJobPostingQuery(candidate, closed.posting().id());
+
+    assertThatThrownBy(() -> get.execute(draftQuery)).isInstanceOf(NotFoundException.class);
+    JobPostingView seen = get.execute(closedQuery);
     assertThat(seen.ownedByViewer()).isFalse();
     assertThat(seen.requirements()).hasSize(1);
   }
@@ -123,12 +125,11 @@ class FlagsAndReadsTest {
   void anAccountThatIsNeitherOwnerNorCandidateGetsTheSameAnswerAsAMissingPosting() {
     JobPostingView published = JobStates.published(f);
 
-    assertThatThrownBy(
-            () -> get.execute(new GetJobPostingQuery(f.stranger, published.posting().id())))
-        .isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(
-            () -> get.execute(new GetJobPostingQuery(f.owner, new JobPostingId(UUID.randomUUID()))))
-        .isInstanceOf(NotFoundException.class);
+    var byStranger = new GetJobPostingQuery(f.stranger, published.posting().id());
+    var unknown = new GetJobPostingQuery(f.owner, new JobPostingId(UUID.randomUUID()));
+
+    assertThatThrownBy(() -> get.execute(byStranger)).isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(() -> get.execute(unknown)).isInstanceOf(NotFoundException.class);
   }
 
   // ---- lectura para matching ----
@@ -167,7 +168,7 @@ class FlagsAndReadsTest {
     assertThat(signals.execute(new GetJobSignalsQuery(draft.posting().id()))).isEmpty();
     assertThat(signals.execute(new GetJobSignalsQuery(deletedDraft.posting().id()))).isEmpty();
     assertThat(signals.execute(new GetJobSignalsQuery(new JobPostingId(UUID.randomUUID()))))
-        .isEqualTo(Optional.empty());
+        .isEmpty();
   }
 
   @Test

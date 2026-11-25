@@ -84,7 +84,9 @@ class RequirementsAndTransitionsTest {
   void aPublishedPostingCannotLoseItsLastSkillOrEducation() {
     JobPostingView published = JobStates.published(f);
 
-    assertThatThrownBy(() -> requirements.execute(setOf(published)))
+    var empty = setOf(published);
+
+    assertThatThrownBy(() -> requirements.execute(empty))
         .isInstanceOf(ValidationFailedException.class);
     assertThat(f.store.findByPosting(published.posting().id())).hasSize(1);
   }
@@ -102,7 +104,9 @@ class RequirementsAndTransitionsTest {
     JobPostingView draft = f.draft();
     var bad = new JobRequirementDraft(RequirementType.SKILL, true, " ", 9, null, null, null, null);
 
-    assertThatThrownBy(() -> requirements.execute(setOf(draft, bad)))
+    var command = setOf(draft, bad);
+
+    assertThatThrownBy(() -> requirements.execute(command))
         .isInstanceOf(ValidationFailedException.class);
     assertThat(f.store.findByPosting(draft.posting().id())).isEmpty();
     assertThat(f.metrics).last().isEqualTo("manage_job_requirements:invalid");
@@ -128,7 +132,9 @@ class RequirementsAndTransitionsTest {
   void publishingNeedsAStructuredRequirement() {
     JobPostingView draft = f.draft();
 
-    assertThatThrownBy(() -> transitions.execute(move(draft, JobStatus.PUBLISHED)))
+    var publish = move(draft, JobStatus.PUBLISHED);
+
+    assertThatThrownBy(() -> transitions.execute(publish))
         .isInstanceOf(ValidationFailedException.class);
     assertThat(f.store.findById(draft.posting().id()).orElseThrow().status())
         .isEqualTo(JobStatus.DRAFT);
@@ -170,11 +176,15 @@ class RequirementsAndTransitionsTest {
     JobPostingView closed = JobStates.closed(f);
     JobPostingView draft = f.draft();
 
-    assertThatThrownBy(() -> transitions.execute(move(closed, JobStatus.ARCHIVED)))
+    var archive = move(closed, JobStatus.ARCHIVED);
+    var closeADraft = move(draft, JobStatus.CLOSED);
+    var backToDraft = move(draft, JobStatus.DRAFT);
+
+    assertThatThrownBy(() -> transitions.execute(archive))
         .isInstanceOf(InvalidTransitionException.class);
-    assertThatThrownBy(() -> transitions.execute(move(draft, JobStatus.CLOSED)))
+    assertThatThrownBy(() -> transitions.execute(closeADraft))
         .isInstanceOf(InvalidTransitionException.class);
-    assertThatThrownBy(() -> transitions.execute(move(draft, JobStatus.DRAFT)))
+    assertThatThrownBy(() -> transitions.execute(backToDraft))
         .isInstanceOf(InvalidTransitionException.class);
     assertThat(f.metrics).contains("transition_job_posting:invalid_transition");
   }
@@ -184,9 +194,12 @@ class RequirementsAndTransitionsTest {
     JobPostingView archived = JobStates.archived(f);
     f.events.clear();
 
-    assertThatThrownBy(() -> transitions.execute(move(archived, JobStatus.PUBLISHED)))
+    var reopen = move(archived, JobStatus.PUBLISHED);
+    var delete = move(archived, JobStatus.DELETED);
+
+    assertThatThrownBy(() -> transitions.execute(reopen))
         .isInstanceOf(InvalidTransitionException.class);
-    transitions.execute(move(archived, JobStatus.DELETED));
+    transitions.execute(delete);
 
     assertThat(f.eventTypes()).containsExactly(JobPostingEvents.DELETED);
   }
@@ -209,7 +222,9 @@ class RequirementsAndTransitionsTest {
     JobPostingView draft = f.draft();
     f.capabilities.recruiters.remove(f.owner);
 
-    assertThatThrownBy(() -> transitions.execute(move(draft, JobStatus.DELETED)))
+    var discard = move(draft, JobStatus.DELETED);
+
+    assertThatThrownBy(() -> transitions.execute(discard))
         .isInstanceOf(ForbiddenCapabilityException.class);
 
     var foreign =

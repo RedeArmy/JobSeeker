@@ -478,8 +478,8 @@ class JobPostingEndpointIntegrationTest {
             String.class,
             id);
 
-    assertThat(payloads).isNotEmpty();
     assertThat(payloads)
+        .isNotEmpty()
         .allSatisfy(
             payload ->
                 assertThat(payload)

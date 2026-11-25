@@ -51,7 +51,9 @@ class CreateAndUpdateJobPostingTest {
     f.capabilities.recruiters.remove(f.owner);
     var invalid = new JobDetailsInput("", "", null, null, null, null, null, null);
 
-    assertThatThrownBy(() -> create.execute(new CreateJobPostingCommand(f.owner, invalid)))
+    var command = new CreateJobPostingCommand(f.owner, invalid);
+
+    assertThatThrownBy(() -> create.execute(command))
         .isInstanceOf(ForbiddenCapabilityException.class);
     assertThat(f.store.postings).isEmpty();
     assertThat(f.metrics).containsExactly("create_job_posting:forbidden");
@@ -61,8 +63,9 @@ class CreateAndUpdateJobPostingTest {
   void invalidDataIsCountedAndNothingIsSaved() {
     var invalid = new JobDetailsInput(" ", "d", null, null, null, null, null, null);
 
-    assertThatThrownBy(() -> create.execute(new CreateJobPostingCommand(f.owner, invalid)))
-        .isInstanceOf(ValidationFailedException.class);
+    var command = new CreateJobPostingCommand(f.owner, invalid);
+
+    assertThatThrownBy(() -> create.execute(command)).isInstanceOf(ValidationFailedException.class);
     assertThat(f.store.postings).isEmpty();
     assertThat(f.metrics).containsExactly("create_job_posting:invalid");
   }
@@ -123,30 +126,30 @@ class CreateAndUpdateJobPostingTest {
     var foreign =
         new UpdateJobPostingCommand(f.stranger, draft.posting().id(), 1, JobFixture.input("X"));
 
+    var unknown =
+        new UpdateJobPostingCommand(
+            f.owner, new JobPostingId(UUID.randomUUID()), 1, JobFixture.input("X"));
+
     assertThatThrownBy(() -> update.execute(foreign)).isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(
-            () ->
-                update.execute(
-                    new UpdateJobPostingCommand(
-                        f.owner, new JobPostingId(UUID.randomUUID()), 1, JobFixture.input("X"))))
-        .isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(() -> update.execute(unknown)).isInstanceOf(NotFoundException.class);
   }
 
   @Test
   void anArchivedPostingCannotBeEdited() {
     JobPostingView archived = JobStates.archived(f);
 
-    assertThatThrownBy(() -> update.execute(edit(archived, JobFixture.input("Tarde"))))
-        .isInstanceOf(InvalidStateException.class);
+    var command = edit(archived, JobFixture.input("Tarde"));
+
+    assertThatThrownBy(() -> update.execute(command)).isInstanceOf(InvalidStateException.class);
     assertThat(f.metrics).last().isEqualTo("update_job_posting:invalid_state");
   }
 
   @Test
   void aNegativeVersionIsAValidationErrorNotAStaleOne() {
-    assertThatThrownBy(
-            () ->
-                new UpdateJobPostingCommand(
-                    f.owner, new JobPostingId(UUID.randomUUID()), -1, JobFixture.input("X")))
+    var id = new JobPostingId(UUID.randomUUID());
+    var input = JobFixture.input("X");
+
+    assertThatThrownBy(() -> new UpdateJobPostingCommand(f.owner, id, -1, input))
         .isInstanceOf(ValidationFailedException.class);
   }
 }

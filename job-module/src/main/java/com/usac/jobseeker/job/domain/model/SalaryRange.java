@@ -14,9 +14,6 @@ import java.util.Objects;
  */
 public record SalaryRange(BigDecimal min, BigDecimal max, String currency, SalaryPeriod period) {
 
-  /** Los decimales de la columna `numeric(14,2)`. */
-  private static final int SCALE = 2;
-
   public SalaryRange {
     Objects.requireNonNull(currency, "currency");
     Objects.requireNonNull(period, "period");

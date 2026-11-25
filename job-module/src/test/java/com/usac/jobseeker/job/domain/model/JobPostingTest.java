@@ -138,9 +138,11 @@ class JobPostingTest {
         .isEqualTo(RecruitingStage.REVIEWING);
     assertThat(posting.withAcceptingApplications(false, T2).status())
         .isEqualTo(JobStatus.PUBLISHED);
-    assertThatThrownBy(() -> draft().withAcceptingApplications(false, T1))
+    JobPosting aDraft = draft();
+
+    assertThatThrownBy(() -> aDraft.withAcceptingApplications(false, T1))
         .isInstanceOf(InvalidStateException.class);
-    assertThatThrownBy(() -> draft().withRecruitingStage(RecruitingStage.REVIEWING, T1))
+    assertThatThrownBy(() -> aDraft.withRecruitingStage(RecruitingStage.REVIEWING, T1))
         .isInstanceOf(InvalidStateException.class);
   }
 
@@ -160,13 +162,15 @@ class JobPostingTest {
   @Test
   void aSavedPostingNeverHasAVersionBelowOne() {
     JobPosting posting = draft();
+    JobPostingId id = posting.id();
+    JobDetails details = posting.details();
 
     assertThatThrownBy(
             () ->
                 new JobPosting(
-                    posting.id(),
+                    id,
                     OWNER,
-                    posting.details(),
+                    details,
                     JobStatus.DRAFT,
                     true,
                     RecruitingStage.HIRING,

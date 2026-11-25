@@ -234,28 +234,36 @@ class JdbcJobRepositoriesTest {
 
   // ---- la base como última defensa ----
 
-  private void rawInsert(String sql) {
-    jdbc.sql(sql).param("owner", owner.value()).param("id", UUID.randomUUID()).update();
-  }
-
   private static final String COLUMNS =
       "insert into job_postings (id, recruiter_account_id, title, description, %s) values"
           + " (:id, :owner, 'T', 'D', %s)";
 
+  /** Inserta una vacante con una sola columna extra, por SQL, saltándose el dominio. */
+  private void rawInsert(String column, String value) {
+    jdbc.sql(COLUMNS.formatted(column, value))
+        .param("owner", owner.value())
+        .param("id", UUID.randomUUID())
+        .update();
+  }
+
   @Test
   void theDatabaseRejectsWhatTheDomainWouldAlreadyRefuse() {
-    assertThatThrownBy(() -> rawInsert(COLUMNS.formatted("status", "'ARCHIVEDX'")))
+    assertThatThrownBy(() -> rawInsert("status", "'ARCHIVEDX'"))
         .isInstanceOf(DataIntegrityViolationException.class);
     // Moneda sin importe ni periodo (BR-JOB-21).
-    assertThatThrownBy(() -> rawInsert(COLUMNS.formatted("salary_currency", "'USD'")))
+    assertThatThrownBy(() -> rawInsert("salary_currency", "'USD'"))
         .isInstanceOf(DataIntegrityViolationException.class);
-    assertThatThrownBy(() -> rawInsert(COLUMNS.formatted("country", "'gt'")))
+    assertThatThrownBy(() -> rawInsert("country", "'gt'"))
         .isInstanceOf(DataIntegrityViolationException.class);
     // Publicada sin fecha de publicación: el estado y sus marcas deben ser coherentes.
-    assertThatThrownBy(() -> rawInsert(COLUMNS.formatted("status", "'PUBLISHED'")))
+    assertThatThrownBy(() -> rawInsert("status", "'PUBLISHED'"))
         .isInstanceOf(DataIntegrityViolationException.class);
-    assertThatThrownBy(() -> rawInsert(COLUMNS.formatted("status", "'DELETED'")))
+    assertThatThrownBy(() -> rawInsert("status", "'DELETED'"))
         .isInstanceOf(DataIntegrityViolationException.class);
+  }
+
+  private void insertRequirement(String sql, UUID postingId) {
+    jdbc.sql(sql).param("id", UUID.randomUUID()).param("posting", postingId).update();
   }
 
   @Test
@@ -266,19 +274,13 @@ class JdbcJobRepositoriesTest {
         "insert into job_requirements (id, job_posting_id, requirement_type, position, %s)"
             + " values (:id, :posting, %s, 0, %s)";
 
-    assertThatThrownBy(
-            () ->
-                jdbc.sql(sql.formatted("education_level", "'SKILL'", "'BACHELOR'"))
-                    .param("id", UUID.randomUUID())
-                    .param("posting", posting.id().value())
-                    .update())
+    String educationOnASkill = sql.formatted("education_level", "'SKILL'", "'BACHELOR'");
+    String yearsOnAnExperience = sql.formatted("min_years", "'EXPERIENCE_YEARS'", "0");
+    UUID postingId = posting.id().value();
+
+    assertThatThrownBy(() -> insertRequirement(educationOnASkill, postingId))
         .isInstanceOf(DataIntegrityViolationException.class);
-    assertThatThrownBy(
-            () ->
-                jdbc.sql(sql.formatted("min_years", "'EXPERIENCE_YEARS'", "0"))
-                    .param("id", UUID.randomUUID())
-                    .param("posting", posting.id().value())
-                    .update())
+    assertThatThrownBy(() -> insertRequirement(yearsOnAnExperience, postingId))
         .isInstanceOf(DataIntegrityViolationException.class);
   }
 
@@ -289,14 +291,10 @@ class JdbcJobRepositoriesTest {
     String sql =
         "insert into job_requirements (id, job_posting_id, requirement_type, position, skill_name)"
             + " values (:id, :posting, 'SKILL', 0, 'x')";
-    jdbc.sql(sql).param("id", UUID.randomUUID()).param("posting", posting.id().value()).update();
+    UUID postingId = posting.id().value();
+    insertRequirement(sql, postingId);
 
-    assertThatThrownBy(
-            () ->
-                jdbc.sql(sql)
-                    .param("id", UUID.randomUUID())
-                    .param("posting", posting.id().value())
-                    .update())
+    assertThatThrownBy(() -> insertRequirement(sql, postingId))
         .isInstanceOf(DataIntegrityViolationException.class);
   }
 
