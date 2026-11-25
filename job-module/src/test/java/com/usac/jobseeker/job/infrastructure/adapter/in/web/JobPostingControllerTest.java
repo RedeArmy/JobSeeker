@@ -201,10 +201,11 @@ class JobPostingControllerTest {
   @Test
   void aPostingIdThatIsNotAUuidIsNotFound() {
     Principal who = principal(caller);
+    var edit = body(1L);
 
     assertThatThrownBy(() -> controller.getPosting(who, "xyz"))
         .isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(() -> controller.updatePosting(who, "xyz", body(1L)))
+    assertThatThrownBy(() -> controller.updatePosting(who, "xyz", edit))
         .isInstanceOf(NotFoundException.class);
     assertThat(received).isEmpty();
   }
