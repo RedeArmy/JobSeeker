@@ -2,6 +2,9 @@
 # `MatchingProperties`; aquí solo se enlazan las variables de entorno de Ollama (`.env.example`).
 jobseeker:
   matching:
+    # Candidatos sugeridos (REQ-R-11): cuántos perfiles únicos puede ver un reclutador verificado por ventana.
+    suggestions:
+      view-quota: ${MATCHING_PROFILE_VIEW_QUOTA:200}
     embedding:
       host: ${OLLAMA_HOST:localhost}
       port: ${OLLAMA_PORT:11434}

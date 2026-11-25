@@ -17,6 +17,11 @@ import com.usac.jobseeker.matching.application.usecase.embedentity.HandleProfile
 import com.usac.jobseeker.matching.application.usecase.embedentity.JobSignalsReader;
 import com.usac.jobseeker.matching.application.usecase.embedentity.ProcessEmbeddingQueueService;
 import com.usac.jobseeker.matching.application.usecase.embedentity.ProcessEmbeddingQueueUseCase;
+import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.OwnedJobPort;
+import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.RecruiterTrustPort;
+import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.SuggestCandidatesForJobService;
+import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.SuggestCandidatesForJobUseCase;
+import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.SuggestionsPolicy;
 import com.usac.jobseeker.matching.infrastructure.adapter.in.event.JobEventsConsumer;
 import com.usac.jobseeker.matching.infrastructure.adapter.in.event.ProfileEventsConsumer;
 import com.usac.jobseeker.matching.infrastructure.adapter.in.job.EmbeddingWorker;
@@ -24,6 +29,7 @@ import com.usac.jobseeker.matching.infrastructure.adapter.out.ai.OllamaEmbedding
 import com.usac.jobseeker.matching.infrastructure.adapter.out.metrics.EmbeddingQueueMetrics;
 import com.usac.jobseeker.matching.infrastructure.adapter.out.persistence.JdbcEmbeddingRepository;
 import com.usac.jobseeker.matching.infrastructure.adapter.out.persistence.JdbcEmbeddingWorkQueue;
+import com.usac.jobseeker.matching.infrastructure.adapter.out.persistence.JdbcProfileViewLog;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.time.Clock;
@@ -146,6 +152,31 @@ class MatchingConfiguration {
   @Bean
   OutboxEventConsumer jobEventsConsumer(HandleJobEventUseCase handler) {
     return new JobEventsConsumer(handler);
+  }
+
+  @Bean
+  JdbcProfileViewLog jdbcProfileViewLog(JdbcClient jdbc) {
+    return new JdbcProfileViewLog(jdbc);
+  }
+
+  @Bean
+  SuggestCandidatesForJobUseCase suggestCandidatesForJobUseCase(
+      RecruiterTrustPort trust,
+      OwnedJobPort ownedJobs,
+      JdbcEmbeddingRepository embeddings,
+      JdbcProfileViewLog views,
+      UseCaseMetricsPort metrics,
+      MatchingProperties properties) {
+    MatchingProperties.Suggestions s = properties.suggestions();
+    return new SuggestCandidatesForJobService(
+        trust,
+        ownedJobs,
+        embeddings,
+        embeddings,
+        views,
+        new SuggestionsPolicy(s.viewQuota(), s.window(), s.maxPageSize()),
+        metrics,
+        Clock.systemUTC());
   }
 
   @Bean

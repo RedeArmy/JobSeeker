@@ -1,8 +1,10 @@
 package com.usac.jobseeker.app.infrastructure.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.usac.jobseeker.app.InfrastructureTestConfiguration;
@@ -172,6 +174,7 @@ class MatchingEmbeddingEndToEndIntegrationTest {
     ollamaStatus = 200;
     jdbc.update("delete from outbox_events");
     jdbc.update("delete from matching_work_queue");
+    jdbc.update("delete from profile_view_log");
   }
 
   private UUID candidateWithEverything() throws Exception {
@@ -689,5 +692,213 @@ class MatchingEmbeddingEndToEndIntegrationTest {
     assertThat(hasVector(candidateId)).isTrue();
     assertThat(jobHasVector(jobId)).isTrue();
     assertThat(OLLAMA_CALLS.get()).isEqualTo(2);
+  }
+
+  // ---- candidatos sugeridos (REQ-R-10, REQ-R-11) ----
+
+  private static final String ERROR_CODE = "$.error.code";
+
+  private String suggestionsOf(String jobId) {
+    return "/api/v1/matching/jobs/" + jobId + "/suggestions";
+  }
+
+  private UUID recruiterWith(String verification) {
+    UUID id = recruiter();
+    jdbc.update("update accounts set recruiter_verification = ? where id = ?", verification, id);
+    return id;
+  }
+
+  /**
+   * Un candidato descubrible con vector y una vacante publicada con vector, de un dueño verificado.
+   */
+  private record World(UUID candidate, UUID profileId, UUID owner, String jobId) {}
+
+  private World worldWithAVerifiedOwner() throws Exception {
+    UUID candidateId = candidateWithEverything();
+    UUID owner = recruiterWith("VERIFIED");
+    String jobId = publishedJob(owner, "Backend");
+    deliverEvents();
+    runWorker();
+    UUID profileId =
+        jdbc.queryForObject(
+            "select candidate_profile_id from profile_embedding_accounts where account_id = ?",
+            UUID.class,
+            candidateId);
+    return new World(candidateId, profileId, owner, jobId);
+  }
+
+  private int viewLogRows() {
+    return jdbc.queryForObject("select count(*) from profile_view_log", Integer.class);
+  }
+
+  @Test
+  void anUnverifiedRecruiterSeesNoCandidatesAndNothingIsLogged() throws Exception {
+    World world = worldWithAVerifiedOwner();
+    jdbc.update(
+        "update accounts set recruiter_verification = 'UNVERIFIED' where id = ?", world.owner());
+
+    mvc.perform(authed(get(suggestionsOf(world.jobId())), world.owner()))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath(ERROR_CODE).value("RECRUITER_NOT_VERIFIED"));
+
+    assertThat(viewLogRows()).isZero();
+  }
+
+  @Test
+  void aSuspendedRecruiterSeesNoCandidates() throws Exception {
+    World world = worldWithAVerifiedOwner();
+    jdbc.update(
+        "update accounts set recruiter_verification = 'SUSPENDED' where id = ?", world.owner());
+
+    mvc.perform(authed(get(suggestionsOf(world.jobId())), world.owner()))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath(ERROR_CODE).value("RECRUITER_SUSPENDED"));
+  }
+
+  @Test
+  void aVerifiedOwnerSeesTheDiscoverableCandidateWithoutAnyScoreOrPersonalData() throws Exception {
+    World world = worldWithAVerifiedOwner();
+
+    String body =
+        mvc.perform(authed(get(suggestionsOf(world.jobId())), world.owner()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("OK"))
+            .andExpect(
+                jsonPath("$.candidates[?(@.candidateProfileId=='" + world.profileId() + "')]")
+                    .exists())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    // ADR-0017: el coseno bruto nunca llega a una respuesta; BR-DATA-01: ningún dato personal.
+    assertThat(body)
+        .doesNotContainIgnoringCase("similarity")
+        .doesNotContainIgnoringCase("score")
+        .doesNotContain(SECRET_NAME)
+        .doesNotContain(SECRET_EMAIL);
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from profile_view_log where viewer_account_id = ?"
+                    + " and candidate_profile_id = ? and job_posting_id = ?::uuid",
+                Integer.class,
+                world.owner(),
+                world.profileId(),
+                world.jobId()))
+        .isEqualTo(1);
+  }
+
+  @Test
+  void seeingTheSameListAgainDoesNotSpendQuota() throws Exception {
+    World world = worldWithAVerifiedOwner();
+    var first =
+        mvc.perform(authed(get(suggestionsOf(world.jobId())), world.owner()))
+            .andExpect(status().isOk())
+            .andReturn();
+    int remaining =
+        com.jayway.jsonpath.JsonPath.read(
+            first.getResponse().getContentAsString(), "$.remainingQuota");
+
+    mvc.perform(authed(get(suggestionsOf(world.jobId())), world.owner()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.remainingQuota").value(remaining));
+  }
+
+  @Test
+  void aProfileThatHidItselfIsNotSuggested() throws Exception {
+    World world = worldWithAVerifiedOwner();
+    mvc.perform(
+            json(
+                put(CANDIDATE + "/discoverability"),
+                world.candidate(),
+                "{\"discoverable\":false,\"version\":2}"))
+        .andExpect(status().isOk());
+    deliverEvents();
+    runWorker();
+
+    mvc.perform(authed(get(suggestionsOf(world.jobId())), world.owner()))
+        .andExpect(status().isOk())
+        .andExpect(
+            jsonPath("$.candidates[?(@.candidateProfileId=='" + world.profileId() + "')]")
+                .doesNotExist());
+  }
+
+  @Test
+  void aRecruiterWhoAlreadySawTheQuotaOfUniqueProfilesGetsTooManyRequests() throws Exception {
+    World world = worldWithAVerifiedOwner();
+    for (int i = 0; i < 200; i++) {
+      jdbc.update(
+          "insert into profile_view_log (id, viewer_account_id, candidate_profile_id,"
+              + " job_posting_id, context) values (?, ?, ?, ?, 'SUGGESTION')",
+          UUID.randomUUID(),
+          world.owner(),
+          UUID.randomUUID(),
+          UUID.fromString(world.jobId()));
+    }
+
+    mvc.perform(authed(get(suggestionsOf(world.jobId())), world.owner()))
+        .andExpect(status().isTooManyRequests())
+        .andExpect(jsonPath(ERROR_CODE).value("QUOTA_EXCEEDED"));
+  }
+
+  @Test
+  void aJobOfAnotherRecruiterDoesNotExistForTheCaller() throws Exception {
+    World world = worldWithAVerifiedOwner();
+
+    mvc.perform(authed(get(suggestionsOf(world.jobId())), recruiterWith("VERIFIED")))
+        .andExpect(status().isNotFound());
+    mvc.perform(authed(get(suggestionsOf(UUID.randomUUID().toString())), world.owner()))
+        .andExpect(status().isNotFound());
+    mvc.perform(authed(get(suggestionsOf("no-es-un-uuid")), world.owner()))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  void anAccountWithoutTheRecruiterCapabilityIsForbidden() throws Exception {
+    World world = worldWithAVerifiedOwner();
+
+    mvc.perform(authed(get(suggestionsOf(world.jobId())), world.candidate()))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath(ERROR_CODE).value("FORBIDDEN_CAPABILITY"));
+  }
+
+  @Test
+  void aJobThatIsNotPublishedIsAConflict() throws Exception {
+    UUID owner = recruiterWith("VERIFIED");
+    String draft = draftJob(owner, "Borrador");
+
+    mvc.perform(authed(get(suggestionsOf(draft)), owner))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath(ERROR_CODE).value("INVALID_STATE"));
+  }
+
+  // BR-MATCH-08: en REVIEWING deja de generar entradas nuevas.
+  @Test
+  void aJobInReviewingIsPausedAndLogsNothing() throws Exception {
+    World world = worldWithAVerifiedOwner();
+    jdbc.update(
+        "update job_postings set recruiting_stage = 'REVIEWING' where id = ?::uuid", world.jobId());
+
+    mvc.perform(authed(get(suggestionsOf(world.jobId())), world.owner()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("PAUSED"))
+        .andExpect(jsonPath("$.candidates").isEmpty());
+
+    assertThat(viewLogRows()).isZero();
+  }
+
+  @Test
+  void aPageSizeOutOfRangeIsABadRequest() throws Exception {
+    World world = worldWithAVerifiedOwner();
+
+    mvc.perform(authed(get(suggestionsOf(world.jobId())).param("size", "0"), world.owner()))
+        .andExpect(status().isBadRequest());
+    mvc.perform(authed(get(suggestionsOf(world.jobId())).param("size", "51"), world.owner()))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void withoutATokenTheEndpointIsUnauthorized() throws Exception {
+    mvc.perform(get(suggestionsOf(UUID.randomUUID().toString())))
+        .andExpect(status().isUnauthorized());
   }
 }

@@ -10,9 +10,13 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *
  * @param embedding el modelo de embeddings y cómo se le habla (ADR-0018)
  * @param queue la cola de cálculo y la ventana de agrupación de ediciones (ADR-0017, decisión 10)
+ * @param suggestions los topes de los candidatos sugeridos (REQ-R-11)
  */
 @ConfigurationProperties("jobseeker.matching")
-public record MatchingProperties(@DefaultValue Embedding embedding, @DefaultValue Queue queue) {
+public record MatchingProperties(
+    @DefaultValue Embedding embedding,
+    @DefaultValue Queue queue,
+    @DefaultValue Suggestions suggestions) {
 
   /**
    * @param host y @param port: dónde está Ollama
@@ -49,4 +53,15 @@ public record MatchingProperties(@DefaultValue Embedding embedding, @DefaultValu
       @DefaultValue("12") int maxAttempts,
       @DefaultValue("5s") Duration baseBackoff,
       @DefaultValue("5m") Duration maxBackoff) {}
+
+  /**
+   * @param viewQuota perfiles únicos que un reclutador puede ver por ventana: lo bastante para
+   *     trabajar con comodidad y poco para recorrer la base de candidatos (amenaza T-N1)
+   * @param window la ventana móvil de la cuota
+   * @param maxPageSize el máximo de candidatos por petición
+   */
+  public record Suggestions(
+      @DefaultValue("200") int viewQuota,
+      @DefaultValue("24h") Duration window,
+      @DefaultValue("50") int maxPageSize) {}
 }
