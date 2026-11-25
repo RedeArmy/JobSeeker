@@ -6,6 +6,7 @@ import com.usac.jobseeker.common.domain.error.ForbiddenCapabilityException;
 import com.usac.jobseeker.common.domain.error.InvalidStateException;
 import com.usac.jobseeker.common.domain.error.InvalidTransitionException;
 import com.usac.jobseeker.common.domain.error.NotFoundException;
+import com.usac.jobseeker.common.domain.error.PublishingDeniedException;
 import com.usac.jobseeker.common.domain.error.StaleStateException;
 import com.usac.jobseeker.common.domain.error.ValidationFailedException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -102,6 +103,39 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         .body(
             ErrorEnvelope.body(
                 request, "INVALID_STATE", "La operación no aplica al estado actual del recurso."));
+  }
+
+  /**
+   * La cuenta reclutadora no puede publicar más por la confianza que se le tiene (REQ-R-10). Cada
+   * motivo tiene su código: el cliente puede ofrecer verificarse, o liberar una vacante, y no son
+   * lo mismo. `QUOTA_EXCEEDED` es 429 como el resto de topes de uso (LLD §438).
+   */
+  @ExceptionHandler(PublishingDeniedException.class)
+  ResponseEntity<Object> publishingDenied(
+      PublishingDeniedException denied, HttpServletRequest request) {
+    return switch (denied.reason()) {
+      case NOT_VERIFIED ->
+          ResponseEntity.status(HttpStatus.FORBIDDEN)
+              .body(
+                  ErrorEnvelope.body(
+                      request,
+                      "RECRUITER_NOT_VERIFIED",
+                      "Verifica tu cuenta de reclutador para publicar más vacantes."));
+      case SUSPENDED ->
+          ResponseEntity.status(HttpStatus.FORBIDDEN)
+              .body(
+                  ErrorEnvelope.body(
+                      request,
+                      "RECRUITER_SUSPENDED",
+                      "Tu cuenta de reclutador está suspendida y no puede publicar."));
+      case QUOTA_EXCEEDED ->
+          ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+              .body(
+                  ErrorEnvelope.body(
+                      request,
+                      "QUOTA_EXCEEDED",
+                      "Alcanzaste el máximo de vacantes publicadas; cierra alguna para publicar otra."));
+    };
   }
 
   /** Lo que se quiso crear ya existe: 409 con su propio código, distinto de una versión vieja. */

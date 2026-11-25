@@ -62,7 +62,9 @@ class AccountWritersNotifyTheObserverTest {
         .as("escritores de `accounts` en código de producción")
         .extracting(p -> p.getFileName().toString())
         .containsExactlyInAnyOrder(
-            "JdbcAccountRepository.java", "JdbcIdentityStateRepository.java");
+            "JdbcAccountRepository.java",
+            "JdbcIdentityStateRepository.java",
+            "JdbcRecruiterVerificationRepository.java");
     for (Path writer : writers) {
       assertThat(Files.readString(writer))
           .as("%s debe avisar con observer.accountChanged(...)", writer.getFileName())

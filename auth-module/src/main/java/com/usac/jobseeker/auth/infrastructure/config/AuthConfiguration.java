@@ -1,7 +1,11 @@
 package com.usac.jobseeker.auth.infrastructure.config;
 
+import com.usac.jobseeker.auth.application.usecase.changerecruiterverification.ChangeRecruiterVerificationService;
+import com.usac.jobseeker.auth.application.usecase.changerecruiterverification.ChangeRecruiterVerificationUseCase;
 import com.usac.jobseeker.auth.application.usecase.getmyaccount.GetMyAccountService;
 import com.usac.jobseeker.auth.application.usecase.getmyaccount.GetMyAccountUseCase;
+import com.usac.jobseeker.auth.application.usecase.getrecruiterverification.GetRecruiterVerificationService;
+import com.usac.jobseeker.auth.application.usecase.getrecruiterverification.GetRecruiterVerificationUseCase;
 import com.usac.jobseeker.auth.application.usecase.handleclavariswebhook.HandleClavarisWebhookService;
 import com.usac.jobseeker.auth.application.usecase.handleclavariswebhook.HandleClavarisWebhookUseCase;
 import com.usac.jobseeker.auth.application.usecase.provisionaccount.ProvisionAccountService;
@@ -10,6 +14,7 @@ import com.usac.jobseeker.auth.application.usecase.resolveactor.ResolveActorServ
 import com.usac.jobseeker.auth.application.usecase.resolveactor.ResolveActorUseCase;
 import com.usac.jobseeker.auth.infrastructure.adapter.out.persistence.JdbcAccountRepository;
 import com.usac.jobseeker.auth.infrastructure.adapter.out.persistence.JdbcIdentityStateRepository;
+import com.usac.jobseeker.auth.infrastructure.adapter.out.persistence.JdbcRecruiterVerificationRepository;
 import com.usac.jobseeker.common.application.account.AccountChangeObserver;
 import com.usac.jobseeker.common.application.idempotency.ProcessedEventsPort;
 import com.usac.jobseeker.common.application.observability.UseCaseMetricsPort;
@@ -62,5 +67,24 @@ class AuthConfiguration {
   @Bean
   ResolveActorUseCase resolveActorUseCase(JdbcAccountRepository repository) {
     return new ResolveActorService(repository);
+  }
+
+  @Bean
+  JdbcRecruiterVerificationRepository jdbcRecruiterVerificationRepository(
+      JdbcClient jdbc, ObjectProvider<AccountChangeObserver> observer) {
+    return new JdbcRecruiterVerificationRepository(
+        jdbc, observer.getIfAvailable(() -> AccountChangeObserver.NONE));
+  }
+
+  @Bean
+  GetRecruiterVerificationUseCase getRecruiterVerificationUseCase(
+      JdbcRecruiterVerificationRepository repository, UseCaseMetricsPort metrics) {
+    return new GetRecruiterVerificationService(repository, metrics);
+  }
+
+  @Bean
+  ChangeRecruiterVerificationUseCase changeRecruiterVerificationUseCase(
+      JdbcRecruiterVerificationRepository repository, UseCaseMetricsPort metrics) {
+    return new ChangeRecruiterVerificationService(repository, metrics);
   }
 }

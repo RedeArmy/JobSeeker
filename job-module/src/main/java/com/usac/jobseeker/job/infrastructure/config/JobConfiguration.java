@@ -4,6 +4,9 @@ import com.usac.jobseeker.common.application.observability.UseCaseMetricsPort;
 import com.usac.jobseeker.common.application.outbox.DomainEventPublisherPort;
 import com.usac.jobseeker.job.application.support.CapabilityPort;
 import com.usac.jobseeker.job.application.support.JobChange;
+import com.usac.jobseeker.job.application.support.PublishingGate;
+import com.usac.jobseeker.job.application.support.PublishingPolicy;
+import com.usac.jobseeker.job.application.support.RecruiterStandingPort;
 import com.usac.jobseeker.job.application.usecase.createjobposting.CreateJobPostingService;
 import com.usac.jobseeker.job.application.usecase.createjobposting.CreateJobPostingUseCase;
 import com.usac.jobseeker.job.application.usecase.getjobposting.GetJobPostingService;
@@ -24,12 +27,14 @@ import com.usac.jobseeker.job.infrastructure.adapter.out.persistence.JdbcJobPost
 import com.usac.jobseeker.job.infrastructure.adapter.out.persistence.JdbcJobRequirementsRepository;
 import java.time.Clock;
 import java.util.UUID;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /** Cablea los casos de uso de `job` como beans: `application` no lleva estereotipos (ADR-0015). */
 @Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties(JobProperties.class)
 class JobConfiguration {
 
   @Bean
@@ -81,8 +86,20 @@ class JobConfiguration {
   }
 
   @Bean
-  TransitionJobPostingUseCase transitionJobPostingUseCase(JobChange change) {
-    return new TransitionJobPostingService(change, Clock.systemUTC());
+  PublishingGate publishingGate(
+      RecruiterStandingPort standings,
+      JdbcJobPostingRepository postings,
+      JobProperties properties) {
+    JobProperties.Publishing limits = properties.publishing();
+    return new PublishingGate(
+        standings,
+        postings,
+        new PublishingPolicy(limits.unverifiedMaxPublished(), limits.verifiedMaxPublished()));
+  }
+
+  @Bean
+  TransitionJobPostingUseCase transitionJobPostingUseCase(JobChange change, PublishingGate gate) {
+    return new TransitionJobPostingService(change, gate, Clock.systemUTC());
   }
 
   @Bean

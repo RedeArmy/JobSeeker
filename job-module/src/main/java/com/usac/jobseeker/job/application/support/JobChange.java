@@ -8,6 +8,7 @@ import com.usac.jobseeker.common.domain.error.ForbiddenCapabilityException;
 import com.usac.jobseeker.common.domain.error.InvalidStateException;
 import com.usac.jobseeker.common.domain.error.InvalidTransitionException;
 import com.usac.jobseeker.common.domain.error.NotFoundException;
+import com.usac.jobseeker.common.domain.error.PublishingDeniedException;
 import com.usac.jobseeker.common.domain.error.StaleStateException;
 import com.usac.jobseeker.common.domain.error.ValidationFailedException;
 import com.usac.jobseeker.common.domain.model.AccountId;
@@ -16,6 +17,7 @@ import com.usac.jobseeker.job.domain.model.JobPosting;
 import com.usac.jobseeker.job.domain.model.JobPostingId;
 import com.usac.jobseeker.job.domain.model.JobRequirement;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -107,6 +109,9 @@ public class JobChange {
     } catch (InvalidStateException invalid) {
       metrics.count(useCase, "invalid_state");
       throw invalid;
+    } catch (PublishingDeniedException denied) {
+      metrics.count(useCase, "denied_" + denied.reason().name().toLowerCase(Locale.ROOT));
+      throw denied;
     }
   }
 

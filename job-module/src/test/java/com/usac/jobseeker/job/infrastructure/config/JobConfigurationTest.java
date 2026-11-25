@@ -2,6 +2,7 @@ package com.usac.jobseeker.job.infrastructure.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.usac.jobseeker.common.domain.model.RecruiterVerification;
 import com.usac.jobseeker.job.application.support.JobChange;
 import com.usac.jobseeker.job.infrastructure.JobPostgres;
 import com.usac.jobseeker.job.infrastructure.adapter.out.persistence.JdbcJobPostingRepository;
@@ -28,7 +29,12 @@ class JobConfigurationTest {
     assertThat(config.getJobPostingUseCase(postings, requirements, new AllowAll(), (u, o) -> {}))
         .isNotNull();
     assertThat(config.manageJobRequirementsUseCase(requirements, change)).isNotNull();
-    assertThat(config.transitionJobPostingUseCase(change)).isNotNull();
+    var gate =
+        config.publishingGate(
+            account -> RecruiterVerification.VERIFIED,
+            postings,
+            new JobProperties(new JobProperties.Publishing(2, 100)));
+    assertThat(config.transitionJobPostingUseCase(change, gate)).isNotNull();
     assertThat(config.setAcceptingApplicationsUseCase(change)).isNotNull();
     assertThat(config.setRecruitingStageUseCase(change)).isNotNull();
     assertThat(config.getJobSignalsUseCase(postings, requirements, (u, o) -> {})).isNotNull();

@@ -21,6 +21,14 @@ final class JobStates {
     return new JobRequirementDraft(RequirementType.SKILL, true, "Java", 3, null, null, null, null);
   }
 
+  /** Le pone la habilidad mínima a un borrador, sin publicarlo (BR-JOB-02). */
+  static JobPostingView withSkill(JobFixture f, JobPostingView draft) {
+    return new ManageJobRequirementsService(f.store, f.change, f.clock())
+        .execute(
+            new ManageJobRequirementsCommand(
+                f.owner, draft.posting().id(), draft.posting().version(), List.of(javaSkill())));
+  }
+
   /** Una vacante publicada, con una habilidad: la mínima para poder publicar (BR-JOB-02). */
   static JobPostingView published(JobFixture f) {
     JobPostingView draft = f.draft();
@@ -51,7 +59,7 @@ final class JobStates {
   }
 
   static JobPostingView transition(JobFixture f, JobPostingView from, JobStatus to) {
-    return new TransitionJobPostingService(f.change, f.clock())
+    return new TransitionJobPostingService(f.change, f.gate, f.clock())
         .execute(
             new TransitionJobPostingCommand(
                 f.owner, from.posting().id(), to, from.posting().version()));

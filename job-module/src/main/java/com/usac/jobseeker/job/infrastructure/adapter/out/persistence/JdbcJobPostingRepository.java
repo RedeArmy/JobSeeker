@@ -50,6 +50,24 @@ public class JdbcJobPostingRepository implements JobPostingStorePort {
         .optional();
   }
 
+  // El candado de transacción por reclutador pone en fila las publicaciones de una misma cuenta:
+  // sin
+  // él, dos simultáneas contarían ambas «una menos que el tope» y pasarían las dos. Es por cuenta,
+  // así que no frena a otros reclutadores, y se libera solo al terminar la transacción.
+  @Override
+  public long lockAndCountPublished(AccountId owner) {
+    jdbc.sql("select pg_advisory_xact_lock(hashtextextended(:key, 0))")
+        .param("key", "job_publish:" + owner)
+        .query()
+        .singleRow();
+    return jdbc.sql(
+            "select count(*) from job_postings where recruiter_account_id = :owner"
+                + " and status = 'PUBLISHED'")
+        .param("owner", owner.value())
+        .query(Long.class)
+        .single();
+  }
+
   @Override
   public void insert(JobPosting posting) {
     bind(
