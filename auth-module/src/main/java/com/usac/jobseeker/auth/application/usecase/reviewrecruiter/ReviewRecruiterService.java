@@ -69,7 +69,7 @@ public class ReviewRecruiterService implements ReviewRecruiterUseCase {
         change.execute(
             new ChangeRecruiterVerificationCommand(command.target(), command.decision()));
     if (changed) {
-      audit.record(
+      audit.append(
           new AuditEntry(
               command.operator(),
               AUDIT_ACTION,

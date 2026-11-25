@@ -27,7 +27,7 @@ public class JdbcAuditLog implements AuditPort {
   }
 
   @Override
-  public void record(AuditEntry entry) {
+  public void append(AuditEntry entry) {
     jdbc.sql(
             "insert into audit_log (id, actor_account_id, action, target_type, target_id, trace_id,"
                 + " details) values (:id, :actor, :action, :targetType, :targetId, :traceId,"

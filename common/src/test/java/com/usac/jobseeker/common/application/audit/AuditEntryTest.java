@@ -50,7 +50,9 @@ class AuditEntryTest {
         new String[] {
           "ana@example.com", "Ana López", "texto con espacios", "x".repeat(81), "a,b"
         }) {
-      assertThatThrownBy(() -> entry("ACTION_OK", "ACCOUNT", Map.of("to", value)))
+      Map<String, String> details = Map.of("to", value);
+
+      assertThatThrownBy(() -> entry("ACTION_OK", "ACCOUNT", details))
           .as(value)
           .isInstanceOf(IllegalArgumentException.class);
     }
@@ -59,7 +61,9 @@ class AuditEntryTest {
   @Test
   void aDetailKeyMustBeASimpleIdentifier() {
     for (String key : new String[] {"", "Con Espacio", "1inicia", "con-guion", "k".repeat(31)}) {
-      assertThatThrownBy(() -> entry("ACTION_OK", "ACCOUNT", Map.of(key, "v")))
+      Map<String, String> details = Map.of(key, "v");
+
+      assertThatThrownBy(() -> entry("ACTION_OK", "ACCOUNT", details))
           .as(key)
           .isInstanceOf(IllegalArgumentException.class);
     }
@@ -74,7 +78,9 @@ class AuditEntryTest {
     mutable.put("to", "SUSPENDED");
 
     assertThat(e.details()).containsEntry("to", "VERIFIED");
-    assertThatThrownBy(() -> e.details().put("x", "y"))
+    Map<String, String> exposed = e.details();
+
+    assertThatThrownBy(() -> exposed.put("x", "y"))
         .isInstanceOf(UnsupportedOperationException.class);
   }
 

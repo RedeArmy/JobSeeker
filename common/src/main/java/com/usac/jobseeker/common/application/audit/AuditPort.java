@@ -7,5 +7,5 @@ package com.usac.jobseeker.common.application.audit;
  */
 public interface AuditPort {
 
-  void record(AuditEntry entry);
+  void append(AuditEntry entry);
 }

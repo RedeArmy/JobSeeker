@@ -128,9 +128,9 @@ class RecruiterReviewEndpointIntegrationTest {
             "select actor_account_id, action, target_type, details::text as details, trace_id"
                 + " from audit_log where target_id = ?",
             target);
-    assertThat(row.get("actor_account_id")).isEqualTo(OPERATOR);
-    assertThat(row.get("action")).isEqualTo("RECRUITER_VERIFICATION_CHANGED");
-    assertThat(row.get("target_type")).isEqualTo("ACCOUNT");
+    assertThat(row).containsEntry("actor_account_id", OPERATOR);
+    assertThat(row).containsEntry("action", "RECRUITER_VERIFICATION_CHANGED");
+    assertThat(row).containsEntry("target_type", "ACCOUNT");
     assertThat(row.get("details").toString()).contains("VERIFIED");
     assertThat(row.get("details").toString())
         .doesNotContain(target.toString())
