@@ -92,6 +92,9 @@ jobseeker:
       write: {capacity: 30, refill-tokens: 30, refill-period: 1m, key: ACCOUNT}
       # Lecturas por cuenta: más permisivo.
       read: {capacity: 120, refill-tokens: 120, refill-period: 1m, key: ACCOUNT}
+      # Candidatos sugeridos: la superficie más sensible al raspado de datos (amenaza T-N1); más estricto que la
+      # lectura, además de la cuota de perfiles únicos de `matching`.
+      suggestions: {capacity: 10, refill-tokens: 10, refill-period: 1m, key: ACCOUNT}
 
   # Bandeja de salida (ADR-0016): sondeo, reintentos con retroceso y tope de intentos.
   outbox:

@@ -244,7 +244,8 @@ final class MigrationRules {
         "profile_embeddings",
         "job_embeddings",
         "profile_embedding_accounts",
-        "matching_work_queue");
+        "matching_work_queue",
+        "profile_view_log");
     put(
         owners,
         "ats",

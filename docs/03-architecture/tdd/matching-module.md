@@ -100,7 +100,7 @@ Las rutas heredan las convenciones de `api-contract-overview.md`; el contrato lo
 | Método y ruta | Quién | Política de límite | Errores clave |
 |---|---|---|---|
 | `GET /api/v1/matching/jobs/{id}/score` | candidato, sobre vacantes visibles para él (BR-VIS-01) | lectura | `404` si no es visible, `202 SCORE_PENDING` si el vector aún no existe |
-| `GET /api/v1/matching/jobs/{id}/suggestions?page&size≤50` | reclutador **propietario** (BR-VIS-03) | estricta, más la cuota diaria de perfiles | `403` si no es el dueño, `429 QUOTA_EXCEEDED` |
+| `GET /api/v1/matching/jobs/{id}/suggestions?size≤50` | reclutador **verificado y propietario** (BR-ACCT-11, BR-VIS-03) | política `suggestions` (10/min), más la cuota de 200 perfiles únicos por 24 h | `403` `RECRUITER_NOT_VERIFIED` o `RECRUITER_SUSPENDED`, `404` si la vacante no es suya, `409` si no está publicada, `429 QUOTA_EXCEEDED`; `200` con `PAUSED` en `REVIEWING` y `PENDING_EMBEDDING` sin vector. Solo identificadores y posición, sin similitud (ADR-0017); el resto es TD-034 |
 
 El desglose lleva `completeness`, `α` y la marca de **no calibrado** mientras no exista la calibración (ADR-0017, decisión 5). El coseno bruto no aparece en ninguna respuesta.
 
@@ -130,7 +130,7 @@ El desglose lleva `completeness`, `α` y la marca de **no calibrado** mientras n
 | 3 | ✅ **Perfiles (24-nov-2026) y vacantes (25-nov-2026).** `embedentity` para perfiles y vacantes, la cola, el trabajador, el adaptador de Ollama y los adaptadores de lectura de `cv` y `job`. Detalle y desvíos de este documento en §10.1 | `cv` sub-paso 5 (`getprofilesnapshot`), TDD de `job`, ADR-0018 con modelo definitivo |
 | 4 | `recomputescoresforentity` y los consumidores de la bandeja | 3 |
 | 5 | `explainscore` y el «qué pasaría si»; el endpoint del score | 2 |
-| 6 | `suggestcandidatesforjob` y el índice HNSW parcial. **Debe exigir que el reclutador sea `VERIFIED`** (`403 RECRUITER_NOT_VERIFIED`) y respetar la cuota diaria de perfiles vistos (`429 QUOTA_EXCEEDED`, REQ-R-10 y REQ-R-11): es el control central contra el raspado de datos de candidatos (amenaza T-N1, TD-033) | 3, D1, TD-032 |
+| 6 | `suggestcandidatesforjob` y el índice HNSW parcial. **Debe exigir que el reclutador sea `VERIFIED`** (`403 RECRUITER_NOT_VERIFIED`) y respetar la cuota diaria de perfiles vistos (`429 QUOTA_EXCEEDED`, REQ-R-10 y REQ-R-11): es el control central contra el raspado de datos de candidatos (amenaza T-N1). **Hecho en el PR #42 (TD-R27, ADR-0029)** para la etapa de recuperación; puntaje, prioridad y exclusión siguen en TD-034 | 3, D1, TD-032 |
 | 7 | `snapshotapplicationprofile` y `migratealgorithmversion` | postulación mínima de `ats` |
 | — | Normalización de habilidades en el cálculo | ADR-0019 aprobado y el caso de uso de `cv` |
 

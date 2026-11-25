@@ -22,12 +22,13 @@ class RateLimitPropertiesTest {
     policies.put("webhook", policy(KeyKind.IP));
     policies.put("write", policy(KeyKind.ACCOUNT));
     policies.put("read", policy(KeyKind.ACCOUNT));
+    policies.put("suggestions", policy(KeyKind.ACCOUNT));
     return policies;
   }
 
   @Test
   void aCompleteSetOfPoliciesIsAccepted() {
-    assertThat(new RateLimitProperties(true, all()).policies()).hasSize(4);
+    assertThat(new RateLimitProperties(true, all()).policies()).hasSize(5);
   }
 
   @Test
