@@ -19,6 +19,15 @@ public class JdbcRecruiterVerificationRepository
 
   private static final String ID = "id";
 
+  // Dos consultas completas y no un fragmento concatenado: cada una es una constante que se lee de
+  // una vez, y ninguna parte de la sentencia se arma en tiempo de ejecución.
+  private static final String SELECT_ANY =
+      "select recruiter_verification from accounts where id = :id and is_recruiter_enabled";
+
+  private static final String SELECT_ACTIVE =
+      "select recruiter_verification from accounts where id = :id and is_recruiter_enabled"
+          + " and deletion_status = 'ACTIVE' and identity_status <> 'DELETED'";
+
   private final JdbcClient jdbc;
   private final AccountChangeObserver observer;
 
@@ -29,19 +38,16 @@ public class JdbcRecruiterVerificationRepository
 
   @Override
   public Optional<RecruiterVerification> findOfActiveRecruiter(AccountId accountId) {
-    return read(accountId, " and deletion_status = 'ACTIVE' and identity_status <> 'DELETED'");
+    return read(accountId, SELECT_ACTIVE);
   }
 
   @Override
   public Optional<RecruiterVerification> findOfRecruiter(AccountId accountId) {
-    return read(accountId, "");
+    return read(accountId, SELECT_ANY);
   }
 
-  private Optional<RecruiterVerification> read(AccountId accountId, String extraCondition) {
-    return jdbc.sql(
-            "select recruiter_verification from accounts where id = :id"
-                + " and is_recruiter_enabled"
-                + extraCondition)
+  private Optional<RecruiterVerification> read(AccountId accountId, String sql) {
+    return jdbc.sql(sql)
         .param(ID, accountId.value())
         .query((rows, n) -> RecruiterVerification.valueOf(rows.getString(1)))
         .optional();

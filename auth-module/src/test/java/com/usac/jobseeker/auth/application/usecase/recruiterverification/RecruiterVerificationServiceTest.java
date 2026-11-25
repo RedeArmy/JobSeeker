@@ -109,10 +109,10 @@ class RecruiterVerificationServiceTest {
   @Test
   void anOperatorWhoLosesTheRaceGetsAStaleStateAndNothingIsWritten() {
     store.loseTheRace = true;
+    var verify = command(RecruiterVerification.VERIFIED);
 
-    assertThatThrownBy(() -> change.execute(command(RecruiterVerification.VERIFIED)))
-        .isInstanceOf(StaleStateException.class);
-    assertThat(store.values.get(RECRUITER)).isEqualTo(RecruiterVerification.UNVERIFIED);
+    assertThatThrownBy(() -> change.execute(verify)).isInstanceOf(StaleStateException.class);
+    assertThat(store.values).containsEntry(RECRUITER, RecruiterVerification.UNVERIFIED);
   }
 
   // BR-DATA-01: ni la métrica ni el log llevan el identificador de la cuenta.

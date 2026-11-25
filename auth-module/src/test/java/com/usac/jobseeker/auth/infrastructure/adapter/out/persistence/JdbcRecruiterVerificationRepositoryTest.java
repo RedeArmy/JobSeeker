@@ -113,11 +113,15 @@ class JdbcRecruiterVerificationRepositoryTest {
   void theDatabaseRejectsAnUnknownValue() {
     AccountId recruiter = account(true, "ACTIVE", "ACTIVE");
 
-    assertThatThrownBy(
-            () ->
-                jdbc.sql("update accounts set recruiter_verification = 'TRUSTED' where id = :id")
-                    .param("id", recruiter.value())
-                    .update())
+    assertThatThrownBy(() -> setRaw(recruiter, "TRUSTED"))
         .isInstanceOf(DataIntegrityViolationException.class);
+  }
+
+  /** Escribe el valor por SQL, saltándose el dominio, para probar la restricción de la base. */
+  private void setRaw(AccountId account, String value) {
+    jdbc.sql("update accounts set recruiter_verification = :value where id = :id")
+        .param("value", value)
+        .param("id", account.value())
+        .update();
   }
 }
