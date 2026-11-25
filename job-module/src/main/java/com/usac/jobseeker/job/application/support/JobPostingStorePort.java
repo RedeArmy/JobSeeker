@@ -1,5 +1,6 @@
 package com.usac.jobseeker.job.application.support;
 
+import com.usac.jobseeker.common.domain.model.AccountId;
 import com.usac.jobseeker.job.domain.model.JobPosting;
 import com.usac.jobseeker.job.domain.model.JobPostingId;
 import java.util.Optional;
@@ -14,6 +15,13 @@ public interface JobPostingStorePort {
   Optional<JobPosting> findById(JobPostingId id);
 
   void insert(JobPosting posting);
+
+  /**
+   * Cuántas vacantes `PUBLISHED` tiene la cuenta, tras tomar un candado de transacción propio de
+   * esa cuenta: quien publica cuenta y escribe sin que otra publicación de la misma cuenta se cuele
+   * en medio (REQ-R-10). El candado se libera al terminar la transacción.
+   */
+  long lockAndCountPublished(AccountId owner);
 
   /**
    * Escribe la vacante completa con su versión nueva solo si la guardada es `expectedVersion`: el

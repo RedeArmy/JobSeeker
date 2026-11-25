@@ -2,6 +2,7 @@ package com.usac.jobseeker.job.application.usecase.transitionjobposting;
 
 import com.usac.jobseeker.job.application.support.JobChange;
 import com.usac.jobseeker.job.application.support.JobPostingView;
+import com.usac.jobseeker.job.application.support.PublishingGate;
 import com.usac.jobseeker.job.domain.event.JobPostingEvents;
 import com.usac.jobseeker.job.domain.model.Initiator;
 import com.usac.jobseeker.job.domain.model.JobPosting;
@@ -24,10 +25,12 @@ public class TransitionJobPostingService implements TransitionJobPostingUseCase 
   private static final String USE_CASE = "transition_job_posting";
 
   private final JobChange change;
+  private final PublishingGate gate;
   private final Clock clock;
 
-  public TransitionJobPostingService(JobChange change, Clock clock) {
+  public TransitionJobPostingService(JobChange change, PublishingGate gate, Clock clock) {
     this.change = Objects.requireNonNull(change, "change");
+    this.gate = Objects.requireNonNull(gate, "gate");
     this.clock = Objects.requireNonNull(clock, "clock");
   }
 
@@ -47,6 +50,18 @@ public class TransitionJobPostingService implements TransitionJobPostingUseCase 
                     Initiator.OWNER,
                     JobRequirements.satisfiesPublication(requirements),
                     clock.instant()));
+    // Pasar a publicada, desde borrador o reabriendo, cruza la puerta de la confianza (REQ-R-10);
+    // se
+    // comprueba después de que la transición sea válida, para no revelar el tope si ya era un
+    // error.
+    if (moved.status() == JobStatus.PUBLISHED) {
+      change.guarded(
+          USE_CASE,
+          () -> {
+            gate.requireAllowed(command.owner());
+            return moved;
+          });
+    }
     change.save(USE_CASE, moved, command.expectedVersion());
     // Publicar es la puerta del score (§5, regla 6): `matching` solo se entera por estos eventos.
     change.publish(moved, eventFor(current.status(), moved.status()));

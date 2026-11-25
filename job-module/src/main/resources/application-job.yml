@@ -1,1 +1,10 @@
-# Marcador de posición: configuración base del módulo job (ajustes independientes del perfil).
+# Configuración base de `job` (ajustes independientes del perfil). Los valores por defecto viven en
+# `JobProperties`; aquí se dejan explícitos para que quien opera los vea y los pueda calibrar.
+jobseeker:
+  job:
+    publishing:
+      # Vacantes publicadas a la vez según la confianza en la cuenta (REQ-R-10, amenaza T-N1). Una cuenta
+      # sin verificar publica lo bastante para probar el producto y poco para un señuelo; verificarse sube
+      # el tope. Valores iniciales, a calibrar con el uso real.
+      unverified-max-published: 2
+      verified-max-published: 100
