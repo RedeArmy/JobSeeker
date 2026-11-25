@@ -24,5 +24,5 @@ public interface ProfileViewLogPort {
   Set<CandidateProfileId> viewedSince(AccountId viewer, Instant since);
 
   /** Deja constancia de cada perfil mostrado, uno por aparición. */
-  void record(AccountId viewer, JobPostingId job, List<CandidateProfileId> shown, Instant at);
+  void append(AccountId viewer, JobPostingId job, List<CandidateProfileId> shown, Instant at);
 }

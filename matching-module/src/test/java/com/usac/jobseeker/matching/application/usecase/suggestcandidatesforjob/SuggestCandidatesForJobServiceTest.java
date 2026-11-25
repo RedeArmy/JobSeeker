@@ -73,17 +73,18 @@ class SuggestCandidatesForJobServiceTest {
             calls.add("trust");
             return verification;
           },
-          (account, id) -> {
-            calls.add("owned");
-            return owned;
-          },
-          store,
-          (vector, model, limit) -> {
-            calls.add("retrieval");
-            retrievedLimit = limit;
-            retrievedModel = model;
-            return pool.stream().limit(limit).map(c -> new NearestProfile(c, 0.5)).toList();
-          },
+          new SuggestionsSources(
+              (account, id) -> {
+                calls.add("owned");
+                return owned;
+              },
+              store,
+              (vector, model, limit) -> {
+                calls.add("retrieval");
+                retrievedLimit = limit;
+                retrievedModel = model;
+                return pool.stream().limit(limit).map(c -> new NearestProfile(c, 0.5)).toList();
+              }),
           new ProfileViewLogPort() {
             public void lock(AccountId viewer) {
               calls.add("lock");
@@ -95,9 +96,9 @@ class SuggestCandidatesForJobServiceTest {
               return viewed;
             }
 
-            public void record(
+            public void append(
                 AccountId viewer, JobPostingId job, List<CandidateProfileId> shown, Instant at) {
-              calls.add("record");
+              calls.add("append");
               recorded.add(shown);
             }
           },
@@ -205,7 +206,7 @@ class SuggestCandidatesForJobServiceTest {
     assertThat(result.status()).isEqualTo(SuggestionsResult.Status.PAUSED);
     assertThat(result.candidates()).isEmpty();
     assertThat(result.remainingQuota()).isEqualTo(5);
-    assertThat(calls).doesNotContain("retrieval", "lock", "record");
+    assertThat(calls).doesNotContain("retrieval", "lock", "append");
     assertThat(metrics).containsExactly("paused");
   }
 
@@ -218,7 +219,7 @@ class SuggestCandidatesForJobServiceTest {
 
     assertThat(result.status()).isEqualTo(SuggestionsResult.Status.PENDING_EMBEDDING);
     assertThat(result.candidates()).isEmpty();
-    assertThat(calls).doesNotContain("retrieval", "record");
+    assertThat(calls).doesNotContain("retrieval", "append");
     assertThat(metrics).containsExactly("pending_embedding");
   }
 
@@ -291,7 +292,7 @@ class SuggestCandidatesForJobServiceTest {
     ask(2);
 
     assertThat(calls)
-        .containsExactly("trust", "owned", "embedding", "retrieval", "lock", "viewed", "record");
+        .containsExactly("trust", "owned", "embedding", "retrieval", "lock", "viewed", "append");
   }
 
   // ---- la recuperación ----

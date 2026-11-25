@@ -8,7 +8,6 @@ import com.usac.jobseeker.common.domain.error.SuggestionsDeniedException;
 import com.usac.jobseeker.common.domain.error.SuggestionsDeniedException.Reason;
 import com.usac.jobseeker.common.domain.model.AccountId;
 import com.usac.jobseeker.common.domain.model.RecruiterVerification;
-import com.usac.jobseeker.matching.application.usecase.embedentity.EmbeddingStorePort;
 import com.usac.jobseeker.matching.domain.model.CandidateProfileId;
 import com.usac.jobseeker.matching.domain.model.EntityEmbedding;
 import com.usac.jobseeker.matching.domain.service.ViewQuota;
@@ -49,9 +48,7 @@ public class SuggestCandidatesForJobService implements SuggestCandidatesForJobUs
   private static final String USE_CASE = "suggest_candidates_for_job";
 
   private final RecruiterTrustPort trust;
-  private final OwnedJobPort ownedJobs;
-  private final EmbeddingStorePort embeddings;
-  private final CandidateRetrievalPort retrieval;
+  private final SuggestionsSources sources;
   private final ProfileViewLogPort views;
   private final SuggestionsPolicy policy;
   private final UseCaseMetricsPort metrics;
@@ -59,17 +56,13 @@ public class SuggestCandidatesForJobService implements SuggestCandidatesForJobUs
 
   public SuggestCandidatesForJobService(
       RecruiterTrustPort trust,
-      OwnedJobPort ownedJobs,
-      EmbeddingStorePort embeddings,
-      CandidateRetrievalPort retrieval,
+      SuggestionsSources sources,
       ProfileViewLogPort views,
       SuggestionsPolicy policy,
       UseCaseMetricsPort metrics,
       Clock clock) {
     this.trust = Objects.requireNonNull(trust, "trust");
-    this.ownedJobs = Objects.requireNonNull(ownedJobs, "ownedJobs");
-    this.embeddings = Objects.requireNonNull(embeddings, "embeddings");
-    this.retrieval = Objects.requireNonNull(retrieval, "retrieval");
+    this.sources = Objects.requireNonNull(sources, "sources");
     this.views = Objects.requireNonNull(views, "views");
     this.policy = Objects.requireNonNull(policy, "policy");
     this.metrics = Objects.requireNonNull(metrics, "metrics");
@@ -81,7 +74,8 @@ public class SuggestCandidatesForJobService implements SuggestCandidatesForJobUs
   public SuggestionsResult execute(SuggestCandidatesForJobQuery query) {
     requireVerifiedRecruiter(query.recruiter());
     OwnedJobPort.OwnedJob job =
-        ownedJobs
+        sources
+            .ownedJobs()
             .find(query.recruiter(), query.job())
             .orElseThrow(() -> failed("not_found", new NotFoundException()));
     if (!job.published()) {
@@ -92,18 +86,19 @@ public class SuggestCandidatesForJobService implements SuggestCandidatesForJobUs
     if (job.reviewing()) {
       return unavailable(SuggestionsResult.Status.PAUSED, query.recruiter(), since);
     }
-    Optional<EntityEmbedding> embedding = embeddings.findJobEmbedding(query.job());
+    Optional<EntityEmbedding> embedding = sources.embeddings().findJobEmbedding(query.job());
     if (embedding.isEmpty()) {
       return unavailable(SuggestionsResult.Status.PENDING_EMBEDDING, query.recruiter(), since);
     }
     List<CandidateProfileId> ranked =
-        retrieval
+        sources
+            .retrieval()
             .nearestDiscoverable(
                 embedding.get().vector(),
                 embedding.get().model(),
                 Math.min(query.size(), policy.maxPageSize()))
             .stream()
-            .map(nearest -> nearest.candidate())
+            .map(NearestProfile::candidate)
             .toList();
 
     views.lock(query.recruiter());
@@ -112,7 +107,7 @@ public class SuggestCandidatesForJobService implements SuggestCandidatesForJobUs
     if (allowance.exhausted()) {
       throw denied(Reason.QUOTA_EXCEEDED, "quota_exceeded");
     }
-    views.record(query.recruiter(), query.job(), allowance.allowed(), now);
+    views.append(query.recruiter(), query.job(), allowance.allowed(), now);
     return served(SuggestionsResult.Status.OK, allowance.allowed(), allowance.remaining());
   }
 

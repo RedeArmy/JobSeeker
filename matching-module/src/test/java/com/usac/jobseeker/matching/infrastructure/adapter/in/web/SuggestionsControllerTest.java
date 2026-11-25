@@ -24,7 +24,7 @@ class SuggestionsControllerTest {
   private final CandidateProfileId first = new CandidateProfileId(UUID.randomUUID());
   private final CandidateProfileId second = new CandidateProfileId(UUID.randomUUID());
   private final List<SuggestCandidatesForJobQuery> received = new ArrayList<>();
-  private final Principal principal = () -> caller.toString();
+  private final Principal principal = caller::toString;
 
   private final SuggestionsController controller =
       new SuggestionsController(

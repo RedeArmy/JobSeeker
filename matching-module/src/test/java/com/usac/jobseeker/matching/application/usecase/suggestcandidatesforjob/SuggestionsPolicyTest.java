@@ -24,6 +24,7 @@ class SuggestionsPolicyTest {
   @Test
   void anIncoherentPolicyIsRefusedAtStartup() {
     Duration day = Duration.ofHours(24);
+    Duration negative = Duration.ofHours(-1);
 
     assertThatThrownBy(() -> new SuggestionsPolicy(-1, day, 50))
         .isInstanceOf(IllegalArgumentException.class);
@@ -31,7 +32,7 @@ class SuggestionsPolicyTest {
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(() -> new SuggestionsPolicy(10, Duration.ZERO, 50))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> new SuggestionsPolicy(10, Duration.ofHours(-1), 50))
+    assertThatThrownBy(() -> new SuggestionsPolicy(10, negative, 50))
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(() -> new SuggestionsPolicy(10, null, 50))
         .isInstanceOf(IllegalArgumentException.class);

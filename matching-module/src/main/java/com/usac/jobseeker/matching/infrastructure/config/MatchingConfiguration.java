@@ -22,6 +22,7 @@ import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.R
 import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.SuggestCandidatesForJobService;
 import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.SuggestCandidatesForJobUseCase;
 import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.SuggestionsPolicy;
+import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.SuggestionsSources;
 import com.usac.jobseeker.matching.infrastructure.adapter.in.event.JobEventsConsumer;
 import com.usac.jobseeker.matching.infrastructure.adapter.in.event.ProfileEventsConsumer;
 import com.usac.jobseeker.matching.infrastructure.adapter.in.job.EmbeddingWorker;
@@ -170,9 +171,7 @@ class MatchingConfiguration {
     MatchingProperties.Suggestions s = properties.suggestions();
     return new SuggestCandidatesForJobService(
         trust,
-        ownedJobs,
-        embeddings,
-        embeddings,
+        new SuggestionsSources(ownedJobs, embeddings, embeddings),
         views,
         new SuggestionsPolicy(s.viewQuota(), s.window(), s.maxPageSize()),
         metrics,

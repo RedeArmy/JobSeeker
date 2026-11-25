@@ -112,7 +112,8 @@ class ViewQuotaTest {
   void theAllowedListIsACopy() {
     var allowance = ViewQuota.apply(List.of(a), Set.of(), 5);
 
-    assertThatThrownBy(() -> allowance.allowed().add(b))
-        .isInstanceOf(UnsupportedOperationException.class);
+    List<CandidateProfileId> allowed = allowance.allowed();
+
+    assertThatThrownBy(() -> allowed.add(b)).isInstanceOf(UnsupportedOperationException.class);
   }
 }

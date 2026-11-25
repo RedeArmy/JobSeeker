@@ -44,8 +44,8 @@ class JdbcProfileViewLogTest {
   void whatWasRecordedIsViewedWithinTheWindowAndOnlyThen() {
     var recent = candidate();
     var old = candidate();
-    log.record(viewer, job, List.of(old), now.minusSeconds(25 * 3600));
-    log.record(viewer, job, List.of(recent), now.minusSeconds(3600));
+    log.append(viewer, job, List.of(old), now.minusSeconds(25 * 3600));
+    log.append(viewer, job, List.of(recent), now.minusSeconds(3600));
 
     assertThat(log.viewedSince(viewer, now.minusSeconds(24 * 3600))).containsExactly(recent);
   }
@@ -54,15 +54,15 @@ class JdbcProfileViewLogTest {
   @Test
   void aProfileSeenTwiceCountsOnce() {
     var same = candidate();
-    log.record(viewer, job, List.of(same), now.minusSeconds(60));
-    log.record(viewer, job, List.of(same), now.minusSeconds(30));
+    log.append(viewer, job, List.of(same), now.minusSeconds(60));
+    log.append(viewer, job, List.of(same), now.minusSeconds(30));
 
     assertThat(log.viewedSince(viewer, now.minusSeconds(3600))).containsExactly(same);
   }
 
   @Test
   void whatAnotherRecruiterSawIsNotMine() {
-    log.record(new AccountId(UUID.randomUUID()), job, List.of(candidate()), now);
+    log.append(new AccountId(UUID.randomUUID()), job, List.of(candidate()), now);
 
     assertThat(log.viewedSince(viewer, now.minusSeconds(3600))).isEmpty();
   }
@@ -70,7 +70,7 @@ class JdbcProfileViewLogTest {
   @Test
   void theRowHoldsOnlyOpaqueIdentifiersAndTheContext() {
     var seen = candidate();
-    log.record(viewer, job, List.of(seen), now);
+    log.append(viewer, job, List.of(seen), now);
 
     var row =
         jdbc.sql(
@@ -110,7 +110,7 @@ class JdbcProfileViewLogTest {
                                   if (seen >= quota) {
                                     return 0;
                                   }
-                                  log.record(viewer, job, List.of(candidate()), now);
+                                  log.append(viewer, job, List.of(candidate()), now);
                                   return 1;
                                 });
                           }))

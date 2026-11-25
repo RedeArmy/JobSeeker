@@ -55,7 +55,7 @@ public class JdbcProfileViewLog implements ProfileViewLogPort {
   }
 
   @Override
-  public void record(
+  public void append(
       AccountId viewer, JobPostingId job, List<CandidateProfileId> shown, Instant at) {
     for (CandidateProfileId candidate : shown) {
       jdbc.sql(
