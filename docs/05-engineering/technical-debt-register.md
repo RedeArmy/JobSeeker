@@ -4,7 +4,7 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | 🟡 En revisión |
-| **Versión** | 1.8 — se paga TD-028 |
+| **Versión** | 1.9 — se paga el contrato de TD-029 |
 | **Fecha** | 24 de noviembre de 2026 |
 | **Dueño del documento** | Responsable del proyecto |
 | **Revisión del registro** | Al cerrar cada sprint y antes de cada hito de la hoja de ruta |
@@ -56,7 +56,7 @@ Corte: 24-nov-2026.
 | S4 Baja | 5 |
 | **Total** | **18** |
 
-- **Abiertas:** 15 · **Planificadas:** 3 · **Resueltas:** 25 · **Aceptadas:** 6.
+- **Abiertas:** 15 · **Planificadas:** 3 · **Resueltas:** 26 · **Aceptadas:** 6.
 - **S2 abiertas con disparador próximo** (decidir el siguiente sprint): TD-012 (antes de `suggestcandidatesforjob`) y TD-005 y TD-016 (primer despliegue), más TD-020 (antes de usuarios reales).
 - **Métricas a seguir en cada revisión:** deuda abierta por severidad, edad de las S2 en días, número de cierres por sprint, aceptadas vencidas.
 
@@ -76,7 +76,7 @@ Corte: 24-nov-2026.
 | TD-020 | Lote de anonimización sin dueño; descubribilidad al apagar la capacidad | Cumplimiento | S2 | L | Leída | Abierta | Antes de tener usuarios reales |
 | TD-022 | Calibración y cobertura de ESCO sin datos reales; arnés fuera de CI | Pruebas | S3 | L | Medida | Abierta | Antes de fijar el modelo de embeddings (ADR-0018) |
 | TD-027 | Los nombres propios del texto libre no se redactan antes del embedding | Privacidad | S3 | L | Medida | Abierta | Antes de embeber perfiles reales (`embedentity`) |
-| TD-029 | Sin medición de `embedentity` con un Ollama real | Operación | S3 | S | Leída | Abierta | Un Ollama con el modelo vigente disponible (ADR-0018, protocolo de 300 pares) |
+| TD-029 | La latencia de `embedentity` no está medida: la VM de desarrollo no expone AVX2 | Operación | S3 | S | Leída | Abierta | Hardware con AVX2 disponible (ADR-0026) y `docs/03-architecture/architecture-review-2026-11/08-medicion-ollama-y-bakeoff-embeddings.md` §7, punto 1 |
 | TD-023 | Fin de soporte de Spring Boot 4.1 (31-jul-2027) | Plataforma | S3 | L | Medida | Planificada | 2027-04-30 (inicio de la subida) |
 | TD-024 | El `Dockerfile` compila con una imagen de Java 26 | Operación | S4 | XS | Leída | Abierta | Oportunista |
 | TD-025 | La purga de la bandeja usa `Instant.now()` | Código | S4 | XS | Leída | Abierta | Oportunista |
@@ -217,16 +217,16 @@ Corte: 24-nov-2026.
 - **Criterio de cierre:** Decisión registrada con medición del aporte de las descripciones al puntaje, y prueba de nombres si se mantienen.
 - **Referencias:** `docs/03-architecture/adr/0017-matching-v2-pipeline-calibration-and-freshness.md`
 
-#### TD-029 — Sin medición de `embedentity` con un Ollama real
+#### TD-029 — La latencia de `embedentity` no está medida: la VM de desarrollo no expone AVX2
 
 **Operación** · **S3 Media** · esfuerzo **S** · confianza **Leída** · **Abierta**
 
-- **Evidencia:** Las pruebas usan un servidor de prueba: se desconoce la carga en frío, el efecto de `keep_alive` y `num_ctx`, y el tiempo real por perfil. Las métricas ya existen para observarlo.
-- **Interés (qué cuesta no pagarla):** El objetivo de frescura p95 ≤ 120 s está instrumentado pero no demostrado con el modelo real.
-- **Disparador:** Un Ollama con el modelo vigente disponible (ADR-0018, protocolo de 300 pares).
-- **Remediación propuesta:** Correr el flujo contra Ollama con el modelo vigente, archivar la medición y ajustar `keep-alive`, `num-ctx` y el tamaño de lote con ella.
-- **Criterio de cierre:** Una medición archivada con el modelo vigente y el p95 observado frente al objetivo.
-- **Referencias:** `docs/03-architecture/adr/0018-embedding-model-selection-and-versioning.md`
+- **Evidencia:** El contrato del cliente ya se validó contra un Ollama real (TD-R25), pero esta VM oculta AVX/AVX2: `llama.cpp` corre con SSE y un embedding de ~25 tokens tarda de 4 a 25 s (≈5 tokens/s). Un perfil de ~400 tokens son ~80 s más 30 s de ventana: ~110 s, al límite del objetivo de 120 s.
+- **Interés (qué cuesta no pagarla):** El objetivo de frescura p95 ≤ 120 s está instrumentado y su contrato validado, pero no demostrado; y si ADR-0026 elige un huésped que oculta AVX2, el embedding será unas cien veces más lento sin que nada lo avise.
+- **Disparador:** Hardware con AVX2 disponible (ADR-0026) y `docs/03-architecture/architecture-review-2026-11/08-medicion-ollama-y-bakeoff-embeddings.md` §7, punto 1.
+- **Remediación propuesta:** Repetir la medición de §2 de ese documento en hardware con AVX2, con la prueba repetible `OllamaEmbeddingClientRealTest`, y comprobar si fijar `num_thread` por debajo de la cuota de CPU estabiliza los tiempos. Exigir en ADR-0026 que el huésped exponga AVX2.
+- **Criterio de cierre:** Una medición archivada en hardware con AVX2 con el modelo vigente, y el p95 observado frente al objetivo.
+- **Referencias:** `docs/03-architecture/architecture-review-2026-11/08-medicion-ollama-y-bakeoff-embeddings.md` §8
 
 #### TD-023 — Fin de soporte de Spring Boot 4.1 (31-jul-2027)
 
@@ -311,6 +311,7 @@ Corte: 24-nov-2026.
 | TD-R22 | Cualquier reclutador podía publicar sin límite (antes TD-030, parte) | Seguridad | S2 | 2026-11-24 | #38 | Verificación de la cuenta (`UNVERIFIED`, `VERIFIED`, `SUSPENDED`) en `auth`, topes de vacantes publicadas por confianza (2 y 100 por defecto) y puerta al publicar o reabrir, con candado por reclutador contra la carrera. 25 pruebas de punta a punta, una repetida en 25 rondas; sin el candado falla en la ronda 4. Lo que queda (quién verifica y las sugerencias) es TD-032. |
 | TD-R23 | Reglas de formato repetidas en `cv` y a punto de repetirse en `job` (antes TD-031) | Código | S4 | 2026-11-24 | #36 | `FormatRules` y `SalaryRules` en `common`, con pruebas propias; se borró `CandidateRules` de `cv` y la validación del salario quedó en un solo lugar, para que `job` las use en vez de copiarlas. Las pruebas existentes de `cv` pasan sin cambios. De paso, una moneda inexistente ya no deja el salario marcado como utilizable. |
 | TD-R24 | El lado de la vacante de `embedentity` no existía (antes TD-028) | Arquitectura | S3 | 2026-11-25 | #39 | `EmbedJob` con su cola compartida con los perfiles, `JobSignals` y su lectura anticorrupción sobre `getjobsignals`, el consumidor de los siete eventos de `job`, las copias `published` y `recruiting_stage` (BR-MATCH-08) y una migración que admite vacantes en la cola. Solo una vacante publicada se embebe; cerrar conserva el vector y reabrir no llama al modelo. Nueve escenarios de punta a punta desde la API de `job`. |
+| TD-R25 | Sin validar el contrato del cliente de embeddings con un Ollama real (parte de TD-029) | Operación | S3 | 2026-11-25 | #40 | `OllamaEmbeddingClientRealTest`, repetible con `OLLAMA_REAL_URL` y omitida por defecto, comprueba contra Ollama 0.40.17: dimensión 1024, norma 1, el 400 de `truncate=false` que el cliente trata como rechazo, que otra dimensión de columna se rechaza, que un servidor caído es no disponible y una sanidad semántica. Cambiar `truncate` a `true` la hace fallar. Quedó anotado que cambiar `num_ctx` o `num_thread` recarga el modelo. |
 | TD-R26 | Nadie verificaba a los reclutadores (antes TD-032, parte) | Seguridad | S2 | 2026-11-25 | #41 | Canal `PUT /api/v1/admin/recruiters/{id}/verification` solo para operadores (lista de configuración, vacía por defecto; `404` para quien no lo es), sin decidir sobre uno mismo y con cada cambio en `audit_log` en la misma transacción, sin datos personales. Verificar sube el tope de publicación de TD-030: probado de punta a punta. La vía automática por correo queda para cuando haya proveedor de correo; las sugerencias que exijan `VERIFIED` son TD-033. |
 
 ## 7. Deuda aceptada
@@ -337,6 +338,7 @@ Corte: 24-nov-2026.
 | 1.6 | 2026-11-24 | Se paga la parte de TD-030 que se podía cerrar (puerta de publicar con topes por confianza, PR #38, TD-R22). Lo que queda pasa a TD-032: nadie verifica a los reclutadores y las sugerencias aún no exigen la verificación. Quedan 19 abiertas o planificadas, 23 resueltas y 6 aceptadas. |
 | 1.7 | 2026-11-25 | Se paga el canal de verificación de TD-032 (PR #41, TD-R26): un operador verifica, suspende o devuelve a «sin verificar», con auditoría. Entra TD-033: las sugerencias, cuando existan, deben exigir `VERIFIED` y la cuota diaria. Quedan 19 abiertas o planificadas, 24 resueltas y 6 aceptadas. |
 | 1.8 | 2026-11-25 | Se paga TD-028 (PR #39, TD-R24): el lado de la vacante de `embedentity`, desbloqueado por `getjobsignals` del #37. Quedan 18 abiertas o planificadas, 25 resueltas y 6 aceptadas. |
+| 1.9 | 2026-11-25 | Se paga la parte de contrato de TD-029 (PR #40, TD-R25): el cliente se validó contra un Ollama real. TD-029 sigue abierta con su alcance reducido a la latencia en hardware con AVX2. Quedan 18 abiertas o planificadas, 26 resueltas y 6 aceptadas. |
 
 ## 9. Plantilla de ficha
 

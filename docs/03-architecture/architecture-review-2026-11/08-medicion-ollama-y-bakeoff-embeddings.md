@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | 🟡 En revisión |
-| **Versión** | 1.0 · 15-nov-2026 |
+| **Versión** | 1.1 · 15-nov-2026; adenda 25-nov-2026 (§8) |
 | **Relacionado** | ADR-0004 (Ollama local), **ADR-0018 (propuesto)**, ADR-0003, `02-hld-system-design.md` §4 y §8, `07-spike-bibliotecas-java-25.md`, anexo `anexos/bakeoff-embeddings/` |
 | **Método** | Ollama 0.40.16 en un contenedor aislado (imagen `ollama/ollama`), cinco modelos de embeddings, un conjunto **sintético** de 24 vacantes y 56 candidatos (1.344 pares) con relevancia 0–3 derivada de familia profesional y solapamiento de habilidades, más sondeos de sesgo por nombre y de truncamiento de contexto. Intervalos de confianza por *bootstrap* pareado por vacante (10.000 remuestreos) |
 
@@ -156,4 +156,52 @@ Criterios secundarios entre los tres preseleccionados:
 2. Ejecutar el protocolo de 300 pares y la prueba contrafactual con **nombres mezclados** e instituciones/ciudades.
 3. Medir la dirección candidato → vacante y la opción de vector único simétrico.
 4. ~~Verificar las licencias~~ **Hecho el 16-nov-2026 para los tres preseleccionados** (ver la nota de licencias en §5). Pendiente solo lo señalado allí: texto de los archivos `LICENSE`, licencias de los datos de entrenamiento y `embeddinggemma`.
-5. Probar la integración con Spring AI contra Ollama real (`truncate`, `num_ctx`).
+5. ~~Probar la integración con Spring AI contra Ollama real (`truncate`, `num_ctx`)~~ **Hecho el 25-nov-2026 con el cliente propio** (se habla con Ollama por HTTP, sin Spring AI; `matching-module` TDD §10.1): ver §8.
+
+---
+
+## 8. Adenda (25-nov-2026): el contrato del cliente contra un Ollama real
+
+**Qué se hizo.** Se levantó Ollama 0.40.17 con los **mismos límites que `docker-compose.yml`** (1,5 CPU y 4 GB), el modelo provisional `qwen3-embedding:0.6b` (595,78 M de parámetros, cuantización Q8_0, 639 MB) y se probó el cliente de `matching` (`OllamaEmbeddingClient`) y el modelo con peticiones reales. Misma VM que §2: sin AVX (`CPU : SSE3` en el registro de Ollama).
+
+### 8.1 Contrato (✅ medido)
+
+| Qué | Resultado |
+|---|---|
+| Dimensión del vector | **1024**, igual que la columna `vector(1024)` |
+| Norma | **L2 = 1,0000**: los vectores salen unitarios, así que el coseno es el producto punto que usa el índice HNSW |
+| `keep_alive: 30m` | Se respeta: `/api/ps` muestra el modelo residente con su vencimiento a 30 min |
+| `truncate=false` con un texto que no cabe (`num_ctx=128`, ~400 tokens) | **HTTP 400** `the input length exceeds the context length` en 1,6 s, **sin calcular nada**. El cliente lo traduce a `EmbeddingRejectedException` (la cola no reintenta) sin citar el texto |
+| `truncate=true` con el mismo texto | HTTP 200 con **127 tokens contados**: recorta en silencio. Confirma por qué el ADR-0018 exige `truncate=false` siempre (§2.3) |
+| Mismas opciones en llamadas seguidas | Carga 0,00 s |
+| **Cambiar `num_ctx`** entre llamadas (8192 → 4096 → 8192) | **Recarga el modelo**: 2,1 s y 2,5 s de carga |
+| **Cambiar `num_thread`** entre llamadas | También recarga: de 2,5 a 9,8 s |
+| Sanidad semántica (4 textos) | perfil backend ~ vacante backend **0,72**; ~ enfermera 0,18; ~ contador 0,24; enfermera ~ contador 0,35 |
+
+**Consecuencia para el código:** las opciones que se envían a Ollama (`num_ctx`, `keep_alive` y, si algún día se fija, `num_thread`) deben ser **constantes** durante la vida del proceso. El cliente actual ya lo cumple: las toma de la configuración y no varía ninguna por petición. Quien añada una opción por petición provoca una recarga de segundos en cada llamada.
+
+### 8.2 Latencia: **no se puede medir aquí** (sin cambios respecto a §2.2)
+
+- 23 tokens: **4,2 a 25 s** para la misma entrada con 3 hilos bajo la cuota de 1,5 CPU; 210 tokens: 40 s con 1 hilo (≈5 tokens/s, ≈200 ms por token). Está dentro del rango malo de §2.2 (105–391 ms/token).
+- Con 1 hilo el tiempo fue estable (4,2–4,9 s); con 2 hilos 3,5–3,6 s con un valor atípico de 110 s; con el valor por defecto (3 hilos, más que la cuota) varió de 4 a 25 s. **Es una observación, no una conclusión**: el hardware no es representativo y no la usaría para fijar un valor. Queda como hipótesis a comprobar en hardware real (llama.cpp con más hilos que cuota de CPU espera en las barreras entre hilos).
+- Con el swap al 100 % y la VM sin AVX, estas cifras **no sirven** para el SLO de frescura (p95 ≤ 120 s, ADR-0017). Para dimensionarlo con un número prudente: un perfil de ~400 tokens a ~200 ms/token son ~80 s, más 30 s de ventana de agrupación, **~110 s: al límite**. Con AVX2 se espera mucho menos, pero no está medido.
+
+### 8.3 Lo que sigue pendiente
+
+1. Repetir §2 y esta adenda en hardware con **AVX2** (§7, punto 1). Es lo que cierra TD-029. **ADR-0026 debe exigir que el huésped lo exponga**: una VM que lo oculta hace el embedding unas cien veces más lento.
+2. Ejecutar la prueba repetible de abajo en ese hardware.
+
+### 8.4 La prueba repetible
+
+`OllamaEmbeddingClientRealTest` (`matching-module`) comprueba los contratos de §8.1 contra el Ollama que se indique y **se omite si no hay uno**, así que no afecta al `verify`:
+
+```
+OLLAMA_REAL_URL=http://127.0.0.1:11434 mvn -pl matching-module -am test \
+  -Dtest=OllamaEmbeddingClientRealTest -Dsurefire.failIfNoSpecifiedTests=false
+```
+
+Solo valida contratos, nunca tiempos.
+
+### 8.5 Errores míos durante esta medición
+
+Por transparencia, y porque repiten los de §6: un `pkill -f` cuyo patrón estaba en mi propio comando mató mi *shell*; un *script* de 31 minutos imprimía los resultados solo al final y no dejó nada al fallar por un tiempo de espera; y volví a medir latencia sin haber leído antes este documento. Ya está anotado para no repetirlo: en esta VM solo se validan contratos.
