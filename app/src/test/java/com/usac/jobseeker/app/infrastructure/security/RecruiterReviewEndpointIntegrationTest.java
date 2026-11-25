@@ -128,14 +128,15 @@ class RecruiterReviewEndpointIntegrationTest {
             "select actor_account_id, action, target_type, details::text as details, trace_id"
                 + " from audit_log where target_id = ?",
             target);
-    assertThat(row).containsEntry("actor_account_id", OPERATOR);
-    assertThat(row).containsEntry("action", "RECRUITER_VERIFICATION_CHANGED");
-    assertThat(row).containsEntry("target_type", "ACCOUNT");
-    assertThat(row.get("details").toString()).contains("VERIFIED");
+    assertThat(row)
+        .containsEntry("actor_account_id", OPERATOR)
+        .containsEntry("action", "RECRUITER_VERIFICATION_CHANGED")
+        .containsEntry("target_type", "ACCOUNT")
+        .doesNotContainEntry("trace_id", null);
     assertThat(row.get("details").toString())
+        .contains("VERIFIED")
         .doesNotContain(target.toString())
         .doesNotContain(OPERATOR.toString());
-    assertThat(row.get("trace_id")).isNotNull();
   }
 
   // Repetir no cambia nada ni deja un rastro de algo que no ocurrió.
