@@ -33,6 +33,8 @@ JobSeeker es **cliente** de Clavaris: nunca emite tokens ni guarda credenciales.
 | `provisionaccount` | Primer login: crea la cuenta local con la capacidad de candidato si no existe (BR-ACCT-09). Idempotente: un segundo login no cambia nada | `AccountProvisioningPort` |
 | `resolveactor` | Reconstruye el `Actor` desde la base local en cada petición; rechaza `PENDING_DELETION` y `ANONYMIZED` (ADR-0020, resolución de identidad) | `ActorLookupPort` |
 | `handleclavariswebhook` | Aplica un webhook de Clavaris ya verificado (§11) | `IdentityStatePort`, `ProcessedEventsPort`, `DomainEventPublisherPort` |
+| `getrecruiterverification` | Devuelve la verificación de una cuenta reclutadora activa (BR-ACCT-10), o vacío si no existe, no puede actuar o no es reclutadora. Es una lectura entre módulos: `job` la usa al publicar | `RecruiterVerificationReadPort` |
+| `changerecruiterverification` | Fija la verificación de una cuenta reclutadora (`UNVERIFIED`, `VERIFIED`, `SUSPENDED`). Idempotente, condicional al valor leído (dos operadores simultáneos no se pisan) y rechaza a quien no es reclutador. **Aún no tiene quien lo llame**: el canal que verifica es TD-032 | `RecruiterVerificationStorePort` |
 | `getmyaccount` | Devuelve al llamador su propia cuenta (identificador y capacidades): `GET /api/v1/me`. Es el **caso de uso plantilla** del paso 5 del Sprint 0 (§12): no añade reglas de negocio, así que el esfuerzo va a lo transversal | `MyAccountPort` |
 
 Los casos de uso de las demás funciones (`handleclavariswebhook`, el cierre de sesiones de una cuenta, la solicitud de la capacidad de reclutador) se nombran y se crean en el sub-paso que los implementa, no antes (reglas del proyecto, §7.1).

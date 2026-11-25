@@ -4,7 +4,7 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | 🟡 En revisión |
-| **Versión** | 1.5 — entra TD-030 |
+| **Versión** | 1.6 — se paga parte de TD-030; entra TD-032 |
 | **Fecha** | 24 de noviembre de 2026 |
 | **Dueño del documento** | Responsable del proyecto |
 | **Revisión del registro** | Al cerrar cada sprint y antes de cada hito de la hoja de ruta |
@@ -56,7 +56,7 @@ Corte: 24-nov-2026.
 | S4 Baja | 5 |
 | **Total** | **19** |
 
-- **Abiertas:** 17 · **Planificadas:** 2 · **Resueltas:** 22 · **Aceptadas:** 6.
+- **Abiertas:** 17 · **Planificadas:** 2 · **Resueltas:** 23 · **Aceptadas:** 6.
 - **S2 abiertas con disparador próximo** (decidir el siguiente sprint): TD-012 (antes de `suggestcandidatesforjob`) y TD-005 y TD-016 (primer despliegue), más TD-020 (antes de usuarios reales).
 - **Métricas a seguir en cada revisión:** deuda abierta por severidad, edad de las S2 en días, número de cierres por sprint, aceptadas vencidas.
 
@@ -78,7 +78,7 @@ Corte: 24-nov-2026.
 | TD-027 | Los nombres propios del texto libre no se redactan antes del embedding | Privacidad | S3 | L | Medida | Abierta | Antes de embeber perfiles reales (`embedentity`) |
 | TD-028 | El lado de la vacante de `embedentity` no existe: `JobSignals` y `job_embeddings` | Arquitectura | S3 | L | Leída | Abierta | TDD de `job` y primer módulo `job` con código |
 | TD-029 | Sin medición de `embedentity` con un Ollama real | Operación | S3 | S | Leída | Abierta | Un Ollama con el modelo vigente disponible (ADR-0018, protocolo de 300 pares) |
-| TD-030 | Cualquier reclutador puede publicar: falta la verificación y las cuotas (D1 del TDD de `job`) | Seguridad | S2 | L | Leída | Abierta | Bloque «Verificación de reclutador y cuotas» (hallazgo F1) sin diseñar |
+| TD-032 | Nadie verifica a los reclutadores, y las sugerencias aún no exigen la verificación | Seguridad | S2 | L | Leída | Abierta | Procedimiento de verificación decidido por el dueño; sub-paso de sugerencias de `matching` |
 | TD-023 | Fin de soporte de Spring Boot 4.1 (31-jul-2027) | Plataforma | S3 | L | Medida | Planificada | 2027-04-30 (inicio de la subida) |
 | TD-024 | El `Dockerfile` compila con una imagen de Java 26 | Operación | S4 | XS | Leída | Abierta | Oportunista |
 | TD-025 | La purga de la bandeja usa `Instant.now()` | Código | S4 | XS | Leída | Abierta | Oportunista |
@@ -240,16 +240,16 @@ Corte: 24-nov-2026.
 - **Criterio de cierre:** Una medición archivada con el modelo vigente y el p95 observado frente al objetivo.
 - **Referencias:** `docs/03-architecture/adr/0018-embedding-model-selection-and-versioning.md`
 
-#### TD-030 — Cualquier reclutador puede publicar: falta la verificación y las cuotas (D1 del TDD de `job`)
+#### TD-032 — Nadie verifica a los reclutadores, y las sugerencias aún no exigen la verificación
 
 **Seguridad** · **S2 Alta** · esfuerzo **L** · confianza **Leída** · **Abierta**
 
-- **Evidencia:** `transitionjobposting` solo exige la capacidad de reclutador (BR-JOB-01). Una cuenta recién habilitada publica sin límite ni verificación, y sus vacantes llegan a los listados de candidatos.
-- **Interés (qué cuesta no pagarla):** Spam y vacantes fraudulentas visibles para todos los candidatos desde el día uno; el costo de moderarlo después es mayor que el de diseñarlo ahora.
-- **Disparador:** Bloque «Verificación de reclutador y cuotas» (hallazgo F1) sin diseñar.
-- **Remediación propuesta:** Diseñar el bloque (verificación de la cuenta, cuota de vacantes publicadas por plan y tasa de publicación) y exigirlo solo al publicar: crear y editar borradores sigue libre (recomendación D1).
-- **Criterio de cierre:** Una cuenta no verificada recibe un error propio al publicar, con una prueba de punta a punta.
-- **Referencias:** `docs/03-architecture/tdd/job-module.md` §11
+- **Evidencia:** `changerecruiterverification` existe y está probado, pero ninguna ruta ni proceso lo llama: toda cuenta reclutadora queda `UNVERIFIED` y solo se verifica tocando la base. Y las sugerencias de candidatos (que aún no existen) deberán exigir `VERIFIED` (REQ-R-10, REQ-R-11): ese es el control central contra el raspado de datos (T-N1).
+- **Interés (qué cuesta no pagarla):** Hoy el riesgo está acotado por el tope de vacantes sin verificar, pero el producto no puede ofrecer ni a un reclutador legítimo el tope alto, y la protección fuerte contra el raspado no existe todavía.
+- **Disparador:** Procedimiento de verificación decidido por el dueño; sub-paso de sugerencias de `matching`.
+- **Remediación propuesta:** Decidir el procedimiento (correo corporativo verificado, revisión manual o ambos), darle un canal (un flujo en `auth` o una operación de respaldo) y, al construir las sugerencias, exigir `VERIFIED` más la cuota diaria de perfiles vistos (REQ-R-11).
+- **Criterio de cierre:** Una cuenta pasa a `VERIFIED` por un canal real, con auditoría, y las sugerencias responden `403 RECRUITER_NOT_VERIFIED` a una sin verificar, con una prueba de punta a punta.
+- **Referencias:** `docs/03-architecture/tdd/job-module.md` §10.2; `docs/03-architecture/architecture-review-2026-11/01-competencia-y-requerimientos.md` REQ-R-10
 
 #### TD-023 — Fin de soporte de Spring Boot 4.1 (31-jul-2027)
 
@@ -320,6 +320,7 @@ Corte: 24-nov-2026.
 | TD-R19 | Índice `idx_outbox_aggregate` sin lector (antes TD-009) | Rendimiento | S4 | 2026-11-24 | #34 | Descartada: el nuevo reclamo lo usa para comprobar si un agregado tiene un evento en vuelo. |
 | TD-R20 | Un solo hilo para todas las tareas programadas (antes TD-002) | Concurrencia | S3 | 2026-11-24 | #35 | Planificador de cuatro hilos configurable (`SCHEDULER_POOL_SIZE`). Prueba de que una tarea lenta no retrasa a otra; lo necesitaba el trabajador de embeddings, que llama a Ollama durante segundos. |
 | TD-R21 | Sin métricas de frescura de los embeddings (parte de TD-029) | Operación | S3 | 2026-11-24 | #35 | Histograma edición→vector con el objetivo de 120 s como cubo, edad del trabajo listo más viejo y profundidad por estado; tres alertas probadas con `promtool` y tres paneles. La medición con un Ollama real sigue abierta en TD-029. |
+| TD-R22 | Cualquier reclutador podía publicar sin límite (antes TD-030, parte) | Seguridad | S2 | 2026-11-24 | #38 | Verificación de la cuenta (`UNVERIFIED`, `VERIFIED`, `SUSPENDED`) en `auth`, topes de vacantes publicadas por confianza (2 y 100 por defecto) y puerta al publicar o reabrir, con candado por reclutador contra la carrera. 25 pruebas de punta a punta, una repetida en 25 rondas; sin el candado falla en la ronda 4. Lo que queda (quién verifica y las sugerencias) es TD-032. |
 | TD-R23 | Reglas de formato repetidas en `cv` y a punto de repetirse en `job` (antes TD-031) | Código | S4 | 2026-11-24 | #36 | `FormatRules` y `SalaryRules` en `common`, con pruebas propias; se borró `CandidateRules` de `cv` y la validación del salario quedó en un solo lugar, para que `job` las use en vez de copiarlas. Las pruebas existentes de `cv` pasan sin cambios. De paso, una moneda inexistente ya no deja el salario marcado como utilizable. |
 
 ## 7. Deuda aceptada
@@ -343,6 +344,7 @@ Corte: 24-nov-2026.
 | 1.3 | 2026-11-24 | Se paga TD-002 (PR #35, TD-R20) porque el trabajador de embeddings lo exigía. Entran TD-028 (el lado de la vacante de `embedentity`) y TD-029 (medición con un Ollama real); las métricas de frescura de TD-029 se pagan en el mismo PR (TD-R21). Quedan 18 abiertas o planificadas, 21 resueltas y 6 aceptadas. |
 | 1.4 | 2026-11-24 | Se paga TD-031 (reglas de formato repetidas en `cv` y a punto de repetirse en `job`, PR #36, TD-R23): se encontró y se pagó en el mismo cambio. Quedan 18 abiertas o planificadas, 22 resueltas y 6 aceptadas. |
 | 1.5 | 2026-11-24 | Entra TD-030 (verificación de reclutador y cuotas antes de publicar, D1 del TDD de `job`), que dejó el primer corte de `job` (PR #37). Quedan 19 abiertas o planificadas, 22 resueltas y 6 aceptadas. |
+| 1.6 | 2026-11-24 | Se paga la parte de TD-030 que se podía cerrar (puerta de publicar con topes por confianza, PR #38, TD-R22). Lo que queda pasa a TD-032: nadie verifica a los reclutadores y las sugerencias aún no exigen la verificación. Quedan 19 abiertas o planificadas, 23 resueltas y 6 aceptadas. |
 
 ## 9. Plantilla de ficha
 

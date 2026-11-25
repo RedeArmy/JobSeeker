@@ -333,6 +333,7 @@ erDiagram
 | scheduled_anonymization_at | timestamptz | NULL | `deletion_requested_at + accountDeletionGracePeriodDays`; el batch de anonimización recorre por esta columna vencida, mismo patrón que `job_postings.closed_at` (BR-JOB-06) |
 | anonymized_at | timestamptz | NULL | Momento en que se ejecutó la anonimización (BR-DATA-05) — su presencia marca el estado terminal, análogo a `job_postings.deleted_at` |
 | created_at | timestamptz | NOT NULL DEFAULT now() | Auditoría de creación — creada la primera vez que Clavaris notifica (o JobSeeker consulta) una identidad nueva |
+| recruiter_verification | text | NOT NULL DEFAULT 'UNVERIFIED', CHECK IN ('UNVERIFIED','VERIFIED','SUSPENDED') | Confianza en la cuenta como reclutadora (BR-ACCT-10, REQ-R-10). Solo tiene sentido con `is_recruiter_enabled`; la escribe `auth` y la consulta `job` por su caso de uso. Decide cuántas vacantes se publican (BR-JOB-22) |
 
 CHECK `(is_candidate_enabled OR is_recruiter_enabled)` — toda cuenta debe tener al menos una capacidad activa; ninguna cuenta existe sin rol.
 

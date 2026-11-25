@@ -198,7 +198,21 @@ Se construyó la vacante con su ciclo de vida manual de punta a punta: migració
 - **La lectura de una vacante ajena responde `404` también a quien no es candidato**, no `403`: un `403` confirmaría que la vacante existe (§5, regla 2). Un candidato recibe además un contrato más corto, sin versión, etapa, fechas de gestión ni quién la escribió.
 - **`getjobsignals` entrega todo lo que no es borrador ni eliminada**, con su estado. Una cerrada o archivada sigue teniendo señales para que los scores ya calculados se puedan explicar; `matching` decide qué hacer con cada estado.
 
-**Pendiente de esta ola:** `listjobpostings` (sub-paso 5), que necesita el filtro de visibilidad en SQL; el consumo de `getjobsignals` en `matching` (`JobSignals`, `job_embeddings`; TD-028); y la decisión D1 (verificación de reclutador para publicar), que depende de un bloque que aún no existe y queda registrada en el registro de deuda (TD-030).
+### 10.2 La puerta de publicar (D1, TD-030)
+
+Pasar a `PUBLISHED`, sea desde borrador o reabriendo una cerrada, cruza una puerta (`PublishingGate`) que mira la confianza en la cuenta y cuántas vacantes publicadas tiene ya (BR-JOB-22). Decisiones:
+
+- **La verificación es de `auth`, no de `job`.** Es un atributo de la cuenta junto a sus capacidades (`accounts.recruiter_verification`, BR-ACCT-10) y `job` la pregunta por el caso de uso `getrecruiterverification`, con un puerto propio y un enumerado propio (ARCH-04). El `RecruiterProfile` de `cv` (Ola 3) es el perfil público de la cuenta y no es el lugar de la confianza: no existe aún, y la verificación debe funcionar antes que él.
+- **Tres motivos, tres códigos**, porque el cliente reacciona distinto: `403 RECRUITER_NOT_VERIFIED` (sin verificar y en su tope: verificarse lo sube), `403 RECRUITER_SUSPENDED` y `429 QUOTA_EXCEEDED` (verificada y en su tope: cerrar una libera cupo), como el LLD §438.
+- **Solo cuentan las `PUBLISHED`.** Cerrar libera el cupo, que es lo que el reclutador espera, y reabrir una cerrada pasa por el mismo tope: si no, cerrar y reabrir sería una forma de saltárselo.
+- **El recuento toma un candado de transacción por reclutador** (`pg_advisory_xact_lock`). Sin él, dos publicaciones simultáneas de la misma cuenta contarían ambas «una menos que el tope» y pasarían las dos. Es por cuenta, así que no frena a otros reclutadores. La prueba de punta a punta repite la carrera en 25 rondas, porque una sola casi nunca alcanza una ventana de milisegundos (con el candado quitado falla en la ronda 4).
+- **Los topes son configuración** (`jobseeker.job.publishing.*`, 2 y 100 por defecto) y se rechaza al arrancar una política incoherente (verificarse no puede empeorar la cuenta).
+- **La puerta va después de validar la transición**: un publicar inválido (sin habilidad, par que no existe) se dice antes que el tope, para no revelar el cupo.
+- **Ante la duda no se publica**: una cuenta que `auth` no reconoce como reclutadora activa se trata como suspendida.
+
+**Lo que esto no cierra:** quién y cómo pasa una cuenta a `VERIFIED` (correo corporativo o revisión manual, REQ-R-10), y que las sugerencias de candidatos exijan `VERIFIED` (REQ-R-10, REQ-R-11). Ambos son TD-032: el caso de uso existe y está probado, pero hoy nadie lo llama.
+
+**Pendiente de esta ola:** `listjobpostings` (sub-paso 5), que necesita el filtro de visibilidad en SQL; el consumo de `getjobsignals` en `matching` (`JobSignals`, `job_embeddings`; TD-028); y el procedimiento que verifica a un reclutador (TD-032), porque la puerta de publicar de §10.2 ya funciona pero hoy nadie pasa una cuenta a `VERIFIED`.
 
 La Ola 2 empieza por `manageeligibilityrules` y `validatejobeligibility` (que ya tienen carpeta), después la invitación y por último las preguntas; la Ola 3, por el archivado.
 
@@ -206,7 +220,7 @@ La Ola 2 empieza por `manageeligibilityrules` y `validatejobeligibility` (que ya
 
 | ID | Pregunta | Recomendación |
 |---|---|---|
-| **D1** | ¿Quién puede publicar con capacidad de reclutador **no verificada**? BR-JOB-01 solo exige la capacidad, pero el bloque «Verificación de reclutador y cuotas» (hallazgo F1) cambia esto | Permitir crear y editar borradores sin verificación, y exigirla para **publicar**; se confirma con ese bloque |
+| **D1** | ✅ **Resuelta (24-nov-2026).** ¿Quién puede publicar con capacidad de reclutador **no verificada**? | Se crea y edita sin verificación y se publica con un tope según la confianza en la cuenta (BR-JOB-22, §10.2). La verificación es un atributo de la cuenta (BR-ACCT-10) y vive en `auth` |
 | **D2** | ¿Qué pasa con las vacantes publicadas de un reclutador que desactiva su capacidad? Sigue abierto en `domain-model.md` §8 | Mantenerlas bajo su gestión hasta que las transicione él; revisar al diseñar la desactivación de capacidades en `auth` |
 | **D3** | ¿Una invitación vence o es permanente mientras la vacante esté abierta? | Permanente mientras la vacante lo esté (BR-ELIG-13 ya cubre la revocación manual) |
 | **D4** | ¿Se unifican en un solo proceso periódico el archivado y las transiciones programadas? | Un caso de uso por preocupación, **un mismo planificador** que los dispara: no se duplica infraestructura y no se acopla la lógica |
