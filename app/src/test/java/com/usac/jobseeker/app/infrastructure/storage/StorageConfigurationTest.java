@@ -33,6 +33,7 @@ class StorageConfigurationTest {
     assertThatThrownBy(() -> storage.presignDownload(key, "cv.pdf", FileType.PDF))
         .isInstanceOf(UpstreamUnavailableException.class);
     assertThatThrownBy(() -> storage.delete(key)).isInstanceOf(UpstreamUnavailableException.class);
+    assertThatThrownBy(() -> storage.get(key)).isInstanceOf(UpstreamUnavailableException.class);
     assertThatThrownBy(() -> storage.exists(key)).isInstanceOf(UpstreamUnavailableException.class);
     assertThatThrownBy(() -> scanner.scan(content))
         .isInstanceOf(UpstreamUnavailableException.class);

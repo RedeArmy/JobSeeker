@@ -241,6 +241,78 @@ class ProfilePhotoServicesTest {
     assertThat(metrics).endsWith("missing_object");
   }
 
+  // Fail-closed: sin almacén no se toca el perfil.
+  @Test
+  void anUnavailableStorageLeavesTheProfileUntouched() {
+    photos.create(account);
+    storage.putDown = true;
+    var service = upload();
+    var command = new UploadProfilePhotoCommand(account, PNG);
+
+    assertThatThrownBy(() -> service.execute(command))
+        .isInstanceOf(UpstreamUnavailableException.class);
+    assertThat(photos.slot.hasPhoto()).isFalse();
+    assertThat(metrics).containsExactly("unavailable");
+  }
+
+  // Si tampoco se puede descartar el objeto nuevo, el error original sigue siendo el que sale; el
+  // objeto lo recoge la reconciliación (TD-041).
+  @Test
+  void aFailedDiscardKeepsTheOriginalError() {
+    photos.create(account);
+    photos.failOnSet = true;
+    storage.deleteDown = true;
+    var service = upload();
+    var command = new UploadProfilePhotoCommand(account, PNG);
+
+    assertThatThrownBy(() -> service.execute(command)).isInstanceOf(IllegalStateException.class);
+    assertThat(storage.objects).hasSize(1);
+  }
+
+  @Test
+  void theCommandTheContentAndThePolicyAreValues() {
+    byte[] bytes = {1, 2};
+    var command = new UploadProfilePhotoCommand(account, bytes);
+    bytes[0] = 9;
+    var content =
+        new com.usac.jobseeker.cv.application.usecase.getmyprofilephoto.ProfilePhotoContent(
+            new byte[] {1, 2}, "image/png");
+
+    assertThat(command.content()).containsExactly(1, 2);
+    assertThat(command)
+        .isEqualTo(new UploadProfilePhotoCommand(account, new byte[] {1, 2}))
+        .hasSameHashCodeAs(new UploadProfilePhotoCommand(account, new byte[] {1, 2}))
+        .isNotEqualTo(new UploadProfilePhotoCommand(account, new byte[] {1}))
+        .isNotEqualTo(new UploadProfilePhotoCommand(new AccountId(UUID.randomUUID()), bytes))
+        .isNotEqualTo("otra cosa");
+    assertThat(command.toString()).isEqualTo("UploadProfilePhotoCommand[bytes=2]");
+    assertThat(new UploadProfilePhotoCommand(account, null).content()).isEmpty();
+    assertThatThrownBy(() -> new UploadProfilePhotoCommand(null, bytes))
+        .isInstanceOf(NullPointerException.class);
+
+    assertThat(content.content()).containsExactly(1, 2);
+    assertThat(content)
+        .isEqualTo(content.getClass().cast(copy(content)))
+        .hasSameHashCodeAs(copy(content))
+        .isNotEqualTo(
+            new com.usac.jobseeker.cv.application.usecase.getmyprofilephoto.ProfilePhotoContent(
+                new byte[] {1, 2}, "image/jpeg"))
+        .isNotEqualTo(
+            new com.usac.jobseeker.cv.application.usecase.getmyprofilephoto.ProfilePhotoContent(
+                new byte[] {1}, "image/png"));
+    assertThat(content.toString()).isEqualTo("ProfilePhotoContent[image/png, bytes=2]");
+
+    assertThatThrownBy(() -> new ProfilePhotoPolicy(0))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThat(new ProfilePhotoPolicy(1).maxBytes()).isEqualTo(1);
+  }
+
+  private static Object copy(
+      com.usac.jobseeker.cv.application.usecase.getmyprofilephoto.ProfilePhotoContent content) {
+    return new com.usac.jobseeker.cv.application.usecase.getmyprofilephoto.ProfilePhotoContent(
+        content.content(), content.mediaType());
+  }
+
   // La imagen procesada se compara por contenido y no se puede cambiar desde fuera.
   @Test
   void aProcessedPhotoComparesByContentAndCopiesItsBytes() {
@@ -313,9 +385,14 @@ class ProfilePhotoServicesTest {
   private static final class Store implements ObjectStoragePort {
     final Map<String, byte[]> objects = new HashMap<>();
     final List<String> deleted = new ArrayList<>();
+    boolean putDown;
+    boolean deleteDown;
 
     @Override
     public StoredObjectKey put(FilePurpose purpose, byte[] content, FileType type) {
+      if (putDown) {
+        throw new UpstreamUnavailableException("storage", new IOException("caído"));
+      }
       var key = StoredObjectKey.random(purpose);
       objects.put(key.value(), content.clone());
       return key;
@@ -328,6 +405,9 @@ class ProfilePhotoServicesTest {
 
     @Override
     public void delete(StoredObjectKey key) {
+      if (deleteDown) {
+        throw new UpstreamUnavailableException("storage", new IOException("caído"));
+      }
       deleted.add(key.value());
       objects.remove(key.value());
     }

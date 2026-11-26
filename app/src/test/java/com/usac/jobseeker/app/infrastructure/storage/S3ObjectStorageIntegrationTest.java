@@ -175,6 +175,20 @@ class S3ObjectStorageIntegrationTest {
     assertThat(storage.exists(key)).isFalse();
   }
 
+  // La foto de perfil se sirve leyendo el objeto (tdd/cv-module.md §10.8); uno que ya no está no
+  // es un error, sino «sin foto».
+  @Test
+  void anObjectIsReadBackAndAMissingOneIsEmpty() {
+    byte[] png = {(byte) 0x89, 'P', 'N', 'G', 1, 2, 3};
+    StoredObjectKey key = storage.put(FilePurpose.PHOTO, png, FileType.PNG);
+
+    var read = storage.get(key);
+    storage.delete(key);
+
+    assertThat(read).hasValueSatisfying(bytes -> assertThat(bytes).isEqualTo(png));
+    assertThat(storage.get(key)).isEmpty();
+  }
+
   @Test
   void anUnreachableStorageIsUnavailableNotAnInternalError() throws Exception {
     int closedPort;
@@ -188,6 +202,8 @@ class S3ObjectStorageIntegrationTest {
 
     assertThatThrownBy(() -> down.put(FilePurpose.CV, content, FileType.PDF))
         .isInstanceOf(UpstreamUnavailableException.class);
+    StoredObjectKey key = StoredObjectKey.random(FilePurpose.PHOTO);
+    assertThatThrownBy(() -> down.get(key)).isInstanceOf(UpstreamUnavailableException.class);
   }
 
   private static StorageProperties properties(String endpoint, Duration ttl) {
