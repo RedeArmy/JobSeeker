@@ -8,13 +8,26 @@ import com.usac.jobseeker.common.domain.error.SuggestionsDeniedException;
 import com.usac.jobseeker.common.domain.error.SuggestionsDeniedException.Reason;
 import com.usac.jobseeker.common.domain.model.AccountId;
 import com.usac.jobseeker.common.domain.model.RecruiterVerification;
+import com.usac.jobseeker.matching.domain.model.Availability;
+import com.usac.jobseeker.matching.domain.model.CandidateCard;
 import com.usac.jobseeker.matching.domain.model.CandidateProfileId;
+import com.usac.jobseeker.matching.domain.model.CandidateSignals;
+import com.usac.jobseeker.matching.domain.model.CompatibilityScore;
 import com.usac.jobseeker.matching.domain.model.EntityEmbedding;
+import com.usac.jobseeker.matching.domain.model.JobSignals;
+import com.usac.jobseeker.matching.domain.service.CandidateCards;
+import com.usac.jobseeker.matching.domain.service.CompatibilityAggregator;
+import com.usac.jobseeker.matching.domain.service.SuggestionRanking;
 import com.usac.jobseeker.matching.domain.service.ViewQuota;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -51,6 +64,7 @@ public class SuggestCandidatesForJobService implements SuggestCandidatesForJobUs
   private final SuggestionsSources sources;
   private final ProfileViewLogPort views;
   private final SuggestionsPolicy policy;
+  private final ScoringModel scoring;
   private final UseCaseMetricsPort metrics;
   private final Clock clock;
 
@@ -59,12 +73,14 @@ public class SuggestCandidatesForJobService implements SuggestCandidatesForJobUs
       SuggestionsSources sources,
       ProfileViewLogPort views,
       SuggestionsPolicy policy,
+      ScoringModel scoring,
       UseCaseMetricsPort metrics,
       Clock clock) {
     this.trust = Objects.requireNonNull(trust, "trust");
     this.sources = Objects.requireNonNull(sources, "sources");
     this.views = Objects.requireNonNull(views, "views");
     this.policy = Objects.requireNonNull(policy, "policy");
+    this.scoring = Objects.requireNonNull(scoring, "scoring");
     this.metrics = Objects.requireNonNull(metrics, "metrics");
     this.clock = Objects.requireNonNull(clock, "clock");
   }
@@ -90,15 +106,26 @@ public class SuggestCandidatesForJobService implements SuggestCandidatesForJobUs
     if (embedding.isEmpty()) {
       return unavailable(SuggestionsResult.Status.PENDING_EMBEDDING, query.recruiter(), since);
     }
-    List<CandidateProfileId> ranked =
+    JobSignals jobSignals =
+        sources
+            .jobs()
+            .read(query.job())
+            .orElseThrow(() -> failed("not_published", new InvalidStateException()));
+    LocalDate today = now.atZone(ZoneOffset.UTC).toLocalDate();
+    List<NearestProfile> recovered =
         sources
             .retrieval()
             .nearestDiscoverable(
-                embedding.get().vector(),
-                embedding.get().model(),
-                Math.min(query.size(), policy.maxPageSize()))
-            .stream()
-            .map(NearestProfile::candidate)
+                embedding.get().vector(), embedding.get().model(), policy.retrievalCap());
+    Map<CandidateProfileId, SuggestedCandidate> scored = new HashMap<>();
+    List<SuggestionRanking.Entry> entries = new ArrayList<>();
+    int incomplete =
+        scoreRecovered(recovered, jobSignals, query.recruiter(), today, scored, entries);
+    entries.sort(SuggestionRanking.order(policy.tieTolerance()));
+    List<CandidateProfileId> ranked =
+        entries.stream()
+            .limit(Math.min(query.size(), policy.maxPageSize()))
+            .map(entry -> new CandidateProfileId(entry.candidate()))
             .toList();
 
     views.lock(query.recruiter());
@@ -108,7 +135,53 @@ public class SuggestCandidatesForJobService implements SuggestCandidatesForJobUs
       throw denied(Reason.QUOTA_EXCEEDED, "quota_exceeded");
     }
     views.append(query.recruiter(), query.job(), allowance.allowed(), now);
-    return served(SuggestionsResult.Status.OK, allowance.allowed(), allowance.remaining());
+    List<SuggestedCandidate> shown = allowance.allowed().stream().map(scored::get).toList();
+    return served(
+        SuggestionsResult.Status.OK, shown, allowance.remaining(), recovered.size(), incomplete);
+  }
+
+  /**
+   * Etapa 2 del pipeline (ADR-0017): puntúa a los recuperados con aritmética sobre lo que ya hay,
+   * sin llamar a ningún modelo. Se descarta a quien ya no es descubrible según su perfil vivo (la
+   * copia de `discoverable` del índice puede ir un evento por detrás, BR-DATA-03) y a quien declaró
+   * menos de la completitud mínima: omitir datos no debe poder subir el puntaje de nadie (R1).
+   * Devuelve cuántos se descartaron por incompletos.
+   */
+  private int scoreRecovered(
+      List<NearestProfile> recovered,
+      JobSignals jobSignals,
+      AccountId recruiter,
+      LocalDate today,
+      Map<CandidateProfileId, SuggestedCandidate> scored,
+      List<SuggestionRanking.Entry> entries) {
+    int incomplete = 0;
+    for (NearestProfile nearest : recovered) {
+      Optional<CandidateSignals> signals = sources.candidates().read(nearest.account());
+      if (signals.isEmpty() || !signals.get().discoverable()) {
+        continue;
+      }
+      CompatibilityScore score =
+          CompatibilityAggregator.score(
+              signals.get(),
+              jobSignals,
+              nearest.cosineSimilarity(),
+              scoring.weights(),
+              scoring.calibration(),
+              today);
+      if (score.breakdown().completeness() < scoring.weights().minCompleteness()) {
+        incomplete++;
+        continue;
+      }
+      // BR-MATCH-09: la disponibilidad es la que ve ESTE reclutador (UNSET si fue excluido).
+      Availability availability = sources.availability().visibleTo(recruiter, nearest.account());
+      CandidateCard card = CandidateCards.of(signals.get(), today);
+      scored.put(
+          nearest.candidate(),
+          new SuggestedCandidate(nearest.candidate(), score, availability, card));
+      entries.add(
+          new SuggestionRanking.Entry(nearest.candidate().value(), score.overall(), availability));
+    }
+    return incomplete;
   }
 
   private void requireVerifiedRecruiter(AccountId recruiter) {
@@ -129,15 +202,31 @@ public class SuggestCandidatesForJobService implements SuggestCandidatesForJobUs
   private SuggestionsResult unavailable(
       SuggestionsResult.Status status, AccountId recruiter, Instant since) {
     int used = views.viewedSince(recruiter, since).size();
-    return served(status, List.of(), Math.max(0, policy.viewQuota() - used));
+    return served(status, List.of(), Math.max(0, policy.viewQuota() - used), 0, 0);
   }
 
   private SuggestionsResult served(
-      SuggestionsResult.Status status, List<CandidateProfileId> candidates, int remaining) {
+      SuggestionsResult.Status status,
+      List<SuggestedCandidate> candidates,
+      int remaining,
+      int evaluated,
+      int incomplete) {
     String outcome = status.name().toLowerCase(Locale.ROOT);
     metrics.count(USE_CASE, outcome);
-    LOG.info("event=suggestions_served outcome={} Sugeridos de una vacante entregados", outcome);
-    return new SuggestionsResult(status, candidates, remaining);
+    LOG.info(
+        "event=suggestions_served outcome={} evaluated={} incomplete={} shown={} Sugeridos de una"
+            + " vacante entregados",
+        outcome,
+        evaluated,
+        incomplete,
+        candidates.size());
+    boolean any = !candidates.isEmpty();
+    return new SuggestionsResult(
+        status,
+        candidates,
+        remaining,
+        any ? candidates.get(0).score().version() : null,
+        any && scoring.calibration().calibrated());
   }
 
   private SuggestionsDeniedException denied(Reason reason, String outcome) {

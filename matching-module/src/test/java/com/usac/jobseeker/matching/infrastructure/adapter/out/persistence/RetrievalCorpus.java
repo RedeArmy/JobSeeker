@@ -65,15 +65,21 @@ final class RetrievalCorpus {
   void load(DataSource dataSource, int count, double otherModelShare, double hiddenShare) {
     JdbcTemplate jdbc = new JdbcTemplate(dataSource);
     jdbc.update("delete from profile_embeddings");
+    jdbc.update("delete from profile_embedding_accounts");
     String sql =
         "insert into profile_embeddings (candidate_profile_id, discoverable, embedding,"
             + " embedding_model, embedding_dim, embedding_content_hash, embedding_truncated,"
             + " embedding_computed_at) values (?, ?, cast(? as vector), ?, ?, ?, false, ?)";
+    String accountSql =
+        "insert into profile_embedding_accounts (account_id, candidate_profile_id) values (?, ?)";
     List<Object[]> batch = new ArrayList<>();
+    List<Object[]> accounts = new ArrayList<>();
     for (int i = 0; i < count; i++) {
+      UUID profile = UUID.randomUUID();
+      accounts.add(new Object[] {UUID.randomUUID(), profile});
       batch.add(
           new Object[] {
-            UUID.randomUUID(),
+            profile,
             random.nextDouble() >= hiddenShare,
             literal(point(0.6)),
             random.nextDouble() < otherModelShare ? OTHER_MODEL : MODEL,
@@ -83,11 +89,14 @@ final class RetrievalCorpus {
           });
       if (batch.size() == 500) {
         jdbc.batchUpdate(sql, batch);
+        jdbc.batchUpdate(accountSql, accounts);
         batch.clear();
+        accounts.clear();
       }
     }
     if (!batch.isEmpty()) {
       jdbc.batchUpdate(sql, batch);
+      jdbc.batchUpdate(accountSql, accounts);
     }
     jdbc.execute("analyze profile_embeddings");
   }

@@ -6,8 +6,15 @@ jobseeker:
     # Recuperación vectorial (TD-012): candidatos que explora el índice HNSW por consulta.
     retrieval:
       ef-search: ${MATCHING_RETRIEVAL_EF_SEARCH:100}
+    # Puntaje de compatibilidad (BR-MATCH-05, ADR-0017): pesos por dimensión, alfa y completitud mínima. Sin los
+    # parámetros de Platt (calibration.a y calibration.b) el puntaje se publica marcado como NO calibrado.
+    scoring:
+      alpha: ${MATCHING_SCORING_ALPHA:0.30}
+      min-completeness: ${MATCHING_SCORING_MIN_COMPLETENESS:0.5}
     suggestions:
       view-quota: ${MATCHING_PROFILE_VIEW_QUOTA:200}
+      # Tolerancia (puntos) con que OPEN_TO_WORK adelanta en el orden; 1 es la resolución del porcentaje mostrado (BR-MATCH-07, ADR-0030).
+      tie-tolerance: ${MATCHING_SUGGESTIONS_TIE_TOLERANCE:1.0}
     embedding:
       host: ${OLLAMA_HOST:localhost}
       port: ${OLLAMA_PORT:11434}

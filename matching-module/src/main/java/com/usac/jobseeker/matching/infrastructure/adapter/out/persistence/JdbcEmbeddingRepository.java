@@ -289,14 +289,18 @@ public class JdbcEmbeddingRepository implements EmbeddingStorePort, CandidateRet
                 Math.clamp(efSearch, limit > MAX_EF_SEARCH ? MAX_EF_SEARCH : limit, MAX_EF_SEARCH)))
         .query()
         .singleRow();
+    // La unión con la cuenta va FUERA de la consulta ordenada por distancia, para que el
+    // planificador
+    // pueda seguir usando el índice HNSW; una cuenta con lápida (anonimizada) no se devuelve nunca.
     return jdbc.sql(
-            "select candidate_profile_id, similarity from ("
+            "select n.candidate_profile_id, a.account_id, n.similarity from ("
                 + " select candidate_profile_id, embedding <=> cast(:query as vector) as distance,"
                 + " 1 - (embedding <=> cast(:query as vector)) as similarity"
                 + " from profile_embeddings where discoverable and embedding is not null"
                 + " and embedding_model = :model"
-                + " order by embedding <=> cast(:query as vector) limit :limit) nearest"
-                + " order by distance")
+                + " order by embedding <=> cast(:query as vector) limit :limit) n"
+                + " join profile_embedding_accounts a on a.candidate_profile_id = n.candidate_profile_id"
+                + " where a.anonymized_at is null order by n.distance")
         .param("query", toLiteral(query))
         .param("model", model)
         .param("limit", limit)
@@ -304,6 +308,7 @@ public class JdbcEmbeddingRepository implements EmbeddingStorePort, CandidateRet
             (rows, n) ->
                 new NearestProfile(
                     new CandidateProfileId(rows.getObject("candidate_profile_id", UUID.class)),
+                    new AccountId(rows.getObject("account_id", UUID.class)),
                     rows.getDouble("similarity")))
         .list();
   }

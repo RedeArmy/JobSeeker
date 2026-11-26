@@ -47,6 +47,7 @@ class JdbcEmbeddingRetrievalRecallTest {
   @AfterAll
   static void clean() {
     JDBC.sql("delete from profile_embeddings").update();
+    JDBC.sql("delete from profile_embedding_accounts").update();
   }
 
   /**
@@ -72,9 +73,13 @@ class JdbcEmbeddingRetrievalRecallTest {
     return String.join(
         "\n",
         JDBC.sql(
-                "explain select candidate_profile_id from profile_embeddings where discoverable"
-                    + " and embedding is not null and embedding_model = :model"
-                    + " order by embedding <=> cast(:q as vector) limit 50")
+                "explain select n.candidate_profile_id, a.account_id from ("
+                    + " select candidate_profile_id, embedding <=> cast(:q as vector) as distance"
+                    + " from profile_embeddings where discoverable and embedding is not null"
+                    + " and embedding_model = :model"
+                    + " order by embedding <=> cast(:q as vector) limit 50) n"
+                    + " join profile_embedding_accounts a on a.candidate_profile_id = n.candidate_profile_id"
+                    + " where a.anonymized_at is null order by n.distance")
             .param("model", RetrievalCorpus.MODEL)
             .param("q", RetrievalCorpus.literal(corpus.query().values()))
             .query(String.class)

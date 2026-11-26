@@ -3,6 +3,7 @@ package com.usac.jobseeker.matching.application.usecase.embedentity;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.usac.jobseeker.common.domain.model.AccountId;
 import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.NearestProfile;
 import com.usac.jobseeker.matching.domain.model.CandidateProfileId;
 import java.util.Optional;
@@ -27,10 +28,14 @@ class EmbeddingStatesTest {
 
   @Test
   void aNearestProfileNeedsItsCandidate() {
-    assertThatThrownBy(() -> new NearestProfile(null, 0.5))
+    assertThatThrownBy(() -> new NearestProfile(null, new AccountId(UUID.randomUUID()), 0.5))
         .isInstanceOf(NullPointerException.class);
     assertThat(
-            new NearestProfile(new CandidateProfileId(UUID.randomUUID()), 0.5).cosineSimilarity())
+            new NearestProfile(
+                    new CandidateProfileId(UUID.randomUUID()),
+                    new AccountId(UUID.randomUUID()),
+                    0.5)
+                .cosineSimilarity())
         .isEqualTo(0.5);
   }
 }

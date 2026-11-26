@@ -17,23 +17,31 @@ import com.usac.jobseeker.matching.application.usecase.embedentity.HandleProfile
 import com.usac.jobseeker.matching.application.usecase.embedentity.JobSignalsReader;
 import com.usac.jobseeker.matching.application.usecase.embedentity.ProcessEmbeddingQueueService;
 import com.usac.jobseeker.matching.application.usecase.embedentity.ProcessEmbeddingQueueUseCase;
+import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.AvailabilityPort;
 import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.OwnedJobPort;
 import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.RecruiterTrustPort;
+import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.ScoringModel;
 import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.SuggestCandidatesForJobService;
 import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.SuggestCandidatesForJobUseCase;
 import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.SuggestionsPolicy;
 import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.SuggestionsSources;
+import com.usac.jobseeker.matching.domain.model.Calibration;
+import com.usac.jobseeker.matching.domain.model.Dimension;
+import com.usac.jobseeker.matching.domain.model.Weights;
 import com.usac.jobseeker.matching.infrastructure.adapter.in.event.JobEventsConsumer;
 import com.usac.jobseeker.matching.infrastructure.adapter.in.event.ProfileEventsConsumer;
 import com.usac.jobseeker.matching.infrastructure.adapter.in.job.EmbeddingWorker;
 import com.usac.jobseeker.matching.infrastructure.adapter.out.ai.OllamaEmbeddingClient;
 import com.usac.jobseeker.matching.infrastructure.adapter.out.metrics.EmbeddingQueueMetrics;
+import com.usac.jobseeker.matching.infrastructure.adapter.out.metrics.ScoringCalibrationMetrics;
 import com.usac.jobseeker.matching.infrastructure.adapter.out.persistence.JdbcEmbeddingRepository;
 import com.usac.jobseeker.matching.infrastructure.adapter.out.persistence.JdbcEmbeddingWorkQueue;
 import com.usac.jobseeker.matching.infrastructure.adapter.out.persistence.JdbcProfileViewLog;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.time.Clock;
+import java.util.EnumMap;
+import java.util.Map;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -165,17 +173,52 @@ class MatchingConfiguration {
       RecruiterTrustPort trust,
       OwnedJobPort ownedJobs,
       JdbcEmbeddingRepository embeddings,
+      CandidateSignalsReader candidates,
+      JobSignalsReader jobs,
+      AvailabilityPort availability,
       JdbcProfileViewLog views,
+      ScoringModel scoring,
       UseCaseMetricsPort metrics,
       MatchingProperties properties) {
     MatchingProperties.Suggestions s = properties.suggestions();
     return new SuggestCandidatesForJobService(
         trust,
-        new SuggestionsSources(ownedJobs, embeddings, embeddings),
+        new SuggestionsSources(ownedJobs, embeddings, embeddings, candidates, jobs, availability),
         views,
-        new SuggestionsPolicy(s.viewQuota(), s.window(), s.maxPageSize()),
+        new SuggestionsPolicy(
+            s.viewQuota(), s.window(), s.maxPageSize(), s.retrievalCap(), s.tieTolerance()),
+        scoring,
         metrics,
         Clock.systemUTC());
+  }
+
+  // Los pesos y la calibración salen de configuración (BR-MATCH-05); sin parámetros de Platt el
+  // puntaje queda marcado como no calibrado (ADR-0017, decisión 5).
+  @Bean
+  ScoringModel scoringModel(MatchingProperties properties) {
+    MatchingProperties.Scoring scoring = properties.scoring();
+    MatchingProperties.Weights w = scoring.weights();
+    Map<Dimension, Double> weights = new EnumMap<>(Dimension.class);
+    weights.put(Dimension.SKILLS, w.skills());
+    weights.put(Dimension.EXPERIENCE, w.experience());
+    weights.put(Dimension.EDUCATION, w.education());
+    weights.put(Dimension.LOCATION_MODALITY, w.locationModality());
+    weights.put(Dimension.SALARY, w.salary());
+    weights.put(Dimension.LANGUAGES, w.languages());
+    String model = properties.embedding().model();
+    Calibration calibration =
+        scoring.calibration().fitted()
+            ? new Calibration(
+                model, Calibration.Kind.PLATT, scoring.calibration().a(), scoring.calibration().b())
+            : Calibration.uncalibrated(model);
+    return new ScoringModel(
+        new Weights(weights, scoring.alpha(), scoring.minCompleteness(), scoring.mandatoryFactor()),
+        calibration);
+  }
+
+  @Bean
+  ScoringCalibrationMetrics scoringCalibrationMetrics(ScoringModel scoring) {
+    return new ScoringCalibrationMetrics(scoring);
   }
 
   @Bean

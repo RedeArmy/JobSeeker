@@ -12,13 +12,15 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param queue la cola de cálculo y la ventana de agrupación de ediciones (ADR-0017, decisión 10)
  * @param suggestions los topes de los candidatos sugeridos (REQ-R-11)
  * @param retrieval cómo se recorre el índice vectorial (TD-012)
+ * @param scoring pesos, `α`, calibración y completitud mínima del puntaje (BR-MATCH-05, ADR-0017)
  */
 @ConfigurationProperties("jobseeker.matching")
 public record MatchingProperties(
     @DefaultValue Embedding embedding,
     @DefaultValue Queue queue,
     @DefaultValue Suggestions suggestions,
-    @DefaultValue Retrieval retrieval) {
+    @DefaultValue Retrieval retrieval,
+    @DefaultValue Scoring scoring) {
 
   /**
    * @param host y @param port: dónde está Ollama
@@ -61,15 +63,61 @@ public record MatchingProperties(
    *     trabajar con comodidad y poco para recorrer la base de candidatos (amenaza T-N1)
    * @param window la ventana móvil de la cuota
    * @param maxPageSize el máximo de candidatos por petición
+   * @param retrievalCap cuántos candidatos recupera la etapa 1 para puntuarlos en la etapa 2
+   * @param tieTolerance puntos de ventaja con que `OPEN_TO_WORK` adelanta en el orden (BR-MATCH-07)
    */
   public record Suggestions(
       @DefaultValue("200") int viewQuota,
       @DefaultValue("24h") Duration window,
-      @DefaultValue("50") int maxPageSize) {}
+      @DefaultValue("50") int maxPageSize,
+      @DefaultValue("200") int retrievalCap,
+      @DefaultValue("1.0") double tieTolerance) {}
 
   /**
    * @param efSearch candidatos que explora el índice HNSW por consulta: más recall y más latencia;
    *     el valor por defecto sale de la medición de TD-012
    */
   public record Retrieval(@DefaultValue("100") int efSearch) {}
+
+  /**
+   * Los parámetros del puntaje: nada se codifica (BR-MATCH-05). Los valores por defecto son los del
+   * ADR-0017 y de `03-lld.md` §2.3, y se calibran con el protocolo de 300 pares; cambiar cualquiera
+   * produce otra `algorithm_version`.
+   *
+   * @param weights peso de cada dimensión estructurada; solo importa su proporción
+   * @param alpha peso de la afinidad semántica calibrada frente a la estructurada
+   * @param minCompleteness completitud mínima para entrar a las listas de sugeridos
+   * @param mandatoryFactor veces que pesa un requisito obligatorio frente a uno deseable
+   * @param calibration parámetros de Platt; sin ellos el puntaje se marca no calibrado
+   */
+  public record Scoring(
+      @DefaultValue Weights weights,
+      @DefaultValue("0.30") double alpha,
+      @DefaultValue("0.5") double minCompleteness,
+      @DefaultValue("2.0") double mandatoryFactor,
+      @DefaultValue Calibration calibration) {}
+
+  /**
+   * Pesos por dimensión (`03-lld.md` §2.3): habilidades 35, experiencia 25, formación 15, ubicación
+   * 10, salario 10, idiomas 5.
+   */
+  public record Weights(
+      @DefaultValue("0.35") double skills,
+      @DefaultValue("0.25") double experience,
+      @DefaultValue("0.15") double education,
+      @DefaultValue("0.10") double locationModality,
+      @DefaultValue("0.10") double salary,
+      @DefaultValue("0.05") double languages) {}
+
+  /**
+   * Parámetros de la sigmoide de Platt. Ausentes (ambos nulos) significa **sin calibrar**: el
+   * puntaje se publica marcado como no calibrado hasta que el protocolo de 300 pares los produzca
+   * (ADR-0017, decisión 5).
+   */
+  public record Calibration(Double a, Double b) {
+
+    public boolean fitted() {
+      return a != null && b != null;
+    }
+  }
 }
