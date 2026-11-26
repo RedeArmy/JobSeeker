@@ -400,6 +400,11 @@ class CvFileServicesTest {
     }
 
     @Override
+    public java.util.Optional<byte[]> get(StoredObjectKey key) {
+      throw new UnsupportedOperationException("la subida del CV no lee contenidos");
+    }
+
+    @Override
     public void delete(StoredObjectKey key) {
       deleted.add(key);
     }

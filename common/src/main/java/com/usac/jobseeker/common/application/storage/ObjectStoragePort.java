@@ -27,6 +27,13 @@ public interface ObjectStoragePort {
    */
   URI presignDownload(StoredObjectKey key, String displayName, FileType type);
 
+  /**
+   * El contenido de un objeto pequeño, para servirlo a través de la aplicación. Solo la foto de
+   * perfil lo usa: una imagen que se muestra en la página no puede venir de otro origen, porque la
+   * política CSP limita las imágenes a `'self'` (`tdd/cv-module.md` §10.8). Vacío si no existe.
+   */
+  java.util.Optional<byte[]> get(StoredObjectKey key);
+
   /** Borra el objeto. Borrar uno que ya no existe no es un error: el borrado se reintenta (§6). */
   void delete(StoredObjectKey key);
 

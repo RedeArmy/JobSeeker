@@ -28,6 +28,11 @@ final class UnavailableObjectStorage implements ObjectStoragePort {
   }
 
   @Override
+  public java.util.Optional<byte[]> get(StoredObjectKey key) {
+    throw unavailable();
+  }
+
+  @Override
   public void delete(StoredObjectKey key) {
     throw unavailable();
   }
