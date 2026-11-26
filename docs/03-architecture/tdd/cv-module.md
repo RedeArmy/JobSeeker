@@ -21,7 +21,7 @@ Según la organización por casos de uso de `coding-standards.md`, este document
 | Entra (Ola 1) | Fuera, con su dueño |
 |---|---|
 | `ProfessionalProfile` compartido: nombre, titular, biografía, experiencia, formación, certificaciones y proyectos (BR-ACCT-02, BR-ACCT-06) | `RecruiterProfile` (BR-ACCT-07, BR-ACCT-08): Ola 3 |
-| `CandidateProfile`: contacto, habilidades, idiomas, autorizaciones de trabajo, atributos de elegibilidad, disponibilidad, descubribilidad (BR-CAND-04, BR-DATA-03) | Subida, análisis y almacén del archivo de CV, y la foto: ADR-0021 (aún sin escribir, bloque «Almacenamiento de archivos») |
+| `CandidateProfile`: contacto, habilidades, idiomas, autorizaciones de trabajo, atributos de elegibilidad, disponibilidad, descubribilidad (BR-CAND-04, BR-DATA-03) | Subida y almacén del archivo de CV, y la foto: ADR-0021 (aprobado el 26-nov-2026, bloque «Almacenamiento de archivos»); el análisis del texto del CV queda fuera |
 | Lista de exclusión de disponibilidad (BR-CAND-05, BR-CAND-06) | Generación de CV propio y de marca (BR-CVGEN-01 a 03): Ola 3 |
 | Contrato de anonimización de los datos de `cv` (BR-DATA-05) | Orquestación de la eliminación: periodo de gracia, lote programado y llamada a Clavaris (BR-DATA-04, BR-DATA-06). Va con el bloque «Cumplimiento y ciclo de vida de cuenta» (§9) |
 | Superficie de lectura mínima para `matching` (§7) | Vistas de un candidato para un reclutador (pipeline, sugeridos): las diseñan los TDD de `ats` y `matching` sobre esa superficie |
@@ -92,6 +92,10 @@ Carpetas de `cv-module/src/main/java/com/usac/jobseeker/cv/application/usecase/`
 | `getprofilesnapshots` | La misma lectura para **varias cuentas con pocas consultas** (hasta 500): la individual es el caso de una, con las mismas reglas de capacidad y anonimización (TD-039) | interna | — |
 | `getvisibleavailabilities` | La disponibilidad que un reclutador puede ver de **varios** candidatos, con la misma regla de exclusión que `getvisibleavailability` (BR-CAND-05, BR-VIS-06; TD-039) | interna | — |
 | `anonymizeprofiledata` | Anonimiza los datos de `cv` de una cuenta (§9) | interna (lote) | `AccountAnonymized` |
+| `uploadcv`, `downloadmycv`, `uploadprofilephoto` | **Planificados (ADR-0021).** Subir una versión nueva del CV o la foto con validación y escaneo, y descargar el CV propio por URL firmada | candidato / cuenta | — |
+| `checkapplicationreadiness` | **Planificado para `ats`.** Qué le falta a la cuenta para postular (BR-CAND-01: nombre, contacto y CV) y el CV vigente (`tdd/ats-tracker-modules.md` §5) | interna | — |
+| `getapplicantprofiles` | **Planificado para `ats`.** Por lotes, nombre, titular y contacto de postulantes; solo tras autorizar al reclutador en `ats` (REQ-C-07) | interna | — |
+| `presigncvdownload` | **Planificado para `ats`.** URL firmada de una versión concreta del CV; autoriza quien la pide (ADR-0021 §3) | interna | — |
 
 **Por qué estas granularidades.** Las colecciones con identidad propia (experiencias, formación…) se editan elemento a elemento, porque la interfaz las edita así y cada elemento tiene su historial. Los conjuntos sin identidad (habilidades, idiomas, autorizaciones) se **reemplazan enteros**: la operación es idempotente por naturaleza y evita reconciliar altas y bajas. Descubribilidad y disponibilidad llevan casos de uso aparte porque sus eventos son distintos y **no** disparan lo mismo: la descubribilidad saca al candidato de los sugeridos de inmediato, y la disponibilidad nunca recalcula un score (`domain-model.md` §6).
 

@@ -71,7 +71,8 @@ Carpetas de `matching-module/src/main/java/com/usac/jobseeker/matching/applicati
 | `explainscore` | El usuario abre el desglose | Plantillas deterministas sobre el desglose y «qué pasaría si» (REQ-C-01) sobre el mismo agregador | los de `calculatecompatibilityscore` |
 | `suggestcandidatesforjob` | El reclutador abre los sugeridos | Pipeline de tres etapas del ADR-0017 con filtros de descubribilidad, cuenta activa y exclusión, y desempate `OPEN_TO_WORK` | `CandidateRetrievalPort`, los de `calculatecompatibilityscore` |
 | `migratealgorithmversion` | Operación | Reprocesa por lotes, empezando por los postulados activos, mostrando la versión por fila | `ScoreStorePort`, `WorkQueuePort` |
-| `snapshotapplicationprofile` | Al postular (evento de `ats`) | Guarda la copia inmutable del perfil canónico y la foto del score de ese momento (ADR-0017, decisión 9) | `ApplicationSnapshotPort` |
+| `getapplicantscores` | **Planificado para `ats`.** El pipeline pide los puntajes de sus postulantes | Por lotes, para una vacante y sus perfiles: puntaje vigente con desglose y el de la postulación (`tdd/ats-tracker-modules.md` §5) | `ScoreStorePort` |
+| `snapshotapplicationprofile` | Al postular, dentro de la transacción de `ats` (TD-040) | Guarda la copia inmutable del perfil canónico y la foto del score de ese momento (ADR-0017, decisión 9) | `ApplicationSnapshotPort` |
 
 Los demás casos de uso (consulta del desglose para el reclutador, filtros de exclusión) se nombran con el TDD de `ats`, que es quien los consume. **No se crean carpetas antes de que su sub-paso las implemente.**
 

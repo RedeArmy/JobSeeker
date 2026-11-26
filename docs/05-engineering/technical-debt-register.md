@@ -4,7 +4,7 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | 🟡 En revisión |
-| **Versión** | 1.15 — aliases de habilidades y herramientas de calibración |
+| **Versión** | 1.16 — ADR-0021 aprobado |
 | **Fecha** | 24 de noviembre de 2026 |
 | **Dueño del documento** | Responsable del proyecto |
 | **Revisión del registro** | Al cerrar cada sprint y antes de cada hito de la hoja de ruta |
@@ -157,7 +157,7 @@ Corte: 24-nov-2026.
 
 **Documentación** · **S2 Alta** · esfuerzo **L** · confianza **Medida** · **Abierta**
 
-- **Evidencia:** 35 documentos «En revisión»; ADR-0021 a 0025 sin escribir; ADR-0026 sin aprobar (bloqueado por datos del responsable); `cd-staging.yml` es un marcador inerte.
+- **Evidencia:** 35 documentos «En revisión»; ADR-0021 aprobado (26-nov-2026) y 0022 a 0025 sin escribir; ADR-0026 sin aprobar (bloqueado por datos del responsable); `cd-staging.yml` es un marcador inerte.
 - **Interés (qué cuesta no pagarla):** Sin ADR de almacenamiento de archivos, notificaciones, búsqueda, organizaciones e IA responsable no se pueden construir esas funciones; sin despliegue no hay validación real.
 - **Disparador:** Antes del primer despliegue.
 - **Remediación propuesta:** Escribir y aprobar los ADR pendientes, resolver el bloqueo de ADR-0026 y activar el CD.
@@ -375,6 +375,7 @@ Corte: 24-nov-2026.
 | 1.13 | 2026-11-25 | Se paga TD-039 (PR #45, TD-R30): lectura por lotes en `auth`, `cv` y `matching`, medida con 200 candidatos (p50 de 1.246 ms a 118 ms) y protegida por una prueba de arquitectura. Se documenta la regla en `coding-standards.md` §8.1. Quedan 20 abiertas o planificadas, 30 resueltas y 6 aceptadas. |
 | 1.14 | 2026-11-25 | Se paga TD-036 (PR #46, TD-R31): puntaje guardado solo para pares con motivo, recalculado dentro del trabajador de la cola, visible al candidato con su «qué pasaría si», migración de versión con fotos y anonimización que conserva el par y el puntaje. El ADR-0031 enmienda la decisión 8 del ADR-0017: sin caché en Redis. Entra TD-040 (`ats` debe llamar a `snapshotapplicationprofile`). Quedan 20 abiertas o planificadas, 31 resueltas y 6 aceptadas. |
 | 1.15 | 2026-11-25 | Se paga la parte de aliases de TD-038 (PR #47, TD-R32): 36 grupos de alias inequívocos y el código del algoritmo pasa a 2. TD-037 sigue abierta con las herramientas listas (`emit-config`, `retrieval-recall`), a la espera de pares etiquetados reales; TD-038 sigue abierta por la taxonomía y la experiencia relevante. Quedan 20 abiertas o planificadas, 32 resueltas y 6 aceptadas. |
+| 1.16 | 2026-11-26 | TD-016 actualiza su evidencia: el ADR-0021 (almacenamiento de archivos y escaneo de malware) queda aprobado y quedan por escribir los ADR-0022 a 0025. Sin cambios en los recuentos. |
 
 ## 9. Plantilla de ficha
 
