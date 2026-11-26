@@ -9,7 +9,9 @@ import com.usac.jobseeker.common.domain.error.UpstreamUnavailableException;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import org.slf4j.Logger;
@@ -39,9 +41,13 @@ public class ReconcileOrphanCvFilesService implements ReconcileOrphanCvFilesUseC
   private final OrphanReconciliationPolicy policy;
   private final UseCaseMetricsPort metrics;
   private final Clock clock;
-  // Dónde siguió la última pasada; vuelve al principio al acabar el almacén. Por instancia: dos
-  // instancias que recorran partes distintas solo adelantan el trabajo.
-  private String resumeAfter = "";
+
+  /** Los propósitos cuyos archivos son de `cv`; cada uno se recorre con su propio cursor. */
+  private static final List<FilePurpose> PURPOSES = List.of(FilePurpose.CV, FilePurpose.PHOTO);
+
+  // Dónde siguió la última pasada en cada propósito; vuelve al principio al acabarlo. Por
+  // instancia: dos instancias que recorran partes distintas solo adelantan el trabajo.
+  private final Map<FilePurpose, String> resumeAfter = new EnumMap<>(FilePurpose.class);
 
   public ReconcileOrphanCvFilesService(
       ObjectStoragePort storage,
@@ -61,21 +67,14 @@ public class ReconcileOrphanCvFilesService implements ReconcileOrphanCvFilesUseC
     Instant oldEnough = clock.instant().minus(policy.grace());
     List<StoredObjectKey> orphans = new ArrayList<>();
     int scanned = 0;
-    String cursor = resumeAfter;
-    boolean more = true;
     try {
-      while (more && scanned < policy.scanLimit()) {
-        ObjectPage page = storage.list(FilePurpose.CV, cursor, policy.pageSize());
-        scanned += page.objects().size();
-        orphans.addAll(orphansIn(page, oldEnough));
-        cursor = page.lastKey();
-        more = page.truncated() && !page.objects().isEmpty();
+      for (FilePurpose purpose : PURPOSES) {
+        scanned += scan(purpose, oldEnough, orphans);
       }
     } catch (UpstreamUnavailableException e) {
       metrics.count(USE_CASE, "unavailable");
       throw e;
     }
-    resumeAfter = more ? cursor : "";
     if (orphans.size() > policy.deleteLimit()) {
       metrics.count(USE_CASE, "halted");
       LOG.error(
@@ -94,15 +93,35 @@ public class ReconcileOrphanCvFilesService implements ReconcileOrphanCvFilesUseC
     return new Result(scanned, orphans.size(), orphans.size(), false);
   }
 
-  // De una página, los objetos con edad suficiente, con formato propio y sin fila que los use.
-  private List<StoredObjectKey> orphansIn(ObjectPage page, Instant oldEnough) {
+  // Recorre un propósito hasta el límite de la pasada y deja el cursor donde quedó.
+  private int scan(FilePurpose purpose, Instant oldEnough, List<StoredObjectKey> orphans) {
+    int scanned = 0;
+    String cursor = resumeAfter.getOrDefault(purpose, "");
+    boolean more = true;
+    while (more && scanned < policy.scanLimit()) {
+      ObjectPage page = storage.list(purpose, cursor, policy.pageSize());
+      scanned += page.objects().size();
+      orphans.addAll(orphansIn(purpose, page, oldEnough));
+      cursor = page.lastKey();
+      more = page.truncated() && !page.objects().isEmpty();
+    }
+    resumeAfter.put(purpose, more ? cursor : "");
+    return scanned;
+  }
+
+  // De una página, los objetos con edad suficiente, con formato propio y sin nadie que los use.
+  private List<StoredObjectKey> orphansIn(FilePurpose purpose, ObjectPage page, Instant oldEnough) {
     List<StoredObjectKey> candidates = new ArrayList<>();
     for (ObjectPage.Entry entry : page.objects()) {
       if (entry.lastModified().isAfter(oldEnough)) {
         continue;
       }
       try {
-        candidates.add(new StoredObjectKey(entry.key()));
+        StoredObjectKey key = new StoredObjectKey(entry.key());
+        // Solo claves de este propósito: un `cv/` bajo el prefijo de fotos no es de esta lista.
+        if (key.value().startsWith(purpose.prefix() + "/")) {
+          candidates.add(key);
+        }
       } catch (IllegalArgumentException _) {
         LOG.warn("event=orphan_cv_unknown_key Objeto con una clave que la aplicación no crea");
       }
@@ -111,7 +130,7 @@ public class ReconcileOrphanCvFilesService implements ReconcileOrphanCvFilesUseC
       return candidates;
     }
     Set<String> referenced =
-        references.referenced(candidates.stream().map(StoredObjectKey::value).toList());
+        references.referenced(purpose, candidates.stream().map(StoredObjectKey::value).toList());
     return candidates.stream().filter(key -> !referenced.contains(key.value())).toList();
   }
 }

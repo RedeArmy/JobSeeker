@@ -133,10 +133,16 @@ class JdbcCvFileRepositoryTest {
     anonymization.discardCvFiles(anonymized.value(), T0.plusSeconds(60));
     String unknown = "cv/" + UUID.randomUUID();
 
-    var found = files.referenced(java.util.List.of(live.objectKey(), gone.objectKey(), unknown));
+    var found =
+        files.referenced(
+            com.usac.jobseeker.common.application.storage.FilePurpose.CV,
+            java.util.List.of(live.objectKey(), gone.objectKey(), unknown));
 
     assertThat(found).containsExactly(live.objectKey());
-    assertThat(files.referenced(java.util.List.of())).isEmpty();
+    assertThat(
+            files.referenced(
+                com.usac.jobseeker.common.application.storage.FilePurpose.CV, java.util.List.of()))
+        .isEmpty();
   }
 
   @Test
