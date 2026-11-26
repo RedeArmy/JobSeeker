@@ -76,8 +76,7 @@ class SnapshotApplicationProfileServiceTest {
     snapshot(candidate.accountId(), job.jobId(), UUID.randomUUID(), SnapshotReason.APPLIED);
 
     var text = world.store.applicationSnapshots.get(0).canonicalText();
-    assertThat(text).contains("Java");
-    assertThat(text).doesNotContain(candidate.accountId().toString());
+    assertThat(text).contains("Java").doesNotContain(candidate.accountId().toString());
   }
 
   @Test
@@ -127,15 +126,11 @@ class SnapshotApplicationProfileServiceTest {
 
   @Test
   void anAccountWithoutAReadableProfileCannotBeSnapshotted() {
-    var job = world.job("PUBLISHED");
+    var job = world.job("PUBLISHED").jobId();
+    var unknown = new AccountId(UUID.randomUUID());
+    var application = UUID.randomUUID();
 
-    assertThatThrownBy(
-            () ->
-                snapshot(
-                    new AccountId(UUID.randomUUID()),
-                    job.jobId(),
-                    UUID.randomUUID(),
-                    SnapshotReason.APPLIED))
+    assertThatThrownBy(() -> snapshot(unknown, job, application, SnapshotReason.APPLIED))
         .isInstanceOf(InvalidStateException.class);
 
     assertThat(world.store.applicationSnapshots).isEmpty();

@@ -13,7 +13,6 @@ import com.usac.jobseeker.matching.domain.model.StoredScore;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -101,8 +100,7 @@ public class RecomputeScoresForEntityService implements RecomputeScoresForEntity
       return 0;
     }
     Map<CandidateProfileId, AccountId> accountOf = sources.directory().accountsOf(profiles);
-    Map<AccountId, CandidateSignals> signalsOf =
-        sources.candidates().readAll((Collection<AccountId>) accountOf.values());
+    Map<AccountId, CandidateSignals> signalsOf = sources.candidates().readAll(accountOf.values());
     Map<CandidateProfileId, Double> cosines = sources.similarity().cosinesForJob(job, profiles);
     Instant now = clock.instant();
     List<StoredScore> fresh = new ArrayList<>();

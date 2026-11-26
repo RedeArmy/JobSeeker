@@ -27,6 +27,8 @@ public record WhatIfScoreQuery(
   private static final Set<String> PROFICIENCIES =
       Set.of("A1", "A2", "B1", "B2", "C1", "C2", "NATIVE");
   private static final int MAX_SKILL_LEVEL = 5;
+  private static final String SKILLS = "skills";
+  private static final String LANGUAGES = "languages";
 
   public WhatIfScoreQuery {
     Objects.requireNonNull(candidate, "candidate");
@@ -35,23 +37,23 @@ public record WhatIfScoreQuery(
     languages = languages == null ? List.of() : List.copyOf(languages);
     List<FieldViolation> violations = new ArrayList<>();
     if (skills.size() > MAX_EXTRAS) {
-      violations.add(new FieldViolation("skills", "TOO_MANY"));
+      violations.add(new FieldViolation(SKILLS, "TOO_MANY"));
     }
     if (languages.size() > MAX_EXTRAS) {
-      violations.add(new FieldViolation("languages", "TOO_MANY"));
+      violations.add(new FieldViolation(LANGUAGES, "TOO_MANY"));
     }
     if (skills.stream().anyMatch(s -> s.name() == null || s.name().isBlank())) {
-      violations.add(new FieldViolation("skills", "NAME_REQUIRED"));
+      violations.add(new FieldViolation(SKILLS, "NAME_REQUIRED"));
     }
     if (skills.stream()
         .anyMatch(s -> s.level() != null && (s.level() < 1 || s.level() > MAX_SKILL_LEVEL))) {
-      violations.add(new FieldViolation("skills", "LEVEL_OUT_OF_RANGE"));
+      violations.add(new FieldViolation(SKILLS, "LEVEL_OUT_OF_RANGE"));
     }
     if (languages.stream().anyMatch(l -> l.language() == null || l.language().isBlank())) {
-      violations.add(new FieldViolation("languages", "LANGUAGE_REQUIRED"));
+      violations.add(new FieldViolation(LANGUAGES, "LANGUAGE_REQUIRED"));
     }
     if (languages.stream().anyMatch(l -> !PROFICIENCIES.contains(l.proficiency()))) {
-      violations.add(new FieldViolation("languages", "INVALID_PROFICIENCY"));
+      violations.add(new FieldViolation(LANGUAGES, "INVALID_PROFICIENCY"));
     }
     if (!violations.isEmpty()) {
       throw new ValidationFailedException(violations);

@@ -20,6 +20,8 @@ import tools.jackson.databind.node.ObjectNode;
  */
 final class ScoreBreakdownJson {
 
+  private static final String DIMENSIONS = "dimensions";
+
   private static final ObjectMapper MAPPER = JsonMapper.builder().build();
 
   private ScoreBreakdownJson() {}
@@ -31,7 +33,7 @@ final class ScoreBreakdownJson {
     root.put("semantic", breakdown.semantic());
     root.put("alpha", breakdown.alpha());
     root.put("completeness", breakdown.completeness());
-    ArrayNode dimensions = root.putArray("dimensions");
+    ArrayNode dimensions = root.putArray(DIMENSIONS);
     for (DimensionScore d : breakdown.dimensions()) {
       ObjectNode node = dimensions.addObject();
       node.put("dimension", d.dimension().name());
@@ -55,11 +57,11 @@ final class ScoreBreakdownJson {
     } catch (JacksonException failure) {
       throw new IllegalStateException("el desglose guardado no es un JSON válido", failure);
     }
-    if (root == null || !root.has("dimensions")) {
+    if (root == null || !root.has(DIMENSIONS)) {
       return new ScoreBreakdown(List.of(), false, 0, 0, 1, completeness);
     }
     List<DimensionScore> dimensions = new ArrayList<>();
-    for (JsonNode node : root.get("dimensions")) {
+    for (JsonNode node : root.get(DIMENSIONS)) {
       dimensions.add(
           new DimensionScore(
               Dimension.valueOf(node.get("dimension").asText()),

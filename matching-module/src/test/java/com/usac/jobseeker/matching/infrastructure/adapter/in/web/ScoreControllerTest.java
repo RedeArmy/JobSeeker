@@ -109,10 +109,9 @@ class ScoreControllerTest {
   void aJobIdThatIsNotAUuidIsAJobThatDoesNotExist() {
     assertThatThrownBy(() -> controller.score(principal, "no-es-un-uuid"))
         .isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(
-            () ->
-                controller.whatIf(
-                    principal, "no-es-un-uuid", new ScoreController.WhatIfRequest(null, null)))
+    var request = new ScoreController.WhatIfRequest(null, null);
+
+    assertThatThrownBy(() -> controller.whatIf(principal, "no-es-un-uuid", request))
         .isInstanceOf(NotFoundException.class);
   }
 

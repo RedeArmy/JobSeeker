@@ -61,6 +61,7 @@ class MigrateAlgorithmVersionServiceTest {
     var old = stale(candidate, job, ScoreReason.SUGGESTED);
 
     assertThat(service().execute()).isEqualTo(1);
+    assertThat(world.metrics).containsExactly("migrated");
 
     // La foto es la del puntaje ANTERIOR: es lo que permite comparar una versión con otra.
     assertThat(world.store.snapshots)
@@ -154,6 +155,7 @@ class MigrateAlgorithmVersionServiceTest {
         .isEqualTo(old.score());
     assertThat(world.store.touched).hasSize(1);
     assertThat(world.store.snapshots).isEmpty();
+    assertThat(world.metrics).containsExactly("deferred");
   }
 
   @Test

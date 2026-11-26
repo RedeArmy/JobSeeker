@@ -55,19 +55,29 @@ class ExplainScoreAndWhatIfServicesTest {
 
   private final EmbeddingWorkQueuePort queue =
       new EmbeddingWorkQueuePort() {
-        public void request(EmbeddingEntity entity, UUID key, Instant notBefore) {}
+        public void request(EmbeddingEntity entity, UUID key, Instant notBefore) {
+          // La cola no participa en estas pruebas: solo se consulta si hay un cambio pendiente.
+        }
 
         public List<Job> claim(int limit, Duration lease, int maxAttempts) {
           return List.of();
         }
 
-        public void complete(Job job) {}
+        public void complete(Job job) {
+          // La cola no participa en estas pruebas: solo se consulta si hay un cambio pendiente.
+        }
 
-        public void retryAt(Job job, Instant notBefore) {}
+        public void retryAt(Job job, Instant notBefore) {
+          // La cola no participa en estas pruebas: solo se consulta si hay un cambio pendiente.
+        }
 
-        public void fail(Job job) {}
+        public void fail(Job job) {
+          // La cola no participa en estas pruebas: solo se consulta si hay un cambio pendiente.
+        }
 
-        public void discard(EmbeddingEntity entity, UUID key) {}
+        public void discard(EmbeddingEntity entity, UUID key) {
+          // La cola no participa en estas pruebas: solo se consulta si hay un cambio pendiente.
+        }
 
         @Override
         public boolean isPending(EmbeddingEntity entity, UUID key) {
@@ -279,25 +289,22 @@ class ExplainScoreAndWhatIfServicesTest {
 
     assertThatThrownBy(() -> new WhatIfScoreQuery(account, job, many, List.of()))
         .isInstanceOf(ValidationFailedException.class);
-    assertThatThrownBy(
-            () ->
-                new WhatIfScoreQuery(
-                    account, job, List.of(new CandidateSignals.Skill(" ", 1)), List.of()))
+    List<CandidateSignals.Skill> blankName = List.of(new CandidateSignals.Skill(" ", 1));
+    List<CandidateSignals.Skill> levelTooHigh = List.of(new CandidateSignals.Skill("Java", 9));
+    List<CandidateSignals.Language> badProficiency =
+        List.of(new CandidateSignals.Language("en", "Z9"));
+    List<CandidateSignals.Language> blankLanguage =
+        List.of(new CandidateSignals.Language("", "B2"));
+    List<CandidateSignals.Skill> noSkills = List.of();
+    List<CandidateSignals.Language> noLanguages = List.of();
+
+    assertThatThrownBy(() -> new WhatIfScoreQuery(account, job, blankName, noLanguages))
         .isInstanceOf(ValidationFailedException.class);
-    assertThatThrownBy(
-            () ->
-                new WhatIfScoreQuery(
-                    account, job, List.of(new CandidateSignals.Skill("Java", 9)), List.of()))
+    assertThatThrownBy(() -> new WhatIfScoreQuery(account, job, levelTooHigh, noLanguages))
         .isInstanceOf(ValidationFailedException.class);
-    assertThatThrownBy(
-            () ->
-                new WhatIfScoreQuery(
-                    account, job, List.of(), List.of(new CandidateSignals.Language("en", "Z9"))))
+    assertThatThrownBy(() -> new WhatIfScoreQuery(account, job, noSkills, badProficiency))
         .isInstanceOf(ValidationFailedException.class);
-    assertThatThrownBy(
-            () ->
-                new WhatIfScoreQuery(
-                    account, job, List.of(), List.of(new CandidateSignals.Language("", "B2"))))
+    assertThatThrownBy(() -> new WhatIfScoreQuery(account, job, noSkills, blankLanguage))
         .isInstanceOf(ValidationFailedException.class);
   }
 

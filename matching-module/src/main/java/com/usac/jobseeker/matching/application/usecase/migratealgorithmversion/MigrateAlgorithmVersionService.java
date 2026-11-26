@@ -60,14 +60,9 @@ public class MigrateAlgorithmVersionService implements MigrateAlgorithmVersionUs
   public int execute() {
     List<StoredScore> stale = sources.store().staleVersion(calculator.version().value(), batchSize);
     Instant now = clock.instant();
-    int migrated = 0;
+    // Un recálculo y un aplazamiento cuentan aparte: si los aplazados no bajan, algo impide migrar.
     for (StoredScore old : stale) {
-      if (migrate(old, now)) {
-        migrated++;
-      }
-    }
-    if (!stale.isEmpty()) {
-      metrics.count(USE_CASE, "processed");
+      metrics.count(USE_CASE, migrate(old, now) ? "migrated" : "deferred");
     }
     return stale.size();
   }

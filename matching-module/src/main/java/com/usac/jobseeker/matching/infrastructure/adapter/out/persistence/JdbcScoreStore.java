@@ -39,6 +39,19 @@ public class JdbcScoreStore implements ScoreStorePort {
   private static final String PROFILE = "profile";
   private static final String JOB = "job";
   private static final String REASON_RANK = "array['SUGGESTED', 'CANDIDATE_VIEW', 'APPLIED']";
+  private static final String OVERALL = "overall";
+  private static final String COMPLETENESS = "completeness";
+  private static final String CALIBRATED = "calibrated";
+  private static final String VERSION = "version";
+  private static final String LIMIT = "limit";
+  private static final String AT = "at";
+  // Todas las consultas son constantes: solo los valores viajan como parámetros, nunca se arma SQL
+  // con datos de la petición.
+  private static final String SELECT_CURRENT =
+      "select candidate_profile_id, job_posting_id, overall, completeness, calibrated,"
+          + " algorithm_version, breakdown, reason, computed_at from compatibility_scores_current";
+  private static final String PAIR =
+      " where candidate_profile_id = :profile and job_posting_id = :job";
 
   private final JdbcClient jdbc;
 
@@ -81,11 +94,11 @@ public class JdbcScoreStore implements ScoreStorePort {
                 + ", excluded.reason))]")
         .param("profiles", rows.stream().map(r -> r.profile().value()).toArray(UUID[]::new))
         .param("jobs", rows.stream().map(r -> r.job().value()).toArray(UUID[]::new))
-        .param("overall", rows.stream().mapToDouble(r -> r.score().overall()).toArray())
+        .param(OVERALL, rows.stream().mapToDouble(r -> r.score().overall()).toArray())
         .param(
-            "completeness",
+            COMPLETENESS,
             rows.stream().mapToDouble(r -> r.score().breakdown().completeness()).toArray())
-        .param("calibrated", toBooleans(rows))
+        .param(CALIBRATED, toBooleans(rows))
         .param(
             "versions", rows.stream().map(r -> r.score().version().value()).toArray(String[]::new))
         .param(
@@ -94,7 +107,7 @@ public class JdbcScoreStore implements ScoreStorePort {
                 .map(r -> ScoreBreakdownJson.write(r.score().breakdown()))
                 .toArray(String[]::new))
         .param("reasons", rows.stream().map(r -> r.reason().name()).toArray(String[]::new))
-        .param("at", rows.stream().map(r -> r.computedAt().toString()).toArray(String[]::new))
+        .param(AT, rows.stream().map(r -> r.computedAt().toString()).toArray(String[]::new))
         .update();
   }
 
@@ -108,8 +121,7 @@ public class JdbcScoreStore implements ScoreStorePort {
 
   @Override
   public Optional<StoredScore> findCurrent(CandidateProfileId profile, JobPostingId job) {
-    return jdbc.sql(
-            selectCurrent() + " where candidate_profile_id = :profile and job_posting_id = :job")
+    return jdbc.sql(SELECT_CURRENT + PAIR)
         .param(PROFILE, profile.value())
         .param(JOB, job.value())
         .query((rows, n) -> storedOf(rows))
@@ -122,7 +134,7 @@ public class JdbcScoreStore implements ScoreStorePort {
             "select job_posting_id from compatibility_scores_current"
                 + " where candidate_profile_id = :profile order by computed_at desc limit :limit")
         .param(PROFILE, profile.value())
-        .param("limit", limit)
+        .param(LIMIT, limit)
         .query((rows, n) -> new JobPostingId(rows.getObject(1, UUID.class)))
         .list();
   }
@@ -133,7 +145,7 @@ public class JdbcScoreStore implements ScoreStorePort {
             "select candidate_profile_id from compatibility_scores_current"
                 + " where job_posting_id = :job order by computed_at desc limit :limit")
         .param(JOB, job.value())
-        .param("limit", limit)
+        .param(LIMIT, limit)
         .query((rows, n) -> new CandidateProfileId(rows.getObject(1, UUID.class)))
         .list();
   }
@@ -141,20 +153,18 @@ public class JdbcScoreStore implements ScoreStorePort {
   @Override
   public List<StoredScore> staleVersion(String currentVersion, int limit) {
     return jdbc.sql(
-            selectCurrent()
+            SELECT_CURRENT
                 + " where algorithm_version <> :version and anonymized_at is null"
                 + " order by computed_at limit :limit")
-        .param("version", currentVersion)
-        .param("limit", limit)
+        .param(VERSION, currentVersion)
+        .param(LIMIT, limit)
         .query((rows, n) -> storedOf(rows))
         .list();
   }
 
   @Override
   public void deleteCurrent(CandidateProfileId profile, JobPostingId job) {
-    jdbc.sql(
-            "delete from compatibility_scores_current"
-                + " where candidate_profile_id = :profile and job_posting_id = :job")
+    jdbc.sql("delete from compatibility_scores_current" + PAIR)
         .param(PROFILE, profile.value())
         .param(JOB, job.value())
         .update();
@@ -162,10 +172,8 @@ public class JdbcScoreStore implements ScoreStorePort {
 
   @Override
   public void touch(CandidateProfileId profile, JobPostingId job, Instant at) {
-    jdbc.sql(
-            "update compatibility_scores_current set computed_at = :at"
-                + " where candidate_profile_id = :profile and job_posting_id = :job")
-        .param("at", OffsetDateTime.ofInstant(at, ZoneOffset.UTC))
+    jdbc.sql("update compatibility_scores_current set computed_at = :at" + PAIR)
+        .param(AT, OffsetDateTime.ofInstant(at, ZoneOffset.UTC))
         .param(PROFILE, profile.value())
         .param(JOB, job.value())
         .update();
@@ -184,12 +192,12 @@ public class JdbcScoreStore implements ScoreStorePort {
         .param(PROFILE, snapshot.profile().value())
         .param(JOB, snapshot.job().value())
         .param("reason", snapshot.reason().name())
-        .param("overall", score.overall())
-        .param("completeness", score.breakdown().completeness())
-        .param("calibrated", score.calibrated())
-        .param("version", score.version().value())
+        .param(OVERALL, score.overall())
+        .param(COMPLETENESS, score.breakdown().completeness())
+        .param(CALIBRATED, score.calibrated())
+        .param(VERSION, score.version().value())
         .param("breakdown", ScoreBreakdownJson.write(score.breakdown()))
-        .param("at", OffsetDateTime.ofInstant(snapshot.createdAt(), ZoneOffset.UTC))
+        .param(AT, OffsetDateTime.ofInstant(snapshot.createdAt(), ZoneOffset.UTC))
         .update();
   }
 
@@ -207,8 +215,8 @@ public class JdbcScoreStore implements ScoreStorePort {
         .param("application", snapshot.applicationId())
         .param("text", snapshot.canonicalText())
         .param("hash", snapshot.canonicalHash())
-        .param("version", snapshot.algorithmVersion())
-        .param("at", OffsetDateTime.ofInstant(snapshot.createdAt(), ZoneOffset.UTC))
+        .param(VERSION, snapshot.algorithmVersion())
+        .param(AT, OffsetDateTime.ofInstant(snapshot.createdAt(), ZoneOffset.UTC))
         .update();
   }
 
@@ -216,21 +224,25 @@ public class JdbcScoreStore implements ScoreStorePort {
   @Override
   public void anonymizeProfile(CandidateProfileId profile, Instant at) {
     OffsetDateTime when = OffsetDateTime.ofInstant(at, ZoneOffset.UTC);
-    for (String table : List.of("compatibility_scores_current", "compatibility_score_snapshots")) {
-      jdbc.sql(
-              "update "
-                  + table
-                  + " set breakdown = cast('{}' as jsonb), anonymized_at = :at"
-                  + " where candidate_profile_id = :profile and anonymized_at is null")
-          .param("at", when)
-          .param(PROFILE, profile.value())
-          .update();
-    }
+    jdbc.sql(
+            "update compatibility_scores_current set breakdown = cast('{}' as jsonb),"
+                + " anonymized_at = :at where candidate_profile_id = :profile"
+                + " and anonymized_at is null")
+        .param(AT, when)
+        .param(PROFILE, profile.value())
+        .update();
+    jdbc.sql(
+            "update compatibility_score_snapshots set breakdown = cast('{}' as jsonb),"
+                + " anonymized_at = :at where candidate_profile_id = :profile"
+                + " and anonymized_at is null")
+        .param(AT, when)
+        .param(PROFILE, profile.value())
+        .update();
     jdbc.sql(
             "update application_profile_snapshots set canonical_text = null, canonical_hash = null,"
                 + " anonymized_at = :at where candidate_profile_id = :profile"
                 + " and anonymized_at is null")
-        .param("at", when)
+        .param(AT, when)
         .param(PROFILE, profile.value())
         .update();
   }
@@ -242,19 +254,14 @@ public class JdbcScoreStore implements ScoreStorePort {
         .update();
   }
 
-  private static String selectCurrent() {
-    return "select candidate_profile_id, job_posting_id, overall, completeness, calibrated,"
-        + " algorithm_version, breakdown, reason, computed_at from compatibility_scores_current";
-  }
-
   private static StoredScore storedOf(ResultSet rows) throws SQLException {
-    double completeness = rows.getDouble("completeness");
+    double completeness = rows.getDouble(COMPLETENESS);
     CompatibilityScore score =
         new CompatibilityScore(
-            rows.getDouble("overall"),
+            rows.getDouble(OVERALL),
             ScoreBreakdownJson.read(rows.getString("breakdown"), completeness),
             AlgorithmVersion.parse(rows.getString("algorithm_version")),
-            rows.getBoolean("calibrated"));
+            rows.getBoolean(CALIBRATED));
     return new StoredScore(
         new CandidateProfileId(rows.getObject("candidate_profile_id", UUID.class)),
         new JobPostingId(rows.getObject("job_posting_id", UUID.class)),
