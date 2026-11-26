@@ -62,6 +62,13 @@
             <groupId>io.swagger.core.v3</groupId>
             <artifactId>swagger-annotations-jakarta</artifactId>
         </dependency>
+        <!-- Solo para fijar cabeceras HTMX (HX-Retarget) desde un controlador de pantalla. `provided`:
+             el contenedor de `app` ya la trae en ejecución; ARCH-02 impide usarla fuera de la web. -->
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
 
         <dependency>
             <groupId>org.junit.jupiter</groupId>
