@@ -4,7 +4,7 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | 🟡 En revisión |
-| **Versión** | 1.11 — se paga TD-012 |
+| **Versión** | 1.12 — se paga TD-034 |
 | **Fecha** | 24 de noviembre de 2026 |
 | **Dueño del documento** | Responsable del proyecto |
 | **Revisión del registro** | Al cerrar cada sprint y antes de cada hito de la hoja de ruta |
@@ -52,11 +52,11 @@ Corte: 24-nov-2026.
 |---|---|
 | S1 Crítica | 0 |
 | S2 Alta | 4 |
-| S3 Media | 9 |
+| S3 Media | 12 |
 | S4 Baja | 5 |
-| **Total** | **18** |
+| **Total** | **21** |
 
-- **Abiertas:** 15 · **Planificadas:** 3 · **Resueltas:** 28 · **Aceptadas:** 6.
+- **Abiertas:** 16 · **Planificadas:** 5 · **Resueltas:** 29 · **Aceptadas:** 6.
 - **S2 abiertas con disparador próximo** (decidir el siguiente sprint): TD-005 y TD-016 (primer despliegue), más TD-020 (antes de usuarios reales).
 - **Métricas a seguir en cada revisión:** deuda abierta por severidad, edad de las S2 en días, número de cierres por sprint, aceptadas vencidas.
 
@@ -80,8 +80,11 @@ Corte: 24-nov-2026.
 | TD-024 | El `Dockerfile` compila con una imagen de Java 26 | Operación | S4 | XS | Leída | Abierta | Oportunista |
 | TD-025 | La purga de la bandeja usa `Instant.now()` | Código | S4 | XS | Leída | Abierta | Oportunista |
 | TD-026 | Habilidades sin enlace a la taxonomía | Dominio | S4 | L | Medida | Planificada | Sub-paso de enlazado de ADR-0019 |
-| TD-034 | Los sugeridos solo devuelven el orden: faltan puntaje, prioridad por disponibilidad, exclusión y lectura enmascarada | Dominio | S2 | L | Leída | Planificada | Sub-pasos siguientes de `matching` (puntaje y vista del candidato) |
 | TD-035 | `profile_view_log` crece sin retención | Operación | S3 | S | Leída | Abierta | Antes de usuarios reales |
+| TD-036 | El puntaje no se persiste, ni se cachea, ni se recalcula, y el candidato no ve el suyo | Dominio | S3 | L | Leída | Planificada | Postulación y pipeline mínimos (`ats`, `tracker`) |
+| TD-037 | El puntaje se publica sin calibrar: `α`, pesos y Platt son valores iniciales | Calidad | S2 | L | Leída | Planificada | Protocolo de 300 pares y arnés de evaluación |
+| TD-038 | Habilidades por texto normalizado y experiencia total, no relevante | Dominio | S3 | M | Leída | Planificada | ADR-0019 implementado en `cv` |
+| TD-039 | Puntuar 200 recuperados lee sus perfiles uno a uno | Rendimiento | S3 | M | Hipótesis | Abierta | Antes de dar sugeridos a usuarios reales |
 
 ### Fichas
 
@@ -261,17 +264,6 @@ Corte: 24-nov-2026.
 - **Criterio de cierre:** Controles D1–D4 verificados.
 - **Referencias:** `docs/03-architecture/adr/0019-skills-taxonomy-and-normalization.md`
 
-#### TD-034 — Los sugeridos solo devuelven el orden: faltan puntaje, prioridad por disponibilidad, exclusión y lectura enmascarada
-
-**Dominio** · **S2 Alta** · esfuerzo **L** · confianza **Leída** · **Planificada**
-
-- **Evidencia:** `GET /api/v1/matching/jobs/{id}/suggestions` entrega identificadores opacos en orden de cercanía y nada más: sin puntaje con desglose (BR-MATCH-02), sin la prioridad `OPEN_TO_WORK` (BR-MATCH-07), sin la lista de exclusión (BR-MATCH-09) y sin una lectura enmascarada del candidato para mostrarlo (REQ-C-07).
-- **Interés (qué cuesta no pagarla):** El reclutador ve una lista que no puede interpretar ni usar; hoy es solo la etapa de recuperación de ADR-0017.
-- **Disparador:** Sub-pasos siguientes de `matching` (puntaje) y la vista del candidato de `cv`.
-- **Remediación propuesta:** Etapas de puntaje y de re-ranqueo de ADR-0017 sobre lo recuperado; un caso de uso de `cv` que devuelva los datos enmascarados que BR-VIS-04 permite; y la exclusión de quien ya postuló o fue descartado.
-- **Criterio de cierre:** La respuesta lleva porcentaje calibrado con su desglose y datos enmascarados, respeta la prioridad y la exclusión, y la cuota sigue contando perfiles únicos.
-- **Referencias:** `docs/01-product/business-rules.md` BR-MATCH-06 a 09; ADR-0017
-
 #### TD-035 — `profile_view_log` crece sin retención
 
 **Operación** · **S3 Media** · esfuerzo **S** · confianza **Leída** · **Abierta**
@@ -282,6 +274,50 @@ Corte: 24-nov-2026.
 - **Remediación propuesta:** Decidir el plazo (por ejemplo 90 días) y un lote programado que purgue, como el de la bandeja de eventos, con su métrica.
 - **Criterio de cierre:** Plazo documentado, lote en ejecución y una prueba de que no borra lo que la cuota aún cuenta.
 - **Referencias:** migración `V20261125110000`; `docs/04-security/threat-model-stride.md` T-N1
+
+#### TD-036 — El puntaje no se persiste, ni se cachea, ni se recalcula, y el candidato no ve el suyo
+
+**Dominio** · **S3 Media** · esfuerzo **L** · confianza **Leída** · **Planificada**
+
+- **Evidencia:** Los sugeridos calculan el puntaje al pedirlo, sobre vectores y señales ya guardados (ADR-0017, decisión 9: «nunca se materializan todos los pares»). Pero un par con motivo (postulado, visto por el candidato) necesita su puntaje vigente, sus fotos y la copia inmutable del perfil canónico al postular; y el candidato aún no tiene `GET /api/v1/matching/jobs/{id}/score`, `explainscore` ni el «qué pasaría si» (REQ-C-01).
+- **Interés (qué cuesta no pagarla):** Sin persistencia no hay historial auditable (BR-MATCH-04), el reclutador evaluaría un perfil distinto del que el candidato presentó, y el candidato, que es la mitad de la propuesta de valor, no ve su compatibilidad.
+- **Disparador:** Postulación y pipeline mínimos.
+- **Remediación propuesta:** Los sub-pasos 2, 4, 5 y 7 del TDD: `compatibility_scores_current` con *upsert*, fotos, caché por huella en Redis, `recomputescoresforentity`, el endpoint del candidato, `explainscore` y `snapshotapplicationprofile`, con anonimización de las copias (BR-DATA-05).
+- **Criterio de cierre:** Un candidato ve su puntaje y desglose por vacante, el puntaje de un postulado queda versionado con su foto, y editar un perfil o una vacante lo actualiza dentro del objetivo de frescura.
+- **Referencias:** `docs/03-architecture/tdd/matching-module.md` §4, §5 y §10; ADR-0017 decisiones 8 a 10
+
+#### TD-037 — El puntaje se publica sin calibrar: `α`, pesos y Platt son valores iniciales
+
+**Calidad** · **S2 Alta** · esfuerzo **L** · confianza **Leída** · **Planificada**
+
+- **Evidencia:** El puntaje es **preliminar** (ADR-0030): la respuesta lleva `calibrated: false`, `jobseeker_matching_scoring_calibrated` vale 0 y arranca un aviso en el registro; sin parámetros de Platt el coseno se acota a [0, 1], los pesos son los de `03-lld.md` §2.3, `α = 0,30` y la completitud mínima 0,5 son los iniciales del ADR-0017. Con embeddings reales el coseno vacante-candidato va de 0,17 a 0,85, así que sin calibrar el semántico comprime el rango.
+- **Interés (qué cuesta no pagarla):** La métrica de éxito «precisión ≥ 0,85» no puede medirse con un puntaje sin calibrar, y el orden de los sugeridos puede estar sesgado por la compresión del coseno.
+- **Disparador:** El protocolo de 300 pares del ADR-0018 y el arnés de evaluación.
+- **Remediación propuesta:** Ajustar Platt por modelo con calibración y evaluación separadas por vacante (C2), medir el *recall* de los 200 recuperados frente a puntuar a todos (C1, ≥ 0,95), fijar el umbral contrafactual (C5) y publicar los parámetros por configuración, lo que cambia la `algorithm_version`.
+- **Criterio de cierre:** Parámetros ajustados y archivados, precisión con intervalo de confianza sobre la reserva, y `calibrated: true` en producción.
+- **Referencias:** ADR-0017 decisiones 5 y 12 y controles C1, C2 y C5; `scripts/eval/README.md`
+
+#### TD-038 — Habilidades por texto normalizado y experiencia total, no relevante
+
+**Dominio** · **S3 Media** · esfuerzo **M** · confianza **Leída** · **Planificada**
+
+- **Evidencia:** Una habilidad cubre un requisito si coincide el nombre normalizado (sin mayúsculas, acentos ni puntuación): «JS» y «JavaScript» son distintas. La experiencia suma todos los años declarados, no los relevantes al puesto. El ADR-0019 prevé enlace por taxonomía y similitud de embeddings (`τ_skill`), que no existe todavía.
+- **Interés (qué cuesta no pagarla):** Falsos negativos por sinónimos y puntajes de experiencia inflados para quien tiene años en otra área.
+- **Disparador:** ADR-0019 implementado en `cv`.
+- **Remediación propuesta:** Enlazar habilidades a conceptos ESCO y comparar por identificador, con el escalón de embeddings calibrado, y ponderar la experiencia por la afinidad de cada puesto con la vacante.
+- **Criterio de cierre:** Sinónimos conocidos cubren el mismo requisito y la experiencia relevante sustituye al total, medido en el conjunto dorado.
+- **Referencias:** ADR-0019; `docs/03-architecture/tdd/matching-module.md` §3 y §10.2
+
+#### TD-039 — Puntuar 200 recuperados lee sus perfiles uno a uno
+
+**Rendimiento** · **S3 Media** · esfuerzo **M** · confianza **Hipótesis** · **Abierta**
+
+- **Evidencia:** La etapa 2 lee las señales de cada recuperado con `getprofilesnapshot` y su disponibilidad con `getvisibleavailability`, uno por uno: hasta 200 lecturas de varias consultas cada una por petición. Con unos pocos perfiles es instantáneo, pero no se ha medido con 200 frente a NFR-PERF-04 (sugeridos en ≤ 3 s).
+- **Interés (qué cuesta no pagarla):** Si no cabe, el endpoint más sensible se vuelve lento justo bajo el límite de 10 peticiones por minuto, o se baja el tope de recuperación y se pierde *recall*.
+- **Disparador:** Antes de dar sugeridos a usuarios reales.
+- **Remediación propuesta:** Medir con 200 perfiles reales; si no cabe, una lectura por lotes en `cv` (varias cuentas por llamada) y una caché corta de las señales, sin cambiar el contrato público de los sugeridos.
+- **Criterio de cierre:** p95 de los sugeridos medido con 200 recuperados y dentro de NFR-PERF-04.
+- **Referencias:** `docs/03-architecture/tdd/matching-module.md` §8 y §10.2
 
 ## 6. Deuda resuelta
 
@@ -315,6 +351,7 @@ Corte: 24-nov-2026.
 | TD-R26 | Nadie verificaba a los reclutadores (antes TD-032, parte) | Seguridad | S2 | 2026-11-25 | #41 | Canal `PUT /api/v1/admin/recruiters/{id}/verification` solo para operadores (lista de configuración, vacía por defecto; `404` para quien no lo es), sin decidir sobre uno mismo y con cada cambio en `audit_log` en la misma transacción, sin datos personales. Verificar sube el tope de publicación de TD-030: probado de punta a punta. La vía automática por correo queda para cuando haya proveedor de correo; las sugerencias que exijan `VERIFIED` son TD-033. |
 | TD-R27 | Las sugerencias no exigían un reclutador verificado ni cuota de perfiles vistos (antes TD-033) | Seguridad | S2 | 2026-11-25 | #42 | `suggestcandidatesforjob` niega con `403` a quien no sea `VERIFIED` (antes de tocar la vacante), exige ser dueño de una vacante publicada y cuenta como visto cada perfil único mostrado (200 por 24 h, configurable, `429 QUOTA_EXCEEDED`), bajo un candado por reclutador y en la misma transacción que `profile_view_log`; la cuota vive en la base y no en Redis, así no hay un camino en que una caída la deje pasar. Endpoint con su propio límite de tasa (10/min). Probado de punta a punta; la respuesta no lleva similitud ni datos personales. |
 | TD-R28 | Recuperación vectorial con filtros sin validar ni aplicar (antes TD-012) | Rendimiento | S2 | 2026-11-25 | #43 | `nearestDiscoverable` fija `hnsw.iterative_scan = relaxed_order` y `ef_search` no menor que la página, local a la transacción y con reordenado exterior; `ef_search` configurable (100). Medido con la consulta real y el HNSW forzado (comprobado por `EXPLAIN`): con un 90 % de vectores de otro modelo, sin la regla una página de 50 devuelve 3,6 filas (recall 0,07) y con ella 50 filas con recall ≈ 0,95; sin coste de latencia medible (p50 ≈ 30 ms). Prueba de regresión y medición repetible en `11-medicion-recuperacion-vectorial-y-latencia-de-embeddings.md`. |
+| TD-R29 | Los sugeridos solo devolvían el orden: sin puntaje, prioridad, exclusión ni tarjeta (antes TD-034) | Dominio | S2 | 2026-11-25 | #44 | Puntaje explicable de seis dimensiones más la afinidad semántica con `α` visible, completitud mínima, `algorithm_version` por *hash* de pesos y calibración y marca de no calibrado; desempate `OPEN_TO_WORK` con una tolerancia de un punto, configurable (BR-MATCH-07, ADR-0030), que respeta la exclusión (BR-MATCH-09) preguntándola a `cv`; tarjeta enmascarada con el titular redactado (REQ-C-07). Propiedades probadas (límites, idempotencia, monotonía y C3) y de punta a punta con la exclusión, la completitud y sin datos personales ni coseno crudo en la respuesta. Lo que queda fuera: TD-036 a TD-039. |
 
 ## 7. Deuda aceptada
 
@@ -343,6 +380,7 @@ Corte: 24-nov-2026.
 | 1.9 | 2026-11-25 | Se paga la parte de contrato de TD-029 (PR #40, TD-R25): el cliente se validó contra un Ollama real. TD-029 sigue abierta con su alcance reducido a la latencia en hardware con AVX2. Quedan 18 abiertas o planificadas, 26 resueltas y 6 aceptadas. |
 | 1.10 | 2026-11-25 | Se paga TD-033 (PR #42, TD-R27): los sugeridos exigen un reclutador verificado y cuentan una cuota de perfiles únicos. Se confirma la verificación manual por operadores (ADR-0029). Entran TD-034 (puntaje, prioridad, exclusión y lectura enmascarada) y TD-035 (retención de `profile_view_log`); TD-012 ve cumplido su disparador. Quedan 19 abiertas o planificadas, 27 resueltas y 6 aceptadas. |
 | 1.11 | 2026-11-25 | Se paga TD-012 (PR #43, TD-R28): la regla de escaneo iterativo ya estaba medida pero no aplicada; ahora se aplica, se mide con la consulta real y la protege una prueba de regresión. TD-029 sigue abierta: la VM no tiene AVX2, pero el instrumento de medición ya existe y está probado. Quedan 18 abiertas o planificadas, 28 resueltas y 6 aceptadas. |
+| 1.12 | 2026-11-25 | Se paga TD-034 (PR #44, TD-R29): puntaje explicable, prioridad por disponibilidad, exclusión y tarjeta enmascarada en los sugeridos. Entran TD-036 (persistencia, caché, recálculo y puntaje del candidato), TD-037 (calibración), TD-038 (taxonomía de habilidades y experiencia relevante) y TD-039 (costo de leer 200 perfiles uno a uno). El ADR-0030 formaliza el desempate por tolerancia, la completitud aplicable y el puntaje preliminar, con un indicador de calibración. Quedan 21 abiertas o planificadas, 29 resueltas y 6 aceptadas. |
 
 ## 9. Plantilla de ficha
 
