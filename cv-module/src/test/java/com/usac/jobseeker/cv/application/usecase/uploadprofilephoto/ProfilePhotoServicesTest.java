@@ -285,7 +285,7 @@ class ProfilePhotoServicesTest {
         .isNotEqualTo(new UploadProfilePhotoCommand(account, new byte[] {1}))
         .isNotEqualTo(new UploadProfilePhotoCommand(new AccountId(UUID.randomUUID()), bytes))
         .isNotEqualTo("otra cosa");
-    assertThat(command.toString()).isEqualTo("UploadProfilePhotoCommand[bytes=2]");
+    assertThat(command).hasToString("UploadProfilePhotoCommand[bytes=2]");
     assertThat(new UploadProfilePhotoCommand(account, null).content()).isEmpty();
     assertThatThrownBy(() -> new UploadProfilePhotoCommand(null, bytes))
         .isInstanceOf(NullPointerException.class);
@@ -300,7 +300,7 @@ class ProfilePhotoServicesTest {
         .isNotEqualTo(
             new com.usac.jobseeker.cv.application.usecase.getmyprofilephoto.ProfilePhotoContent(
                 new byte[] {1}, "image/png"));
-    assertThat(content.toString()).isEqualTo("ProfilePhotoContent[image/png, bytes=2]");
+    assertThat(content).hasToString("ProfilePhotoContent[image/png, bytes=2]");
 
     assertThatThrownBy(() -> new ProfilePhotoPolicy(0))
         .isInstanceOf(IllegalArgumentException.class);
@@ -328,7 +328,7 @@ class ProfilePhotoServicesTest {
             new PhotoProcessorPort.ProcessedPhoto(new byte[] {1, 2, 3}, FileType.PNG))
         .isNotEqualTo(new PhotoProcessorPort.ProcessedPhoto(new byte[] {1, 2, 3}, FileType.JPEG))
         .isNotEqualTo(new PhotoProcessorPort.ProcessedPhoto(new byte[] {1, 2}, FileType.PNG));
-    assertThat(photo.toString()).isEqualTo("ProcessedPhoto[PNG, bytes=3]");
+    assertThat(photo).hasToString("ProcessedPhoto[PNG, bytes=3]");
   }
 
   private static void assertReason(Runnable call, Reason reason) {

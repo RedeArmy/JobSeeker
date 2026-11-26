@@ -63,9 +63,12 @@ class JdbcProfilePhotoRepositoryTest {
     var account = anAccountWithProfile();
     var id = photos.find(account).orElseThrow().profileId();
 
-    assertThatThrownBy(() -> photos.set(id, "cv/" + UUID.randomUUID(), FileType.PNG))
+    String cvKey = "cv/" + UUID.randomUUID();
+    String photoKey = "photo/" + UUID.randomUUID();
+
+    assertThatThrownBy(() -> photos.set(id, cvKey, FileType.PNG))
         .isInstanceOf(DataAccessException.class);
-    assertThatThrownBy(() -> photos.set(id, "photo/" + UUID.randomUUID(), FileType.PDF))
+    assertThatThrownBy(() -> photos.set(id, photoKey, FileType.PDF))
         .isInstanceOf(DataAccessException.class);
   }
 
@@ -78,7 +81,8 @@ class JdbcProfilePhotoRepositoryTest {
     photos.set(photos.find(account).orElseThrow().profileId(), live, FileType.PNG);
 
     assertThat(files.referenced(FilePurpose.PHOTO, List.of(live, gone))).containsExactly(live);
-    assertThatThrownBy(() -> files.referenced(FilePurpose.ANSWER, List.of(live)))
+    List<String> keys = List.of(live);
+    assertThatThrownBy(() -> files.referenced(FilePurpose.ANSWER, keys))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
