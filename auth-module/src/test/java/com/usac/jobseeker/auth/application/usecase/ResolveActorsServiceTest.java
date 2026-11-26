@@ -46,8 +46,7 @@ class ResolveActorsServiceTest {
       assertThat(resolved).containsEntry(id, single.execute(new ResolveActorQuery(id)));
     }
     assertThat(resolved)
-        .containsEntry(unknown, new ActorResolution.Rejected(Reason.NOT_PROVISIONED));
-    assertThat(resolved)
+        .containsEntry(unknown, new ActorResolution.Rejected(Reason.NOT_PROVISIONED))
         .containsEntry(pending, new ActorResolution.Rejected(Reason.PENDING_DELETION));
   }
 
