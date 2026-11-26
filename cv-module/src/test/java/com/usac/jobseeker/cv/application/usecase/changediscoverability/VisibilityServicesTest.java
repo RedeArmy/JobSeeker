@@ -337,17 +337,14 @@ class VisibilityServicesTest {
     exclusions.add(new AddAvailabilityExclusionCommand(me, other));
     var stranger = new AccountId(UUID.randomUUID());
 
-    assertThat(visible.execute(new GetVisibleAvailabilityQuery(me, other)))
-        .isEqualTo(AvailabilityStatus.UNSET);
+    assertThat(visible.execute(new GetVisibleAvailabilityQuery(me, other))).isEqualTo("UNSET");
     assertThat(visible.execute(new GetVisibleAvailabilityQuery(me, stranger)))
-        .isEqualTo(AvailabilityStatus.OPEN_TO_WORK);
-    assertThat(visible.execute(new GetVisibleAvailabilityQuery(me, me)))
-        .isEqualTo(AvailabilityStatus.OPEN_TO_WORK);
+        .isEqualTo("OPEN_TO_WORK");
+    assertThat(visible.execute(new GetVisibleAvailabilityQuery(me, me))).isEqualTo("OPEN_TO_WORK");
   }
 
   @Test
   void aCandidateWithoutProfileIsUnsetForEveryone() {
-    assertThat(visible.execute(new GetVisibleAvailabilityQuery(me, other)))
-        .isEqualTo(AvailabilityStatus.UNSET);
+    assertThat(visible.execute(new GetVisibleAvailabilityQuery(me, other))).isEqualTo("UNSET");
   }
 }

@@ -3,6 +3,7 @@ package com.usac.jobseeker.matching.infrastructure.adapter.out.persistence;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.usac.jobseeker.common.domain.model.AccountId;
 import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.NearestProfile;
 import com.usac.jobseeker.matching.domain.model.CandidateProfileId;
 import com.usac.jobseeker.matching.domain.model.EmbeddingVector;
@@ -40,6 +41,15 @@ class JdbcEmbeddingRepositoryTest {
 
   private static CandidateProfileId profile() {
     return new CandidateProfileId(UUID.randomUUID());
+  }
+
+  /**
+   * Un perfil ligado a una cuenta, como llega por la bandeja: la recuperación devuelve la cuenta.
+   */
+  private CandidateProfileId registeredProfile() {
+    CandidateProfileId id = profile();
+    repository.registerProfile(new AccountId(UUID.randomUUID()), id);
+    return id;
   }
 
   private static JobPostingId job() {
@@ -270,10 +280,10 @@ class JdbcEmbeddingRepositoryTest {
   @Test
   void theNearestDiscoverableProfilesComeBackFromMostToLeastSimilar() {
     String model = "modelo-" + UUID.randomUUID();
-    CandidateProfileId same = profile();
-    CandidateProfileId near = profile();
-    CandidateProfileId orthogonal = profile();
-    CandidateProfileId opposite = profile();
+    CandidateProfileId same = registeredProfile();
+    CandidateProfileId near = registeredProfile();
+    CandidateProfileId orthogonal = registeredProfile();
+    CandidateProfileId opposite = registeredProfile();
     repository.saveProfileEmbedding(same, true, embedding(vector(1f), model));
     repository.saveProfileEmbedding(near, true, embedding(vector(1f, 1f), model));
     repository.saveProfileEmbedding(orthogonal, true, embedding(vector(0f, 1f), model));
@@ -297,10 +307,10 @@ class JdbcEmbeddingRepositoryTest {
   @Test
   void aProfileThatIsNotDiscoverableOrWasAnonymizedOrHasNoVectorNeverComesBack() {
     String model = "modelo-" + UUID.randomUUID();
-    CandidateProfileId visible = profile();
-    CandidateProfileId hidden = profile();
-    CandidateProfileId anonymized = profile();
-    CandidateProfileId withoutVector = profile();
+    CandidateProfileId visible = registeredProfile();
+    CandidateProfileId hidden = registeredProfile();
+    CandidateProfileId anonymized = registeredProfile();
+    CandidateProfileId withoutVector = registeredProfile();
     repository.saveProfileEmbedding(visible, true, embedding(vector(1f), model));
     repository.saveProfileEmbedding(hidden, false, embedding(vector(1f), model));
     repository.saveProfileEmbedding(anonymized, true, embedding(vector(1f), model));
@@ -312,12 +322,55 @@ class JdbcEmbeddingRepositoryTest {
         .containsExactly(visible);
   }
 
+  // La etapa 2 lee las señales por cuenta: la recuperación debe devolver la cuenta dueña del
+  // perfil.
+  @Test
+  void eachNearestProfileCarriesTheAccountThatOwnsIt() {
+    String model = "modelo-" + UUID.randomUUID();
+    AccountId owner = new AccountId(UUID.randomUUID());
+    CandidateProfileId mine = profile();
+    repository.registerProfile(owner, mine);
+    repository.saveProfileEmbedding(mine, true, embedding(vector(1f), model));
+
+    assertThat(repository.nearestDiscoverable(vector(1f), model, 5))
+        .singleElement()
+        .satisfies(
+            n -> {
+              assertThat(n.candidate()).isEqualTo(mine);
+              assertThat(n.account()).isEqualTo(owner);
+            });
+  }
+
+  // Una cuenta con lápida no se devuelve nunca, aunque su vector siguiera en la tabla (BR-DATA-05).
+  @Test
+  void anAccountWithATombstoneIsNeverReturnedEvenIfItsVectorRemained() {
+    String model = "modelo-" + UUID.randomUUID();
+    AccountId gone = new AccountId(UUID.randomUUID());
+    CandidateProfileId profile = profile();
+    repository.registerProfile(gone, profile);
+    repository.saveProfileEmbedding(profile, true, embedding(vector(1f), model));
+    jdbc.sql("update profile_embedding_accounts set anonymized_at = now() where account_id = :a")
+        .param("a", gone.value())
+        .update();
+
+    assertThat(repository.nearestDiscoverable(vector(1f), model, 5)).isEmpty();
+  }
+
+  // Un perfil con vector pero sin cuenta conocida no puede puntuarse: no se devuelve.
+  @Test
+  void aProfileWithoutAKnownAccountIsNotReturned() {
+    String model = "modelo-" + UUID.randomUUID();
+    repository.saveProfileEmbedding(profile(), true, embedding(vector(1f), model));
+
+    assertThat(repository.nearestDiscoverable(vector(1f), model, 5)).isEmpty();
+  }
+
   @Test
   void onlyVectorsOfTheRequestedModelAreComparedAndTheLimitIsRespected() {
     String current = "modelo-" + UUID.randomUUID();
-    CandidateProfileId a = profile();
-    CandidateProfileId b = profile();
-    CandidateProfileId otherModel = profile();
+    CandidateProfileId a = registeredProfile();
+    CandidateProfileId b = registeredProfile();
+    CandidateProfileId otherModel = registeredProfile();
     repository.saveProfileEmbedding(a, true, embedding(vector(1f), current));
     repository.saveProfileEmbedding(b, true, embedding(vector(1f, 1f), current));
     repository.saveProfileEmbedding(otherModel, true, embedding(vector(1f), "otro-" + current));

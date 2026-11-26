@@ -175,6 +175,8 @@ class MatchingEmbeddingEndToEndIntegrationTest {
     jdbc.update("delete from outbox_events");
     jdbc.update("delete from matching_work_queue");
     jdbc.update("delete from profile_view_log");
+    jdbc.update("delete from profile_embeddings");
+    jdbc.update("delete from profile_embedding_accounts");
   }
 
   private UUID candidateWithEverything() throws Exception {
@@ -756,26 +758,29 @@ class MatchingEmbeddingEndToEndIntegrationTest {
   }
 
   @Test
-  void aVerifiedOwnerSeesTheDiscoverableCandidateWithoutAnyScoreOrPersonalData() throws Exception {
+  void aVerifiedOwnerSeesTheCandidateWithItsScoreBreakdownAndNoPersonalData() throws Exception {
     World world = worldWithAVerifiedOwner();
 
     String body =
         mvc.perform(authed(get(suggestionsOf(world.jobId())), world.owner()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value("OK"))
-            .andExpect(
-                jsonPath("$.candidates[?(@.candidateProfileId=='" + world.profileId() + "')]")
-                    .exists())
+            .andExpect(jsonPath("$.calibrated").value(false))
+            .andExpect(jsonPath("$.algorithmVersion").isNotEmpty())
             .andReturn()
             .getResponse()
             .getContentAsString();
 
-    // ADR-0017: el coseno bruto nunca llega a una respuesta; BR-DATA-01: ningún dato personal.
+    // ADR-0017: el coseno bruto nunca llega a una respuesta; BR-DATA-01 y REQ-C-07: ningún dato
+    // personal.
     assertThat(body)
         .doesNotContainIgnoringCase("similarity")
-        .doesNotContainIgnoringCase("score")
+        .doesNotContainIgnoringCase("cosine")
+        .doesNotContainIgnoringCase("accountId")
         .doesNotContain(SECRET_NAME)
-        .doesNotContain(SECRET_EMAIL);
+        .doesNotContain(SECRET_EMAIL)
+        .doesNotContain(SECRET_PHONE)
+        .doesNotContain("Empresa Confidencial");
     assertThat(
             jdbc.queryForObject(
                 "select count(*) from profile_view_log where viewer_account_id = ?"
@@ -785,6 +790,119 @@ class MatchingEmbeddingEndToEndIntegrationTest {
                 world.profileId(),
                 world.jobId()))
         .isEqualTo(1);
+  }
+
+  private static String candidateOf(UUID profileId) {
+    return "$.candidates[?(@.candidateProfileId=='" + profileId + "')]";
+  }
+
+  private UUID profileOf(UUID account) {
+    return jdbc.queryForObject(
+        "select candidate_profile_id from profile_embedding_accounts where account_id = ?",
+        UUID.class,
+        account);
+  }
+
+  private void declareAvailability(UUID candidate, String status, int version) throws Exception {
+    mvc.perform(
+            json(
+                put(CANDIDATE + "/availability"),
+                candidate,
+                "{\"status\":\"" + status + "\",\"version\":" + version + "}"))
+        .andExpect(status().isOk());
+  }
+
+  private String suggestionsBody(UUID owner, String jobId) throws Exception {
+    return mvc.perform(authed(get(suggestionsOf(jobId)), owner))
+        .andExpect(status().isOk())
+        .andReturn()
+        .getResponse()
+        .getContentAsString();
+  }
+
+  private static Object first(String body, String path) {
+    Object found = com.jayway.jsonpath.JsonPath.read(body, path);
+    if (found instanceof java.util.List<?> list) {
+      return list.isEmpty() ? null : list.get(0);
+    }
+    return found;
+  }
+
+  // BR-MATCH-07: entre porcentajes iguales, OPEN_TO_WORK primero; el estado no cambia el puntaje.
+  @Test
+  void anOpenToWorkCandidateComesFirstAmongEqualScoresWithoutChangingTheScore() throws Exception {
+    UUID plain = candidateWithEverything();
+    UUID open = candidateWithEverything();
+    declareAvailability(open, "OPEN_TO_WORK", 2);
+    UUID owner = recruiterWith("VERIFIED");
+    String jobId = publishedJob(owner, "Backend");
+    deliverEvents();
+    runWorker();
+
+    String body = suggestionsBody(owner, jobId);
+
+    String openProfile = profileOf(open).toString();
+    assertThat(first(body, "$.candidates[0].candidateProfileId")).isEqualTo(openProfile);
+    assertThat(first(body, "$.candidates[0].availability")).isEqualTo("OPEN_TO_WORK");
+    UUID plainProfile = profileOf(plain);
+    assertThat(first(body, candidateOf(plainProfile) + ".availability")).isEqualTo("UNSET");
+    assertThat(first(body, candidateOf(plainProfile) + ".score.overall"))
+        .isEqualTo(first(body, candidateOf(profileOf(open)) + ".score.overall"));
+  }
+
+  // BR-MATCH-09 y BR-VIS-06: quien excluyó a este reclutador se ve como UNSET, sin prioridad, y su
+  // puntaje sigue siendo el normal (BR-CAND-06).
+  @Test
+  void aCandidateWhoExcludedTheRecruiterAppearsAsUnsetWithTheSameScore() throws Exception {
+    UUID owner = recruiterWith("VERIFIED");
+    UUID excluding = candidateWithEverything();
+    declareAvailability(excluding, "OPEN_TO_WORK", 2);
+    mvc.perform(
+            json(
+                post(CANDIDATE + "/availability-exclusions"),
+                excluding,
+                "{\"accountId\":\"" + owner + "\"}"))
+        .andExpect(status().isCreated());
+    UUID plain = candidateWithEverything();
+    String jobId = publishedJob(owner, "Backend");
+    deliverEvents();
+    runWorker();
+
+    String body = suggestionsBody(owner, jobId);
+
+    UUID excludingProfile = profileOf(excluding);
+    assertThat(first(body, candidateOf(excludingProfile) + ".availability")).isEqualTo("UNSET");
+    assertThat(first(body, candidateOf(excludingProfile) + ".score.overall"))
+        .isEqualTo(first(body, candidateOf(profileOf(plain)) + ".score.overall"));
+  }
+
+  // R1 (ADR-0017): quien declaró menos de la completitud mínima no entra a las listas.
+  @Test
+  void aCandidateWhoDeclaredNoneOfWhatTheJobAsksForIsNotSuggested() throws Exception {
+    UUID complete = candidateWithEverything();
+    UUID bare = candidate();
+    mvc.perform(
+            json(
+                put(PROFILE),
+                bare,
+                "{\"fullName\":\"Sin Datos\",\"headline\":\"Perfil vacío\",\"bio\":\"Poco\",\"version\":0}"))
+        .andExpect(status().isCreated());
+    mvc.perform(
+            json(
+                put(CANDIDATE),
+                bare,
+                "{\"contactEmail\":\"vacio@example.test\",\"contactPhone\":\"+502 1111-2222\",\"countryOfResidence\":\"GT\",\"version\":0}"))
+        .andExpect(status().isCreated());
+    UUID owner = recruiterWith("VERIFIED");
+    String jobId = publishedJob(owner, "Backend");
+    deliverEvents();
+    runWorker();
+    assertThat(hasVector(bare)).isTrue();
+
+    String body = suggestionsBody(owner, jobId);
+
+    assertThat(first(body, candidateOf(profileOf(complete)) + ".candidateProfileId")).isNotNull();
+    assertThat(first(body, candidateOf(profileOf(bare)) + ".candidateProfileId")).isNull();
   }
 
   @Test

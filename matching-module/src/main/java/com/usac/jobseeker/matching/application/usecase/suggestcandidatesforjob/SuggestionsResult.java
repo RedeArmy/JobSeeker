@@ -1,19 +1,26 @@
 package com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob;
 
-import com.usac.jobseeker.matching.domain.model.CandidateProfileId;
+import com.usac.jobseeker.matching.domain.model.AlgorithmVersion;
 import java.util.List;
 
 /**
- * Los sugeridos de una vacante, en el orden del ranking. **No lleva similitud ni puntaje**: el
- * coseno bruto no es un porcentaje de compatibilidad y nunca llega a una respuesta (ADR-0017); el
- * orden es lo único que la recuperación aporta.
+ * Los sugeridos de una vacante, en el orden final del pipeline. Cada uno lleva su puntaje
+ * explicable y la respuesta, la versión del algoritmo y si está calibrado (BR-MATCH-04, ADR-0017
+ * decisión 5). **El coseno bruto no aparece en ningún sitio** (ADR-0017).
  *
  * @param status si hay candidatos, si la vacante está en pausa o si aún no tiene vector
- * @param candidates los perfiles descubribles más cercanos, sin datos del candidato
+ * @param candidates los candidatos sugeridos, del mejor al peor según el orden final
  * @param remainingQuota cuántos perfiles nuevos más puede ver el reclutador en la ventana
+ * @param algorithmVersion la versión con que se puntuó; nulo si no se puntuó a nadie
+ * @param calibrated si el puntaje usa una calibración ajustada; falso hasta el protocolo de 300
+ *     pares
  */
 public record SuggestionsResult(
-    Status status, List<CandidateProfileId> candidates, int remainingQuota) {
+    Status status,
+    List<SuggestedCandidate> candidates,
+    int remainingQuota,
+    AlgorithmVersion algorithmVersion,
+    boolean calibrated) {
 
   /** Cómo quedó la petición. */
   public enum Status {
