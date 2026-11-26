@@ -79,6 +79,11 @@ class ApiExceptionHandlerTest {
       throw new FileRejectedException(FileRejectedException.Reason.MALWARE_DETECTED);
     }
 
+    @GetMapping("/too-big")
+    String tooBig() throws org.springframework.web.multipart.MaxUploadSizeExceededException {
+      throw new org.springframework.web.multipart.MaxUploadSizeExceededException(6 * 1024 * 1024);
+    }
+
     @GetMapping("/storage-down")
     String storageDown() {
       throw new UpstreamUnavailableException(
@@ -114,6 +119,16 @@ class ApiExceptionHandlerTest {
         .andExpect(jsonPath("$.error.code").value("FILE_REJECTED"))
         .andExpect(jsonPath("$.error.details[0].field").value("file"))
         .andExpect(jsonPath("$.error.details[0].code").value("MALWARE_DETECTED"));
+  }
+
+  // Lo que pasa del límite de multipart recibe el mismo contrato que el rechazo por tamaño del caso
+  // de uso, no un 413 genérico.
+  @Test
+  void anUploadOverTheMultipartLimitIsAFileRejectedTooLarge() throws Exception {
+    mvc.perform(get("/too-big"))
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(jsonPath("$.error.code").value("FILE_REJECTED"))
+        .andExpect(jsonPath("$.error.details[0].code").value("TOO_LARGE"));
   }
 
   @Test

@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 /**
@@ -220,6 +221,21 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                 "FILE_REJECTED",
                 "El archivo no se aceptó.",
                 List.of(Map.of("field", "file", "code", exception.reason().name()))));
+  }
+
+  /**
+   * Un archivo mayor que el límite de `multipart` se corta antes de leerlo: es el mismo rechazo por
+   * tamaño que el del caso de uso, con el mismo contrato, no un 413 genérico.
+   */
+  @Override
+  protected ResponseEntity<Object> handleMaxUploadSizeExceededException(
+      MaxUploadSizeExceededException exception,
+      HttpHeaders headers,
+      HttpStatusCode status,
+      WebRequest request) {
+    return fileRejected(
+        new FileRejectedException(FileRejectedException.Reason.TOO_LARGE),
+        ((ServletWebRequest) request).getRequest());
   }
 
   /**
