@@ -92,7 +92,10 @@ Carpetas de `cv-module/src/main/java/com/usac/jobseeker/cv/application/usecase/`
 | `getprofilesnapshots` | La misma lectura para **varias cuentas con pocas consultas** (hasta 500): la individual es el caso de una, con las mismas reglas de capacidad y anonimización (TD-039) | interna | — |
 | `getvisibleavailabilities` | La disponibilidad que un reclutador puede ver de **varios** candidatos, con la misma regla de exclusión que `getvisibleavailability` (BR-CAND-05, BR-VIS-06; TD-039) | interna | — |
 | `anonymizeprofiledata` | Anonimiza los datos de `cv` de una cuenta (§9) | interna (lote) | `AccountAnonymized` |
-| `uploadcv`, `downloadmycv`, `uploadprofilephoto` | **Planificados (ADR-0021).** Subir una versión nueva del CV o la foto con validación y escaneo, y descargar el CV propio por URL firmada | candidato / cuenta | — |
+| `uploadcv` | Sube una versión nueva del CV: valida tamaño y tipo real, escanea, guarda y la marca vigente (ADR-0021, §10.7) | candidato | — |
+| `getmycv` | El CV vigente y las versiones anteriores, sin URL | candidato | — |
+| `downloadmycv` | URL firmada de 5 minutos de una versión propia (ADR-0021 §3) | candidato | — |
+| `uploadprofilephoto` | **Planificado (ADR-0021).** Subir la foto de perfil, re-codificada sin metadatos EXIF | cuenta | — |
 | `checkapplicationreadiness` | **Planificado para `ats`.** Qué le falta a la cuenta para postular (BR-CAND-01: nombre, contacto y CV) y el CV vigente (`tdd/ats-tracker-modules.md` §5) | interna | — |
 | `getapplicantprofiles` | **Planificado para `ats`.** Por lotes, nombre, titular y contacto de postulantes; solo tras autorizar al reclutador en `ats` (REQ-C-07) | interna | — |
 | `presigncvdownload` | **Planificado para `ats`.** URL firmada de una versión concreta del CV; autoriza quien la pide (ADR-0021 §3) | interna | — |
@@ -125,6 +128,9 @@ Rutas de ejemplo; el contrato lo genera springdoc de los controladores anotados 
 | `PUT /api/v1/me/candidate-profile/skills`, `…/languages`, `…/work-authorizations` | `replace…` | escritura | sí | 403, 400 |
 | `PUT /api/v1/me/candidate-profile/discoverability`, `…/availability` | `change…` | escritura | sí | 403 |
 | `GET`/`POST`/`DELETE /api/v1/me/candidate-profile/availability-exclusions[/{accountId}]` | `manageavailabilityexclusions` | lectura / escritura | `POST` por clave natural | 403, 404, 409 duplicada |
+| `POST /api/v1/me/candidate-profile/cv` (multipart, campo `file`) | `uploadcv` | `upload` (10/h) | el mismo archivo no crea otra versión | 403, 404 sin perfil, 422 `FILE_REJECTED`, 503 `UPSTREAM_UNAVAILABLE` |
+| `GET /api/v1/me/candidate-profile/cv` | `getmycv` | lectura | sí | 403, 404 |
+| `GET /api/v1/me/candidate-profile/cv/{fileId}/download` | `downloadmycv` | lectura | sí | `302` a la URL firmada; 403, 404, 503 |
 
 Las pantallas Thymeleaf + HTMX viven en `/app/profile/**` y devuelven fragmentos; toda petición mutante lleva el token CSRF y entra en la prueba que recorre las rutas mutantes (definición de hecho, punto 16). Una cuenta sin capacidad de candidato recibe `403` en cualquier ruta de candidato; la cuenta en `PENDING_DELETION` ni siquiera llega a ellas, porque `resolveactor` la rechaza (BR-DATA-04).
 
@@ -150,6 +156,7 @@ Al contrastar `data-model.md` con este diseño aparecieron huecos. Todos están 
 | M5 | `updated_at` descrito como disparador de recálculo | Aclarado: el disparo es el evento por la bandeja, condicionado a la capacidad de candidato | §4.2, §4.4 |
 | M6 | Catálogos sin cerrar | `CHECK` con los valores de §3.1 | §4.3, §4.4, §4.12 |
 | M7 | Qué hacer con la lista de exclusión al anonimizar | Se eliminan las filas del candidato anonimizado; las de otros candidatos que lo excluían no se tocan | §4.10 |
+| M8 | El CV cargado no tenía tabla (solo `raw_cv_text`, que nada rellena) | `candidate_cv_files`, una fila por versión inmutable (ADR-0021 §5), §10.7 | §4.4.1 |
 
 Las pruebas de la migración (la de «publicadas inmutables» y el análisis de `squawk`) existen desde el paso 2 del Sprint 0 y cubren estas migraciones sin trabajo extra. Las restricciones nuevas sobre tablas con filas se añaden `NOT VALID` y se validan después; en tablas nuevas, como estas, no hace falta.
 
@@ -171,6 +178,7 @@ Las pruebas de la migración (la de «publicadas inmutables» y el análisis de 
 | 4 | ✅ **Hecho (24-nov-2026).** Descubribilidad, disponibilidad y lista de exclusión, con sus eventos, su API JSON y su pantalla `/app/candidate-visibility`. Detalle y desvíos de este documento en §10.4 | 3 |
 | 5 | ✅ **Hecho (24-nov-2026).** `getprofilesnapshot`, el catálogo de eventos de `cv` y sus pruebas de contrato (forma del resultado, eventos por la bandeja real). Detalle y desvíos de este documento en §10.5 | 3, TDD de `matching` |
 | 6 | ✅ **Hecho (24-nov-2026).** `anonymizeprofiledata` con su migración, el evento `profile.anonymized` y sus pruebas. Detalle y desvíos de este documento en §10.6 | 2, 3, 4 |
+| 7 | ✅ **Hecho (26-nov-2026).** El CV (ADR-0021): `candidate_cv_files` (M8), `uploadcv`, `getmycv`, `downloadmycv`, su API y el borrado físico al anonimizar. Diseño y desvíos en §10.7 | 3, 6, ADR-0021 |
 
 ### 10.1 Sub-paso 1: qué se construyó y en qué se desvió de este documento
 
@@ -273,6 +281,40 @@ Se construyó `anonymizeprofiledata` (§9) con la migración `V20261124110000__c
 
 Cada sub-paso sale como una PR propia con su definición de hecho completa (OpenAPI anotado, política de límite de tasa, métrica y log con `traceId`, prueba de autorización y de CSRF).
 
+
+### 10.7 Sub-paso 7: el CV (ADR-0021)
+
+**Tabla `candidate_cv_files` (M8).** Una fila por versión, nunca se reescribe el archivo (ADR-0021 §5):
+
+| Columna | Tipo | Regla |
+|---|---|---|
+| `id` | uuid | PK; es lo que guarda `ats` en la postulación |
+| `candidate_profile_id` | uuid | FK a `candidate_profiles` |
+| `object_key` | varchar | Clave del almacén (`cv/{uuid}`), única; nula tras el borrado físico |
+| `display_name` | varchar(100) | Nombre saneado (`FileContentRules.displayName`); es un dato personal, nulo al anonimizar |
+| `file_type` | varchar | `PDF` o `DOCX`, el tipo **detectado** |
+| `size_bytes` | integer | Mayor que 0 |
+| `sha256` | char(64) | Para no crear otra versión si se sube el mismo archivo |
+| `is_current` | boolean | Una sola vigente por perfil (índice único parcial) |
+| `uploaded_at` | timestamptz | |
+| `deleted_at` | timestamptz | Al anonimizar; sin ella la fila sigue sirviendo |
+
+**`uploadcv`, en este orden.** Capacidad de candidato → perfil (404 si no hay: el CV es del perfil de candidato) → tamaño (`TOO_LARGE`) → tipo real PDF o DOCX sin macros (`UNSUPPORTED_TYPE`) → si el SHA-256 es el del vigente, devuelve el vigente sin crear nada → tope de versiones (`LIMIT_REACHED`) → escaneo (`MALWARE_DETECTED`; la firma va al log, el archivo no) → `put` → bloqueo del perfil (`FOR UPDATE`), nueva comprobación del tope y alta de la versión vigente. Si algo falla después del `put`, se borra el objeto por *best effort*; un fallo al confirmar la transacción deja un objeto huérfano que no referencia nadie (la reconciliación periódica del ADR-0021 §2 queda en el registro de deuda).
+
+**El escaneo y la subida van dentro de la transacción** del caso de uso, como el resto del módulo. Retiene una conexión ~1 s con 5 MB (`13-…` §3); con la política `upload` (10 por hora y cuenta) es un costo acotado. Si la medición en producción lo desaconseja, la salida es adquirir la conexión de forma diferida, no partir el caso de uso.
+
+**Límites:** 5 MB y 20 versiones por cuenta (`jobseeker.cv.cv-max-bytes`, `jobseeker.cv.cv-max-versions`), las decisiones R2 y R3 del ADR-0021.
+
+**Anonimización:** `anonymizeprofiledata` marca `deleted_at`, borra `display_name` y `object_key`, y en la misma transacción emite `storage.file_deletion_requested` con las claves; un consumidor de la bandeja las borra del almacén, con reintentos (ADR-0021 §6).
+
+**Sin evento de dominio al subir:** `matching` no lee el CV (embebe datos estructurados, nunca el archivo; amenaza T-N11) y la preparación para postular (`checkapplicationreadiness`) consulta la tabla. Si una notificación lo necesitara, se añade entonces.
+
+**Lo que se construyó además del diseño:**
+
+- **La política de límite `upload` se asigna por tipo de contenido** (`multipart/`), no por ruta: cualquier subida futura (la foto, las respuestas de archivo) queda limitada sin tocar las reglas.
+- **El límite de `multipart` de Spring es de 6 MB**, algo mayor que el del CV: un archivo de 5 a 6 MB recibe el `FILE_REJECTED` del caso de uso y uno mayor se corta antes de leerlo, con el mismo `422 FILE_REJECTED / TOO_LARGE`, no un `413` genérico.
+- **`cv` gana la dependencia `spring-boot`** para `CvFileProperties` (`jobseeker.cv.cv-max-size`, `jobseeker.cv.cv-max-versions`), como `job` y `matching`.
+- **La reconciliación de objetos huérfanos** (un alta cuya transacción falla al confirmar) queda en TD-041.
 ## 11. Pruebas
 
 - **Dominio y casos de uso:** unitarias sin Spring, con puertos en memoria. Cada invariante de §3 y cada error de §6 tiene su caso, y se pasa PIT con los mutadores `STRONGER` como en `auth`.
