@@ -415,9 +415,9 @@ Versiones del CV cargado (ADR-0021, `tdd/cv-module.md` §10.7, M8). El archivo v
 |---|---|---|---|
 | id | uuid | PK | Identificador de la versión |
 | candidate_profile_id | uuid | FK → candidate_profiles.id | Perfil dueño |
-| object_key | varchar(64) | UNIQUE, NULL, CHECK `cv/{uuid}` | Clave aleatoria del almacén; nula tras el borrado físico |
-| display_name | varchar(100) | NULL | Nombre saneado con la extensión del tipo detectado; dato personal, nulo al anonimizar |
-| file_type | varchar(8) | NOT NULL, CHECK IN ('PDF','DOCX') | Tipo detectado por el contenido |
+| object_key | text | UNIQUE, NULL, CHECK `cv/{uuid}` | Clave aleatoria del almacén; nula tras el borrado físico |
+| display_name | text | NULL, CHECK longitud ≤ 100 | Nombre saneado con la extensión del tipo detectado; dato personal, nulo al anonimizar |
+| file_type | text | NOT NULL, CHECK IN ('PDF','DOCX') | Tipo detectado por el contenido |
 | size_bytes | integer | NOT NULL, CHECK > 0 | Tamaño |
 | sha256 | char(64) | NOT NULL | Huella; subir el mismo archivo que el vigente no crea otra versión |
 | is_current | boolean | NOT NULL | Una sola vigente por perfil (índice único parcial `uq_ccf_current`) |

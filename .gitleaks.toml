@@ -1,9 +1,22 @@
 # Configuración de gitleaks (escaneo de secretos). Extiende las reglas por defecto de la herramienta.
 #
-# Por qué no hay lista de excepciones todavía: el escaneo del historial completo (13 commits) no
-# encontró nada. Si aparece un falso positivo, se añade aquí una excepción acotada (regla + archivo
-# o expresión) con un comentario que diga por qué es seguro — nunca una excepción de carpeta entera.
+# Un falso positivo se resuelve con una excepción acotada (regla + archivo + expresión) y un
+# comentario que diga por qué es seguro — nunca una excepción de carpeta entera.
 title = "JobSeeker"
 
 [extend]
 useDefault = true
+
+# Credenciales de prueba del SeaweedFS desechable que levantan dos pruebas de integración (ADR-0021).
+# No protegen nada: el contenedor nace y muere con la prueba y solo escucha en un puerto aleatorio
+# local. La excepción exige las tres cosas a la vez: esta regla, estos dos archivos y un valor que
+# empiece por `prueba-`, de modo que un secreto real en esos archivos seguiría detectándose.
+[[allowlists]]
+description = "Credenciales de prueba del SeaweedFS de las pruebas de integración"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = [
+  '''^app/src/test/java/com/usac/jobseeker/app/infrastructure/storage/S3ObjectStorageIntegrationTest\.java$''',
+  '''^app/src/test/java/com/usac/jobseeker/app/infrastructure/security/CvFileEndpointIntegrationTest\.java$''',
+]
+regexes = ['''^prueba-[a-z0-9-]+$''']

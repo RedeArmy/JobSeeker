@@ -7,19 +7,24 @@ create table candidate_cv_files (
     candidate_profile_id uuid not null references candidate_profiles (id),
     -- Clave aleatoria del almacén: no revela la cuenta ni el nombre (amenaza T-N10). Nula una vez
     -- borrado el objeto al anonimizar.
-    object_key varchar(64),
+    object_key text,
     -- Nombre saneado para mostrar y descargar. Puede ser un dato personal («CV Ana López.pdf»), así
     -- que se borra al anonimizar (BR-DATA-05).
-    display_name varchar(100),
+    display_name text,
     -- El tipo detectado por el contenido, no el que dijo el cliente.
-    file_type varchar(8) not null,
+    file_type text not null,
     size_bytes integer not null,
+    -- SHA-256 en hexadecimal, siempre de 64 caracteres: char(64) es exacto, sin relleno (como
+    -- `request_hash` de app y `embedding_content_hash` de matching).
+    -- squawk-ignore ban-char-field
     sha256 char(64) not null,
     is_current boolean not null,
     uploaded_at timestamptz not null,
     deleted_at timestamptz,
     constraint uq_ccf_object_key unique (object_key),
     constraint ck_ccf_object_key check (object_key is null or object_key ~ '^cv/[0-9a-f-]{36}$'),
+    -- Longitud acotada con CHECK y no con varchar(n): ampliarla después no bloquea la tabla.
+    constraint ck_ccf_display_name check (display_name is null or char_length(display_name) <= 100),
     constraint ck_ccf_file_type check (file_type in ('PDF', 'DOCX')),
     constraint ck_ccf_size check (size_bytes > 0),
     constraint ck_ccf_sha256 check (sha256 ~ '^[0-9a-f]{64}$'),

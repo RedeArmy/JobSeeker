@@ -292,7 +292,7 @@ Cada sub-paso sale como una PR propia con su definición de hecho completa (Open
 | `id` | uuid | PK; es lo que guarda `ats` en la postulación |
 | `candidate_profile_id` | uuid | FK a `candidate_profiles` |
 | `object_key` | varchar | Clave del almacén (`cv/{uuid}`), única; nula tras el borrado físico |
-| `display_name` | varchar(100) | Nombre saneado (`FileContentRules.displayName`); es un dato personal, nulo al anonimizar |
+| `display_name` | text (≤ 100, `CHECK`) | Nombre saneado (`FileContentRules.displayName`); es un dato personal, nulo al anonimizar |
 | `file_type` | varchar | `PDF` o `DOCX`, el tipo **detectado** |
 | `size_bytes` | integer | Mayor que 0 |
 | `sha256` | char(64) | Para no crear otra versión si se sube el mismo archivo |
