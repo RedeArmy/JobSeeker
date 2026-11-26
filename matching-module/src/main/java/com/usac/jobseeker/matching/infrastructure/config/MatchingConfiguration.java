@@ -13,6 +13,7 @@ import com.usac.jobseeker.matching.application.usecase.embedentity.EmbedProfileS
 import com.usac.jobseeker.matching.application.usecase.embedentity.EmbedProfileUseCase;
 import com.usac.jobseeker.matching.application.usecase.embedentity.EmbeddingClientPort;
 import com.usac.jobseeker.matching.application.usecase.embedentity.EmbeddingFreshnessPort;
+import com.usac.jobseeker.matching.application.usecase.embedentity.EmbeddingJobHandlers;
 import com.usac.jobseeker.matching.application.usecase.embedentity.EmbeddingQueuePolicy;
 import com.usac.jobseeker.matching.application.usecase.embedentity.HandleJobEventService;
 import com.usac.jobseeker.matching.application.usecase.embedentity.HandleJobEventUseCase;
@@ -21,6 +22,8 @@ import com.usac.jobseeker.matching.application.usecase.embedentity.HandleProfile
 import com.usac.jobseeker.matching.application.usecase.embedentity.JobSignalsReader;
 import com.usac.jobseeker.matching.application.usecase.embedentity.ProcessEmbeddingQueueService;
 import com.usac.jobseeker.matching.application.usecase.embedentity.ProcessEmbeddingQueueUseCase;
+import com.usac.jobseeker.matching.application.usecase.recomputescoresforentity.RecomputeScoresForEntityService;
+import com.usac.jobseeker.matching.application.usecase.recomputescoresforentity.RecomputeScoresForEntityUseCase;
 import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.AvailabilityPort;
 import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.OwnedJobPort;
 import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.RecruiterTrustPort;
@@ -141,14 +144,14 @@ class MatchingConfiguration {
       JdbcEmbeddingWorkQueue queue,
       EmbedProfileUseCase embedProfile,
       EmbedJobUseCase embedJob,
+      RecomputeScoresForEntityUseCase recompute,
       UseCaseMetricsPort metrics,
       EmbeddingFreshnessPort freshness,
       MatchingProperties properties) {
     MatchingProperties.Queue q = properties.queue();
     return new ProcessEmbeddingQueueService(
         queue,
-        embedProfile,
-        embedJob,
+        new EmbeddingJobHandlers(embedProfile, embedJob, recompute),
         new EmbeddingQueuePolicy(
             q.batchSize(), q.lease(), q.maxAttempts(), q.baseBackoff(), q.maxBackoff()),
         metrics,
@@ -259,5 +262,15 @@ class MatchingConfiguration {
   CalculateCompatibilityScoreUseCase calculateCompatibilityScoreUseCase(
       ScoringSources sources, ScoreCalculator calculator, UseCaseMetricsPort metrics) {
     return new CalculateCompatibilityScoreService(sources, calculator, metrics, Clock.systemUTC());
+  }
+
+  @Bean
+  RecomputeScoresForEntityUseCase recomputeScoresForEntityUseCase(
+      ScoringSources sources,
+      ScoreCalculator calculator,
+      UseCaseMetricsPort metrics,
+      MatchingProperties properties) {
+    return new RecomputeScoresForEntityService(
+        sources, calculator, properties.scoring().recomputeMaxPairs(), metrics, Clock.systemUTC());
   }
 }
