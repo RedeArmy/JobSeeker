@@ -71,7 +71,7 @@ class FileContentRulesTest {
     var type = FileContentRules.detect(bomb);
 
     assertThat(type).contains(FileType.DOCX);
-    assertThat(bomb.length).isLessThan(1024 * 1024);
+    assertThat(bomb).hasSizeLessThan(1024 * 1024);
     assertThat((System.nanoTime() - start) / 1_000_000).isLessThan(500);
   }
 

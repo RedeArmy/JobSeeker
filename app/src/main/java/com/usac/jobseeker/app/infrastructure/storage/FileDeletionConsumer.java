@@ -48,7 +48,7 @@ final class FileDeletionConsumer implements OutboxEventConsumer {
       try {
         storage.delete(new StoredObjectKey(key.asString()));
         deleted++;
-      } catch (IllegalArgumentException e) {
+      } catch (IllegalArgumentException _) {
         LOG.error("event=file_deletion_invalid_key Clave de almacenamiento no válida en el evento");
       }
     }

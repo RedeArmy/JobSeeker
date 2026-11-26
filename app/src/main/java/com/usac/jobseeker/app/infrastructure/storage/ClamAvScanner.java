@@ -35,15 +35,15 @@ final class ClamAvScanner implements MalwareScanPort {
   private static final int MAX_REPLY = 1024;
 
   private final MalwareScanProperties properties;
-  private final Timer clean;
-  private final Timer infected;
-  private final Timer unavailable;
+  private final Timer cleanTimer;
+  private final Timer infectedTimer;
+  private final Timer unavailableTimer;
 
   ClamAvScanner(MalwareScanProperties properties, MeterRegistry meters) {
     this.properties = Objects.requireNonNull(properties, "properties");
-    this.clean = timer(meters, "clean");
-    this.infected = timer(meters, "infected");
-    this.unavailable = timer(meters, "unavailable");
+    this.cleanTimer = timer(meters, "clean");
+    this.infectedTimer = timer(meters, "infected");
+    this.unavailableTimer = timer(meters, "unavailable");
   }
 
   @Override
@@ -51,14 +51,14 @@ final class ClamAvScanner implements MalwareScanPort {
     long start = System.nanoTime();
     try {
       ScanVerdict verdict = verdictOf(exchange(content));
-      (verdict instanceof ScanVerdict.Clean ? clean : infected)
+      (verdict instanceof ScanVerdict.Clean ? cleanTimer : infectedTimer)
           .record(System.nanoTime() - start, java.util.concurrent.TimeUnit.NANOSECONDS);
       return verdict;
     } catch (IOException e) {
-      unavailable.record(System.nanoTime() - start, java.util.concurrent.TimeUnit.NANOSECONDS);
+      unavailableTimer.record(System.nanoTime() - start, java.util.concurrent.TimeUnit.NANOSECONDS);
       throw new UpstreamUnavailableException(DEPENDENCY, e);
     } catch (UpstreamUnavailableException e) {
-      unavailable.record(System.nanoTime() - start, java.util.concurrent.TimeUnit.NANOSECONDS);
+      unavailableTimer.record(System.nanoTime() - start, java.util.concurrent.TimeUnit.NANOSECONDS);
       throw e;
     }
   }

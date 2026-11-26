@@ -68,10 +68,7 @@ class CvFileServicesTest {
   private final UploadCvService upload =
       new UploadCvService(
           change,
-          profiles,
-          files,
-          storage,
-          scanner,
+          new CvFileSources(profiles, files, storage, scanner),
           policy,
           (useCase, outcome) -> metrics.add(useCase + ":" + outcome),
           new Stamp(Clock.fixed(NOW, ZoneOffset.UTC), UUID::randomUUID));

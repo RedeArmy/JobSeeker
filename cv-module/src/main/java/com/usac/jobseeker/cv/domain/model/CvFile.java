@@ -30,7 +30,7 @@ public record CvFile(
   /** Lo que se acepta como CV (ADR-0021 §4, decisión R2). */
   public static final Set<FileType> ACCEPTED_TYPES = Set.of(FileType.PDF, FileType.DOCX);
 
-  private static final Pattern SHA256 = Pattern.compile("^[0-9a-f]{64}$");
+  private static final Pattern SHA256_FORMAT = Pattern.compile("^[0-9a-f]{64}$");
 
   public CvFile {
     Objects.requireNonNull(id, "id");
@@ -45,7 +45,7 @@ public record CvFile(
     if (sizeBytes <= 0) {
       throw new IllegalArgumentException("Un CV no está vacío");
     }
-    if (sha256 == null || !SHA256.matcher(sha256).matches()) {
+    if (sha256 == null || !SHA256_FORMAT.matcher(sha256).matches()) {
       throw new IllegalArgumentException("Huella SHA-256 no válida");
     }
   }

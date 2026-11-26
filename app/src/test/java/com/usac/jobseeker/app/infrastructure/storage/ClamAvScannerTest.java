@@ -131,8 +131,9 @@ class ClamAvScannerTest {
   @Test
   void thePingExpectsPong() throws Exception {
     serve(payload -> "PONG");
+    var scanner = scanner(1024);
 
-    scanner(1024).ping();
+    org.assertj.core.api.Assertions.assertThatCode(scanner::ping).doesNotThrowAnyException();
   }
 
   private ClamAvScanner scanner(int chunkSize) {
@@ -170,7 +171,7 @@ class ClamAvScannerTest {
   private void acceptAndHang() {
     try (Socket socket = server.accept()) {
       socket.getInputStream().readAllBytes();
-    } catch (IOException e) {
+    } catch (IOException _) {
       // El cliente cierra al agotar su tiempo: es lo esperado.
     }
   }

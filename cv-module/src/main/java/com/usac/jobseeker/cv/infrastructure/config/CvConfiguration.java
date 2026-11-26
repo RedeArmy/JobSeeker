@@ -49,6 +49,7 @@ import com.usac.jobseeker.cv.application.usecase.saveprofessionalprofile.Candida
 import com.usac.jobseeker.cv.application.usecase.saveprofessionalprofile.SaveProfessionalProfileService;
 import com.usac.jobseeker.cv.application.usecase.saveprofessionalprofile.SaveProfessionalProfileUseCase;
 import com.usac.jobseeker.cv.application.usecase.uploadcv.CvFilePolicy;
+import com.usac.jobseeker.cv.application.usecase.uploadcv.CvFileSources;
 import com.usac.jobseeker.cv.application.usecase.uploadcv.UploadCvService;
 import com.usac.jobseeker.cv.application.usecase.uploadcv.UploadCvUseCase;
 import com.usac.jobseeker.cv.infrastructure.adapter.in.scheduled.OrphanCvReconciliationJob;
@@ -307,7 +308,11 @@ class CvConfiguration {
       CvFilePolicy policy,
       UseCaseMetricsPort metrics) {
     return new UploadCvService(
-        change, profiles, files, storage, scanner, policy, metrics, Stamp.system());
+        change,
+        new CvFileSources(profiles, files, storage, scanner),
+        policy,
+        metrics,
+        Stamp.system());
   }
 
   @Bean

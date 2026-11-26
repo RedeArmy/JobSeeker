@@ -40,7 +40,6 @@ public final class FileContentRules {
   private static final String MACROS = "vbaproject.bin";
 
   private static final int MAX_NAME_LENGTH = 100;
-  private static final Pattern MARKS = Pattern.compile("\\p{M}+");
   private static final Pattern NOT_ALLOWED = Pattern.compile("[^\\p{L}\\p{N} ._-]+");
   private static final Pattern SPACES = Pattern.compile("\\s+");
 

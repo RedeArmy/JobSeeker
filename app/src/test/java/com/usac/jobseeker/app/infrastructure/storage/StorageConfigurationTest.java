@@ -71,7 +71,9 @@ class StorageConfigurationTest {
 
   @Test
   void theDownloadLifetimeCannotExceedFiveMinutes() {
-    assertThatThrownBy(() -> storageWithTtl(Duration.ofMinutes(6)))
+    Duration tooLong = Duration.ofMinutes(6);
+
+    assertThatThrownBy(() -> storageWithTtl(tooLong))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("5 minutos");
     assertThatThrownBy(() -> storageWithTtl(Duration.ZERO))
@@ -82,6 +84,10 @@ class StorageConfigurationTest {
   // A medio configurar es un error de despliegue que se ve al arrancar, no un almacén «ausente».
   @Test
   void anEndpointWithoutCredentialsFailsAtStartup() {
+    Duration ttl = Duration.ofMinutes(5);
+    Duration connect = Duration.ofSeconds(2);
+    Duration read = Duration.ofSeconds(10);
+
     assertThatThrownBy(
             () ->
                 new StorageProperties(
@@ -91,9 +97,9 @@ class StorageConfigurationTest {
                     null,
                     null,
                     true,
-                    Duration.ofMinutes(5),
-                    Duration.ofSeconds(2),
-                    Duration.ofSeconds(10),
+                    ttl,
+                    connect,
+                    read,
                     false))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("access-key");
@@ -101,14 +107,11 @@ class StorageConfigurationTest {
 
   @Test
   void theScannerSettingsAreValidated() {
-    assertThatThrownBy(
-            () ->
-                new MalwareScanProperties("h", 0, Duration.ofSeconds(1), Duration.ofSeconds(1), 1))
+    Duration second = Duration.ofSeconds(1);
+
+    assertThatThrownBy(() -> new MalwareScanProperties("h", 0, second, second, 1))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(
-            () ->
-                new MalwareScanProperties(
-                    "h", 3310, Duration.ofSeconds(1), Duration.ofSeconds(1), 0))
+    assertThatThrownBy(() -> new MalwareScanProperties("h", 3310, second, second, 0))
         .isInstanceOf(IllegalArgumentException.class);
   }
 

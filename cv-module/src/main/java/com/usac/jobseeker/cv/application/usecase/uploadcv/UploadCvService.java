@@ -52,18 +52,16 @@ public class UploadCvService implements UploadCvUseCase {
 
   public UploadCvService(
       CandidateChange change,
-      CandidateProfileStorePort profiles,
-      CvFileStorePort files,
-      ObjectStoragePort storage,
-      MalwareScanPort scanner,
+      CvFileSources sources,
       CvFilePolicy policy,
       UseCaseMetricsPort metrics,
       Stamp stamp) {
     this.change = Objects.requireNonNull(change, "change");
-    this.profiles = Objects.requireNonNull(profiles, "profiles");
-    this.files = Objects.requireNonNull(files, "files");
-    this.storage = Objects.requireNonNull(storage, "storage");
-    this.scanner = Objects.requireNonNull(scanner, "scanner");
+    Objects.requireNonNull(sources, "sources");
+    this.profiles = sources.profiles();
+    this.files = sources.files();
+    this.storage = sources.storage();
+    this.scanner = sources.scanner();
     this.policy = Objects.requireNonNull(policy, "policy");
     this.metrics = Objects.requireNonNull(metrics, "metrics");
     this.stamp = Objects.requireNonNull(stamp, "stamp");
@@ -137,10 +135,10 @@ public class UploadCvService implements UploadCvUseCase {
   private void scan(byte[] content) {
     try {
       ScanVerdict verdict = scanner.scan(content);
-      if (verdict instanceof ScanVerdict.Infected infected) {
+      if (verdict instanceof ScanVerdict.Infected(String signature)) {
         LOG.warn(
             "event=cv_rejected outcome=malware signature={} Se rechazó un CV con malware",
-            infected.signature());
+            signature);
         throw rejected(Reason.MALWARE_DETECTED, "malware");
       }
     } catch (UpstreamUnavailableException e) {
@@ -164,7 +162,7 @@ public class UploadCvService implements UploadCvUseCase {
   private void discard(StoredObjectKey key) {
     try {
       storage.delete(key);
-    } catch (UpstreamUnavailableException e) {
+    } catch (UpstreamUnavailableException _) {
       LOG.warn("event=cv_orphan_object No se pudo borrar un objeto de un alta fallida");
     }
   }

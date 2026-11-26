@@ -75,7 +75,7 @@ class StorageConfiguration {
       // 503.
       try {
         storage.createBucketIfMissing();
-      } catch (UpstreamUnavailableException e) {
+      } catch (UpstreamUnavailableException _) {
         LOG.warn(
             "event=storage_bucket_check_failed No se pudo comprobar el bucket del almacén al"
                 + " arrancar");
@@ -114,7 +114,7 @@ class StorageConfiguration {
       try {
         s3.ping();
         return Health.up().build();
-      } catch (UpstreamUnavailableException e) {
+      } catch (UpstreamUnavailableException _) {
         return Health.down().build();
       }
     };
@@ -129,7 +129,7 @@ class StorageConfiguration {
       try {
         clamAv.ping();
         return Health.up().build();
-      } catch (UpstreamUnavailableException e) {
+      } catch (UpstreamUnavailableException _) {
         return Health.down().build();
       }
     };

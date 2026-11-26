@@ -138,11 +138,14 @@ class ReconcileOrphanCvFilesServiceTest {
 
   @Test
   void thePolicyRefusesAGraceShorterThanAnHourAndIncoherentLimits() {
-    assertThatThrownBy(() -> new OrphanReconciliationPolicy(Duration.ofMinutes(10), 10, 100, 5))
+    Duration tenMinutes = Duration.ofMinutes(10);
+    Duration day = Duration.ofHours(24);
+
+    assertThatThrownBy(() -> new OrphanReconciliationPolicy(tenMinutes, 10, 100, 5))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> new OrphanReconciliationPolicy(Duration.ofHours(24), 100, 10, 5))
+    assertThatThrownBy(() -> new OrphanReconciliationPolicy(day, 100, 10, 5))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> new OrphanReconciliationPolicy(Duration.ofHours(24), 10, 100, 0))
+    assertThatThrownBy(() -> new OrphanReconciliationPolicy(day, 10, 100, 0))
         .isInstanceOf(IllegalArgumentException.class);
   }
 

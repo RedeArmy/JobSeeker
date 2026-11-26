@@ -246,10 +246,12 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
   @ExceptionHandler(UpstreamUnavailableException.class)
   ResponseEntity<Object> upstreamUnavailable(
       UpstreamUnavailableException exception, HttpServletRequest request) {
-    LOG.warn(
-        "event=upstream_unavailable dependency={} Un servicio externo no responde",
-        exception.dependency(),
-        exception.getCause());
+    if (LOG.isWarnEnabled()) {
+      LOG.warn(
+          "event=upstream_unavailable dependency={} Un servicio externo no responde",
+          exception.dependency(),
+          exception.getCause());
+    }
     return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
         .body(
             ErrorEnvelope.body(

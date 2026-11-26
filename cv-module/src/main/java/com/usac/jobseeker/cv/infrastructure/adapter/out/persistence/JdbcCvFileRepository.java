@@ -29,6 +29,7 @@ public class JdbcCvFileRepository implements CvFileStorePort, CvFileReferencePor
       "id, candidate_profile_id, object_key, display_name, file_type, size_bytes, sha256,"
           + " is_current, uploaded_at";
   private static final String LIVE = " from candidate_cv_files where deleted_at is null";
+  private static final String SELECT_LIVE = "select " + COLUMNS + LIVE;
 
   private final JdbcClient jdbc;
 
@@ -38,8 +39,7 @@ public class JdbcCvFileRepository implements CvFileStorePort, CvFileReferencePor
 
   @Override
   public Optional<CvFile> current(CandidateProfileId profile) {
-    return jdbc.sql(
-            "select " + COLUMNS + LIVE + " and candidate_profile_id = :profile and is_current")
+    return jdbc.sql(SELECT_LIVE + " and candidate_profile_id = :profile and is_current")
         .param(PROFILE, profile.value())
         .query(JdbcCvFileRepository::fileOf)
         .optional();
@@ -49,10 +49,7 @@ public class JdbcCvFileRepository implements CvFileStorePort, CvFileReferencePor
   public List<CvFile> versions(CandidateProfileId profile) {
     // Más reciente primero, con el identificador como desempate para un orden estable.
     return jdbc.sql(
-            "select "
-                + COLUMNS
-                + LIVE
-                + " and candidate_profile_id = :profile order by uploaded_at desc, id")
+            SELECT_LIVE + " and candidate_profile_id = :profile order by uploaded_at desc, id")
         .param(PROFILE, profile.value())
         .query(JdbcCvFileRepository::fileOf)
         .list();
@@ -60,8 +57,7 @@ public class JdbcCvFileRepository implements CvFileStorePort, CvFileReferencePor
 
   @Override
   public Optional<CvFile> find(CandidateProfileId profile, UUID fileId) {
-    return jdbc.sql(
-            "select " + COLUMNS + LIVE + " and candidate_profile_id = :profile and id = :id")
+    return jdbc.sql(SELECT_LIVE + " and candidate_profile_id = :profile and id = :id")
         .param(PROFILE, profile.value())
         .param("id", fileId)
         .query(JdbcCvFileRepository::fileOf)

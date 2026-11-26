@@ -29,7 +29,9 @@ class StorageTypesTest {
     assertThat(new StoredObjectKey(valid).value()).isEqualTo(valid);
     assertThatThrownBy(() -> new StoredObjectKey("cv/../../secreto"))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> new StoredObjectKey("otros/" + java.util.UUID.randomUUID()))
+    String otherPrefix = "otros/" + java.util.UUID.randomUUID();
+
+    assertThatThrownBy(() -> new StoredObjectKey(otherPrefix))
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(() -> new StoredObjectKey(null)).isInstanceOf(NullPointerException.class);
   }

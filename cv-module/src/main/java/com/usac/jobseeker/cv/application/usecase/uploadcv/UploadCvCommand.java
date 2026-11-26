@@ -24,10 +24,10 @@ public record UploadCvCommand(AccountId accountId, String originalName, byte[] c
 
   @Override
   public boolean equals(Object other) {
-    return other instanceof UploadCvCommand that
-        && accountId.equals(that.accountId)
-        && Objects.equals(originalName, that.originalName)
-        && Arrays.equals(content, that.content);
+    return other instanceof UploadCvCommand(AccountId account, String name, byte[] bytes)
+        && accountId.equals(account)
+        && Objects.equals(originalName, name)
+        && Arrays.equals(content, bytes);
   }
 
   @Override

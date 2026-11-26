@@ -28,7 +28,7 @@ public class OrphanCvReconciliationJob {
   public void run() {
     try {
       reconcile.execute();
-    } catch (UpstreamUnavailableException e) {
+    } catch (UpstreamUnavailableException _) {
       LOG.warn(
           "event=orphan_cv_reconciliation_skipped Almacén no disponible; se reintenta en la"
               + " próxima pasada");

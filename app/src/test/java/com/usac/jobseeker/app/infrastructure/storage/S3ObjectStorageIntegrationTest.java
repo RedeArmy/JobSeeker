@@ -102,10 +102,12 @@ class S3ObjectStorageIntegrationTest {
     ObjectStoragePort shortLived =
         configuration.objectStorage(properties(endpoint(), Duration.ofSeconds(1)));
     URI expiring = shortLived.presignDownload(key, "cv.pdf", FileType.PDF);
-    Thread.sleep(2_500);
-
     assertThat(get(URI.create(tampered)).statusCode()).isEqualTo(403);
-    assertThat(get(expiring).statusCode()).isEqualTo(403);
+    // Se espera a que caduque comprobándolo, no durmiendo un tiempo fijo.
+    org.awaitility.Awaitility.await()
+        .atMost(Duration.ofSeconds(15))
+        .pollInterval(Duration.ofMillis(500))
+        .until(() -> get(expiring).statusCode() == 403);
   }
 
   @Test
@@ -140,14 +142,18 @@ class S3ObjectStorageIntegrationTest {
       cvs.add(isolated.put(FilePurpose.CV, new byte[] {1}, FileType.PDF).value());
     }
     isolated.put(FilePurpose.PHOTO, new byte[] {1}, FileType.PNG);
-    java.util.Collections.sort(cvs);
+    cvs.sort(null);
 
     var first = isolated.list(FilePurpose.CV, "", 2);
     var second = isolated.list(FilePurpose.CV, first.lastKey(), 2);
 
-    assertThat(first.objects()).extracting(e -> e.key()).containsExactly(cvs.get(0), cvs.get(1));
+    assertThat(first.objects())
+        .extracting(com.usac.jobseeker.common.application.storage.ObjectPage.Entry::key)
+        .containsExactly(cvs.get(0), cvs.get(1));
     assertThat(first.truncated()).isTrue();
-    assertThat(second.objects()).extracting(e -> e.key()).containsExactly(cvs.get(2));
+    assertThat(second.objects())
+        .extracting(com.usac.jobseeker.common.application.storage.ObjectPage.Entry::key)
+        .containsExactly(cvs.get(2));
     assertThat(second.truncated()).isFalse();
     assertThat(first.objects())
         .allSatisfy(

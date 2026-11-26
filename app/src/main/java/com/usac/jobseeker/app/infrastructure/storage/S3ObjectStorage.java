@@ -17,7 +17,6 @@ import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.S3Exception;
@@ -62,16 +61,17 @@ final class S3ObjectStorage implements ObjectStoragePort, AutoCloseable {
 
   @Override
   public URI presignDownload(StoredObjectKey key, String displayName, FileType type) {
-    GetObjectRequest get =
-        GetObjectRequest.builder()
-            .bucket(bucket)
-            .key(key.value())
-            .responseContentDisposition(attachment(displayName))
-            .responseContentType(type.mediaType())
-            .build();
     try {
       return presigner
-          .presignGetObject(p -> p.signatureDuration(downloadTtl).getObjectRequest(get))
+          .presignGetObject(
+              p ->
+                  p.signatureDuration(downloadTtl)
+                      .getObjectRequest(
+                          get ->
+                              get.bucket(bucket)
+                                  .key(key.value())
+                                  .responseContentDisposition(attachment(displayName))
+                                  .responseContentType(type.mediaType())))
           .url()
           .toURI();
     } catch (SdkException | java.net.URISyntaxException e) {
@@ -94,7 +94,7 @@ final class S3ObjectStorage implements ObjectStoragePort, AutoCloseable {
     try {
       s3.headObject(b -> b.bucket(bucket).key(key.value()));
       return true;
-    } catch (NoSuchKeyException e) {
+    } catch (NoSuchKeyException _) {
       return false;
     } catch (S3Exception e) {
       if (e.statusCode() == NOT_FOUND) {
@@ -140,7 +140,7 @@ final class S3ObjectStorage implements ObjectStoragePort, AutoCloseable {
   void createBucketIfMissing() {
     try {
       s3.headBucket(b -> b.bucket(bucket));
-    } catch (NoSuchBucketException e) {
+    } catch (NoSuchBucketException _) {
       createBucket();
     } catch (S3Exception e) {
       if (e.statusCode() != NOT_FOUND) {

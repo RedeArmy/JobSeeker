@@ -103,7 +103,7 @@ public class ReconcileOrphanCvFilesService implements ReconcileOrphanCvFilesUseC
       }
       try {
         candidates.add(new StoredObjectKey(entry.key()));
-      } catch (IllegalArgumentException unknownFormat) {
+      } catch (IllegalArgumentException _) {
         LOG.warn("event=orphan_cv_unknown_key Objeto con una clave que la aplicación no crea");
       }
     }

@@ -72,18 +72,17 @@ class JdbcCvFileRepositoryTest {
     files.insertCurrent(cv(profile, T0, true));
 
     var duplicate = cv(profile, T0.plusSeconds(1), true);
-    assertThatThrownBy(
-            () ->
-                jdbc.sql(
-                        "insert into candidate_cv_files (id, candidate_profile_id, object_key,"
-                            + " display_name, file_type, size_bytes, sha256, is_current, uploaded_at)"
-                            + " values (:id, :p, :k, 'x.pdf', 'PDF', 1, :sha, true, now())")
-                    .param("id", duplicate.id())
-                    .param("p", profile.value())
-                    .param("k", duplicate.objectKey())
-                    .param("sha", duplicate.sha256())
-                    .update())
-        .isInstanceOf(DataAccessException.class);
+    var insert =
+        jdbc.sql(
+                "insert into candidate_cv_files (id, candidate_profile_id, object_key,"
+                    + " display_name, file_type, size_bytes, sha256, is_current, uploaded_at)"
+                    + " values (:id, :p, :k, 'x.pdf', 'PDF', 1, :sha, true, now())")
+            .param("id", duplicate.id())
+            .param("p", profile.value())
+            .param("k", duplicate.objectKey())
+            .param("sha", duplicate.sha256());
+
+    assertThatThrownBy(insert::update).isInstanceOf(DataAccessException.class);
   }
 
   @Test
@@ -146,14 +145,13 @@ class JdbcCvFileRepositoryTest {
     var file = cv(profile, T0, true);
     files.insertCurrent(file);
 
-    assertThatThrownBy(
-            () ->
-                jdbc.sql(
-                        "update candidate_cv_files set deleted_at = now(), is_current = false"
-                            + " where id = :id")
-                    .param("id", file.id())
-                    .update())
-        .isInstanceOf(DataAccessException.class);
+    var markDeleted =
+        jdbc.sql(
+                "update candidate_cv_files set deleted_at = now(), is_current = false"
+                    + " where id = :id")
+            .param("id", file.id());
+
+    assertThatThrownBy(markDeleted::update).isInstanceOf(DataAccessException.class);
   }
 
   private CandidateProfileId aCandidate() {
