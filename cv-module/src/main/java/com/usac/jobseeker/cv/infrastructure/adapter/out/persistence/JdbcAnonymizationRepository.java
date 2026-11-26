@@ -5,6 +5,7 @@ import com.usac.jobseeker.cv.application.usecase.anonymizeprofiledata.Anonymizat
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -68,6 +69,23 @@ public class JdbcAnonymizationRepository implements AnonymizationStorePort {
             .optional();
     marked.ifPresent(this::deleteCandidateChildren);
     return marked;
+  }
+
+  // Una sola sentencia: lee las claves vigentes y las borra a la vez, así ninguna se escapa entre
+  // la
+  // lectura y la escritura.
+  @Override
+  public List<String> discardCvFiles(UUID candidateProfileId, Instant now) {
+    return jdbc.sql(
+            "with old as (select id, object_key from candidate_cv_files"
+                + " where candidate_profile_id = :profile and deleted_at is null for update)"
+                + " update candidate_cv_files f set object_key = null, display_name = null,"
+                + " is_current = false, deleted_at = :now from old where f.id = old.id"
+                + " returning old.object_key")
+        .param(PROFILE, candidateProfileId)
+        .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+        .query(String.class)
+        .list();
   }
 
   // Cada sentencia es completa y fija: no se concatena ningún nombre de tabla.

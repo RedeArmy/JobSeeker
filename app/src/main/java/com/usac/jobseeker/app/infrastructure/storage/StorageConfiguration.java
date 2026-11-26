@@ -1,5 +1,6 @@
 package com.usac.jobseeker.app.infrastructure.storage;
 
+import com.usac.jobseeker.common.application.outbox.OutboxEventConsumer;
 import com.usac.jobseeker.common.application.storage.MalwareScanPort;
 import com.usac.jobseeker.common.application.storage.ObjectStoragePort;
 import com.usac.jobseeker.common.domain.error.UpstreamUnavailableException;
@@ -91,6 +92,12 @@ class StorageConfiguration {
       return new UnavailableMalwareScanner();
     }
     return new ClamAvScanner(properties, meters);
+  }
+
+  // ADR-0021 §6: el borrado físico de lo anonimizado llega por la bandeja, con reintentos.
+  @Bean
+  OutboxEventConsumer fileDeletionConsumer(ObjectStoragePort storage) {
+    return new FileDeletionConsumer(storage);
   }
 
   /**

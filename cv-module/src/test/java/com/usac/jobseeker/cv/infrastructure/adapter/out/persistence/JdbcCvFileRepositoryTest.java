@@ -22,8 +22,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
  * Las versiones del CV contra la tabla real (Postgres 17, `tdd/cv-module.md` §10.7): una sola
- * vigente por perfil, el historial ordenado y el aislamiento entre perfiles, que la base impone
- * además del código.
+ * vigente por perfil, el historial ordenado, el aislamiento entre perfiles y el borrado al
+ * anonimizar, que la base impone además del código.
  */
 class JdbcCvFileRepositoryTest {
 
@@ -31,6 +31,7 @@ class JdbcCvFileRepositoryTest {
 
   private final JdbcClient jdbc = JdbcClient.create(CvPostgres.dataSource());
   private final JdbcCvFileRepository files = new JdbcCvFileRepository(jdbc);
+  private final JdbcAnonymizationRepository anonymization = new JdbcAnonymizationRepository(jdbc);
 
   @Test
   void aNewVersionBecomesTheOnlyCurrentOneAndTheHistoryIsNewestFirst() {
@@ -92,6 +93,33 @@ class JdbcCvFileRepositoryTest {
     files.lockProfile(profile);
 
     assertThat(files.count(profile)).isZero();
+  }
+
+  // BR-DATA-05 y ADR-0021 §6: se devuelven las claves y la fila queda sin archivo, sin nombre y sin
+  // vigente; ninguna lectura vuelve a mostrarla.
+  @Test
+  void anonymizationDiscardsEveryVersionAndReturnsTheirKeys() {
+    var profile = aCandidate();
+    var first = cv(profile, T0, true);
+    var second = cv(profile, T0.plusSeconds(60), true);
+    files.insertCurrent(first);
+    files.insertCurrent(second);
+
+    var keys = anonymization.discardCvFiles(profile.value(), T0.plusSeconds(3600));
+
+    assertThat(keys).containsExactlyInAnyOrder(first.objectKey(), second.objectKey());
+    assertThat(files.versions(profile)).isEmpty();
+    assertThat(files.current(profile)).isEmpty();
+    assertThat(files.count(profile)).isZero();
+    var leftover =
+        jdbc.sql(
+                "select count(*) from candidate_cv_files where candidate_profile_id = :p"
+                    + " and (object_key is not null or display_name is not null or is_current)")
+            .param("p", profile.value())
+            .query(Integer.class)
+            .single();
+    assertThat(leftover).isZero();
+    assertThat(anonymization.discardCvFiles(profile.value(), T0.plusSeconds(7200))).isEmpty();
   }
 
   @Test

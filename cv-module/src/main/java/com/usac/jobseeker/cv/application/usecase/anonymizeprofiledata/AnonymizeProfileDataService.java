@@ -3,10 +3,14 @@ package com.usac.jobseeker.cv.application.usecase.anonymizeprofiledata;
 import com.usac.jobseeker.common.application.observability.UseCaseMetricsPort;
 import com.usac.jobseeker.common.application.outbox.DomainEventPublisherPort;
 import com.usac.jobseeker.common.application.outbox.OutboxEvent;
+import com.usac.jobseeker.common.application.storage.FileDeletionRequested;
+import com.usac.jobseeker.common.application.storage.StoredObjectKey;
 import com.usac.jobseeker.cv.application.support.Stamp;
 import com.usac.jobseeker.cv.domain.event.ProfileDataAnonymized;
 import com.usac.jobseeker.cv.domain.event.ProfileUpdated;
 import com.usac.jobseeker.cv.domain.model.Anonymization;
+import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -72,8 +76,31 @@ public class AnonymizeProfileDataService implements AnonymizeProfileDataUseCase 
             OutboxEvent.FIRST_EVENT_VERSION,
             ProfileDataAnonymized.payload(command.accountId(), anonymized.get().version()),
             MDC.get(TRACE_ID_KEY)));
+    candidate.ifPresent(profile -> requestCvDeletion(profile, now));
     metrics.count(USE_CASE, "anonymized");
     LOG.info("event=profile_data_anonymized outcome=anonymized Datos de perfil anonimizados");
     return Result.ANONYMIZED;
+  }
+
+  // ADR-0021 §6: el borrado físico de los CV va por la bandeja, en esta misma transacción. Si la
+  // anonimización se deshace, no se borra nada; si el almacén falla, el consumidor reintenta.
+  private void requestCvDeletion(AnonymizationStorePort.Anonymized candidate, Instant now) {
+    List<StoredObjectKey> keys =
+        store.discardCvFiles(candidate.profileId(), now).stream()
+            .map(StoredObjectKey::new)
+            .toList();
+    if (keys.isEmpty()) {
+      return;
+    }
+    events.publish(
+        new OutboxEvent(
+            stamp.ids().get(),
+            ProfileUpdated.CANDIDATE_AGGREGATE_TYPE,
+            candidate.profileId(),
+            candidate.version(),
+            FileDeletionRequested.EVENT_TYPE,
+            OutboxEvent.FIRST_EVENT_VERSION,
+            FileDeletionRequested.payload(keys),
+            MDC.get(TRACE_ID_KEY)));
   }
 }
