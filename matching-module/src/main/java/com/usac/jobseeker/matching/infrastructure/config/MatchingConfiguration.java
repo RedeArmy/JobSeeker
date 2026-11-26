@@ -22,6 +22,8 @@ import com.usac.jobseeker.matching.application.usecase.embedentity.HandleProfile
 import com.usac.jobseeker.matching.application.usecase.embedentity.JobSignalsReader;
 import com.usac.jobseeker.matching.application.usecase.embedentity.ProcessEmbeddingQueueService;
 import com.usac.jobseeker.matching.application.usecase.embedentity.ProcessEmbeddingQueueUseCase;
+import com.usac.jobseeker.matching.application.usecase.migratealgorithmversion.MigrateAlgorithmVersionService;
+import com.usac.jobseeker.matching.application.usecase.migratealgorithmversion.MigrateAlgorithmVersionUseCase;
 import com.usac.jobseeker.matching.application.usecase.recomputescoresforentity.RecomputeScoresForEntityService;
 import com.usac.jobseeker.matching.application.usecase.recomputescoresforentity.RecomputeScoresForEntityUseCase;
 import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.AvailabilityPort;
@@ -38,6 +40,7 @@ import com.usac.jobseeker.matching.domain.model.Weights;
 import com.usac.jobseeker.matching.infrastructure.adapter.in.event.JobEventsConsumer;
 import com.usac.jobseeker.matching.infrastructure.adapter.in.event.ProfileEventsConsumer;
 import com.usac.jobseeker.matching.infrastructure.adapter.in.job.EmbeddingWorker;
+import com.usac.jobseeker.matching.infrastructure.adapter.in.job.ScoreMaintenanceWorker;
 import com.usac.jobseeker.matching.infrastructure.adapter.out.ai.OllamaEmbeddingClient;
 import com.usac.jobseeker.matching.infrastructure.adapter.out.metrics.EmbeddingQueueMetrics;
 import com.usac.jobseeker.matching.infrastructure.adapter.out.metrics.ScoringCalibrationMetrics;
@@ -272,5 +275,26 @@ class MatchingConfiguration {
       MatchingProperties properties) {
     return new RecomputeScoresForEntityService(
         sources, calculator, properties.scoring().recomputeMaxPairs(), metrics, Clock.systemUTC());
+  }
+
+  @Bean
+  MigrateAlgorithmVersionUseCase migrateAlgorithmVersionUseCase(
+      ScoringSources sources,
+      ScoreCalculator calculator,
+      UseCaseMetricsPort metrics,
+      MatchingProperties properties) {
+    MatchingProperties.Scoring scoring = properties.scoring();
+    return new MigrateAlgorithmVersionService(
+        sources,
+        calculator,
+        scoring.migrationBatchSize(),
+        scoring.snapshotRetention(),
+        metrics,
+        Clock.systemUTC());
+  }
+
+  @Bean
+  ScoreMaintenanceWorker scoreMaintenanceWorker(MigrateAlgorithmVersionUseCase maintenance) {
+    return new ScoreMaintenanceWorker(maintenance);
   }
 }
