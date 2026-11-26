@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.ScoringModel;
 import com.usac.jobseeker.matching.domain.model.Calibration;
 import com.usac.jobseeker.matching.domain.model.Weights;
+import com.usac.jobseeker.matching.domain.service.CompatibilityAggregator;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
@@ -30,7 +31,7 @@ class ScoringCalibrationMetricsTest {
                 .gauge()
                 .getId()
                 .getTag("algorithm_version"))
-        .startsWith("1|modelo|");
+        .startsWith(CompatibilityAggregator.CODE_VERSION + "|modelo|");
   }
 
   @Test

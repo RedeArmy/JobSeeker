@@ -4,7 +4,7 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | 🟡 En revisión |
-| **Versión** | 1.14 — se paga TD-036 |
+| **Versión** | 1.15 — aliases de habilidades y herramientas de calibración |
 | **Fecha** | 24 de noviembre de 2026 |
 | **Dueño del documento** | Responsable del proyecto |
 | **Revisión del registro** | Al cerrar cada sprint y antes de cada hito de la hoja de ruta |
@@ -81,8 +81,8 @@ Corte: 24-nov-2026.
 | TD-025 | La purga de la bandeja usa `Instant.now()` | Código | S4 | XS | Leída | Abierta | Oportunista |
 | TD-026 | Habilidades sin enlace a la taxonomía | Dominio | S4 | L | Medida | Planificada | Sub-paso de enlazado de ADR-0019 |
 | TD-035 | `profile_view_log` crece sin retención | Operación | S3 | S | Leída | Abierta | Antes de usuarios reales |
-| TD-037 | El puntaje se publica sin calibrar: `α`, pesos y Platt son valores iniciales | Calidad | S2 | L | Leída | Planificada | Protocolo de 300 pares y arnés de evaluación |
-| TD-038 | Habilidades por texto normalizado y experiencia total, no relevante | Dominio | S3 | M | Leída | Planificada | ADR-0019 implementado en `cv` |
+| TD-037 | El puntaje se publica sin calibrar: `α`, pesos y Platt son valores iniciales | Calidad | S2 | M | Leída | Planificada | Pares etiquetados reales (protocolo de 300 pares); las herramientas ya existen |
+| TD-038 | Taxonomía de habilidades y experiencia relevante (los aliases ya están) | Dominio | S3 | M | Leída | Planificada | ADR-0019 implementado en `cv` |
 | TD-040 | `ats` debe llamar a `snapshotapplicationprofile` al postular y al cambiar de etapa | Dominio | S3 | S | Leída | Planificada | Postulación y pipeline mínimos (`ats`) |
 
 ### Fichas
@@ -276,25 +276,25 @@ Corte: 24-nov-2026.
 
 #### TD-037 — El puntaje se publica sin calibrar: `α`, pesos y Platt son valores iniciales
 
-**Calidad** · **S2 Alta** · esfuerzo **L** · confianza **Leída** · **Planificada**
+**Calidad** · **S2 Alta** · esfuerzo **M** · confianza **Leída** · **Planificada**
 
-- **Evidencia:** El puntaje es **preliminar** (ADR-0030): la respuesta lleva `calibrated: false`, `jobseeker_matching_scoring_calibrated` vale 0 y arranca un aviso en el registro; sin parámetros de Platt el coseno se acota a [0, 1], los pesos son los de `03-lld.md` §2.3, `α = 0,30` y la completitud mínima 0,5 son los iniciales del ADR-0017. Con embeddings reales el coseno vacante-candidato va de 0,17 a 0,85, así que sin calibrar el semántico comprime el rango.
+- **Evidencia:** El puntaje es **preliminar** (ADR-0030): la respuesta lleva `calibrated: false`, `jobseeker_matching_scoring_calibrated` vale 0 y arranca un aviso en el registro; los pesos son los de `03-lld.md` §2.3, `α = 0,30` y la completitud mínima 0,5 son los iniciales. **Las herramientas para cerrarlo ya existen y están probadas** (`scripts/eval/matching_eval.py`: `calibrate`, `emit-config`, que se niega si no se cumple el protocolo, y `retrieval-recall` para el control C1); lo que falta son **datos reales**. Con embeddings reales el coseno vacante-candidato va de 0,17 a 0,85, así que sin calibrar el semántico comprime el rango.
 - **Interés (qué cuesta no pagarla):** La métrica de éxito «precisión ≥ 0,85» no puede medirse con un puntaje sin calibrar, y el orden de los sugeridos puede estar sesgado por la compresión del coseno.
-- **Disparador:** El protocolo de 300 pares del ADR-0018 y el arnés de evaluación.
-- **Remediación propuesta:** Ajustar Platt por modelo con calibración y evaluación separadas por vacante (C2), medir el *recall* de los 200 recuperados frente a puntuar a todos (C1, ≥ 0,95), fijar el umbral contrafactual (C5) y publicar los parámetros por configuración, lo que cambia la `algorithm_version`.
+- **Disparador:** Pares etiquetados reales (protocolo de 300 pares del ADR-0018).
+- **Remediación propuesta:** Etiquetar los pares con dos personas independientes (κ ≥ 0,6); `calibrate` para ver el ajuste fuera de pliegue; `retrieval-recall` (C1, ≥ 0,95); fijar el umbral contrafactual (C5); `emit-config` y pegar las dos propiedades.
 - **Criterio de cierre:** Parámetros ajustados y archivados, precisión con intervalo de confianza sobre la reserva, y `calibrated: true` en producción.
-- **Referencias:** ADR-0017 decisiones 5 y 12 y controles C1, C2 y C5; `scripts/eval/README.md`
+- **Referencias:** ADR-0017 decisiones 5 y 12; ADR-0030; `12-lectura-por-lotes-y-persistencia-del-puntaje.md` §5; `scripts/eval/README.md`
 
-#### TD-038 — Habilidades por texto normalizado y experiencia total, no relevante
+#### TD-038 — Taxonomía de habilidades y experiencia relevante (los aliases ya están)
 
 **Dominio** · **S3 Media** · esfuerzo **M** · confianza **Leída** · **Planificada**
 
-- **Evidencia:** Una habilidad cubre un requisito si coincide el nombre normalizado (sin mayúsculas, acentos ni puntuación): «JS» y «JavaScript» son distintas. La experiencia suma todos los años declarados, no los relevantes al puesto. El ADR-0019 prevé enlace por taxonomía y similitud de embeddings (`τ_skill`), que no existe todavía.
-- **Interés (qué cuesta no pagarla):** Falsos negativos por sinónimos y puntajes de experiencia inflados para quien tiene años en otra área.
-- **Disparador:** ADR-0019 implementado en `cv`.
-- **Remediación propuesta:** Enlazar habilidades a conceptos ESCO y comparar por identificador, con el escalón de embeddings calibrado, y ponderar la experiencia por la afinidad de cada puesto con la vacante.
+- **Evidencia:** Los **aliases** de habilidades inequívocos ya se comparan como la misma (36 grupos: «JS» y «JavaScript», «k8s» y «Kubernetes»; TD-R32). Falta la taxonomía del ADR-0019: enlazar cada habilidad a un concepto (ESCO, con atribución obligatoria) y el escalón de embeddings calibrado. La experiencia sigue sumando **todos** los años declarados, no los relevantes al puesto; una heurística léxica se descartó por penalizar a quien escribe en otro idioma.
+- **Interés (qué cuesta no pagarla):** Sinónimos fuera de los grupos siguen sin coincidir y los puntajes de experiencia se inflan para quien tiene años en otra área.
+- **Disparador:** ADR-0019 implementado en `cv` (descarga del *dataset* con su licencia e importación).
+- **Remediación propuesta:** Enlazar habilidades a conceptos y comparar por identificador (los aliases pasan a ser las habilidades locales sembradas); ponderar la experiencia por su afinidad con la vacante, medida con embeddings, y validarlo contra el conjunto etiquetado.
 - **Criterio de cierre:** Sinónimos conocidos cubren el mismo requisito y la experiencia relevante sustituye al total, medido en el conjunto dorado.
-- **Referencias:** ADR-0019; `docs/03-architecture/tdd/matching-module.md` §3 y §10.2
+- **Referencias:** ADR-0019; `12-lectura-por-lotes-y-persistencia-del-puntaje.md` §4
 
 #### TD-040 — `ats` debe llamar a `snapshotapplicationprofile` al postular y al cambiar de etapa
 
@@ -342,6 +342,7 @@ Corte: 24-nov-2026.
 | TD-R29 | Los sugeridos solo devolvían el orden: sin puntaje, prioridad, exclusión ni tarjeta (antes TD-034) | Dominio | S2 | 2026-11-25 | #44 | Puntaje explicable de seis dimensiones más la afinidad semántica con `α` visible, completitud mínima, `algorithm_version` por *hash* de pesos y calibración y marca de no calibrado; desempate `OPEN_TO_WORK` con una tolerancia de un punto, configurable (BR-MATCH-07, ADR-0030), que respeta la exclusión (BR-MATCH-09) preguntándola a `cv`; tarjeta enmascarada con el titular redactado (REQ-C-07). Propiedades probadas (límites, idempotencia, monotonía y C3) y de punta a punta con la exclusión, la completitud y sin datos personales ni coseno crudo en la respuesta. Lo que queda fuera: TD-036 a TD-039. |
 | TD-R30 | Puntuar 200 recuperados leía sus perfiles uno a uno (antes TD-039) | Rendimiento | S3 | 2026-11-25 | #45 | Lectura por lotes en `auth` (`ResolveActorsUseCase`), `cv` (`GetProfileSnapshotsUseCase`, `GetVisibleAvailabilitiesUseCase`) y `matching`; la individual es el caso de una cuenta. Medido con 200 candidatos: **p50 1.246 ms a 118 ms**, de ≈ 2.400 consultas a ≈ 20 fijas; probado que el número de sentencias no crece con los perfiles y que ningún adaptador de producción olvida el método por lotes (`BatchReadsAreOverriddenTest`). |
 | TD-R31 | El puntaje no se persistía, cacheaba ni recalculaba, y el candidato no veía el suyo (antes TD-036) | Dominio | S3 | 2026-11-25 | #46 | Tablas del puntaje vigente, fotos y copia del perfil canónico; casos de uso `calculatecompatibilityscore`, `recomputescoresforentity`, `explainscore` (con «qué pasaría si»), `snapshotapplicationprofile` y `migratealgorithmversion`; endpoints del candidato con su visibilidad y «actualizando…»; anonimización que conserva el par y el puntaje. Sin caché en Redis (ADR-0031, aprobado). Lo que depende de `ats` queda en TD-040. |
+| TD-R32 | Habilidades por texto normalizado sin alias (parte de TD-038) | Dominio | S3 | 2026-11-25 | #47 | 36 grupos de alias inequívocos («JS» = «JavaScript», «k8s» = «Kubernetes»); una prueba garantiza que ningún nombre está en dos grupos y otra que lo que solo se parece («Spring» y «Spring Boot») no se une. El código del algoritmo pasa a 2 para que la migración recalcule los puntajes guardados. La taxonomía y la experiencia relevante siguen en TD-038. |
 
 ## 7. Deuda aceptada
 
@@ -373,6 +374,7 @@ Corte: 24-nov-2026.
 | 1.12 | 2026-11-25 | Se paga TD-034 (PR #44, TD-R29): puntaje explicable, prioridad por disponibilidad, exclusión y tarjeta enmascarada en los sugeridos. Entran TD-036 (persistencia, caché, recálculo y puntaje del candidato), TD-037 (calibración), TD-038 (taxonomía de habilidades y experiencia relevante) y TD-039 (costo de leer 200 perfiles uno a uno). El ADR-0030 formaliza el desempate por tolerancia, la completitud aplicable y el puntaje preliminar, con un indicador de calibración. Quedan 21 abiertas o planificadas, 29 resueltas y 6 aceptadas. |
 | 1.13 | 2026-11-25 | Se paga TD-039 (PR #45, TD-R30): lectura por lotes en `auth`, `cv` y `matching`, medida con 200 candidatos (p50 de 1.246 ms a 118 ms) y protegida por una prueba de arquitectura. Se documenta la regla en `coding-standards.md` §8.1. Quedan 20 abiertas o planificadas, 30 resueltas y 6 aceptadas. |
 | 1.14 | 2026-11-25 | Se paga TD-036 (PR #46, TD-R31): puntaje guardado solo para pares con motivo, recalculado dentro del trabajador de la cola, visible al candidato con su «qué pasaría si», migración de versión con fotos y anonimización que conserva el par y el puntaje. El ADR-0031 enmienda la decisión 8 del ADR-0017: sin caché en Redis. Entra TD-040 (`ats` debe llamar a `snapshotapplicationprofile`). Quedan 20 abiertas o planificadas, 31 resueltas y 6 aceptadas. |
+| 1.15 | 2026-11-25 | Se paga la parte de aliases de TD-038 (PR #47, TD-R32): 36 grupos de alias inequívocos y el código del algoritmo pasa a 2. TD-037 sigue abierta con las herramientas listas (`emit-config`, `retrieval-recall`), a la espera de pares etiquetados reales; TD-038 sigue abierta por la taxonomía y la experiencia relevante. Quedan 20 abiertas o planificadas, 32 resueltas y 6 aceptadas. |
 
 ## 9. Plantilla de ficha
 
