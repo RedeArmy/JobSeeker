@@ -241,6 +241,24 @@ class ProfilePhotoServicesTest {
     assertThat(metrics).endsWith("missing_object");
   }
 
+  // La imagen procesada se compara por contenido y no se puede cambiar desde fuera.
+  @Test
+  void aProcessedPhotoComparesByContentAndCopiesItsBytes() {
+    byte[] bytes = {1, 2, 3};
+    var photo = new PhotoProcessorPort.ProcessedPhoto(bytes, FileType.PNG);
+    bytes[0] = 9;
+    photo.content()[1] = 9;
+
+    assertThat(photo.content()).containsExactly(1, 2, 3);
+    assertThat(photo)
+        .isEqualTo(new PhotoProcessorPort.ProcessedPhoto(new byte[] {1, 2, 3}, FileType.PNG))
+        .hasSameHashCodeAs(
+            new PhotoProcessorPort.ProcessedPhoto(new byte[] {1, 2, 3}, FileType.PNG))
+        .isNotEqualTo(new PhotoProcessorPort.ProcessedPhoto(new byte[] {1, 2, 3}, FileType.JPEG))
+        .isNotEqualTo(new PhotoProcessorPort.ProcessedPhoto(new byte[] {1, 2}, FileType.PNG));
+    assertThat(photo.toString()).isEqualTo("ProcessedPhoto[PNG, bytes=3]");
+  }
+
   private static void assertReason(Runnable call, Reason reason) {
     assertThatThrownBy(call::run)
         .isInstanceOfSatisfying(

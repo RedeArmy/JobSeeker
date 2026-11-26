@@ -154,7 +154,7 @@ public class CvScreenController {
   /** Una versión ya lista para mostrar: tamaño legible y fecha en UTC, sin depender de la vista. */
   record CvRow(UUID id, String name, String type, String size, String date, boolean current) {
 
-    private static final DateTimeFormatter DATE =
+    private static final DateTimeFormatter UTC_DAY =
         DateTimeFormatter.ISO_LOCAL_DATE.withZone(ZoneOffset.UTC);
     private static final double KILOBYTE = 1024.0;
 
@@ -164,7 +164,7 @@ public class CvScreenController {
           view.displayName(),
           view.type(),
           String.format(Locale.ROOT, "%.1f KB", view.sizeBytes() / KILOBYTE),
-          DATE.format(view.uploadedAt()),
+          UTC_DAY.format(view.uploadedAt()),
           view.current());
     }
   }

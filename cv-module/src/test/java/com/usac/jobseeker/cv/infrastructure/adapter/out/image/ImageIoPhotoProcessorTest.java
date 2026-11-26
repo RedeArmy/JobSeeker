@@ -67,7 +67,7 @@ class ImageIoPhotoProcessorTest {
   @Test
   void somethingThatIsNotAnImageIsRejected() {
     byte[] garbage = "%PDF-1.7 no soy una imagen".getBytes(StandardCharsets.US_ASCII);
-    byte[] truncated = new byte[] {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n', 0, 0};
+    byte[] truncated = {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n', 0, 0};
 
     assertThatThrownBy(() -> processor.process(garbage, FileType.PNG))
         .isInstanceOf(FileRejectedException.class);

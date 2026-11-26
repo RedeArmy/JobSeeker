@@ -23,6 +23,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 public class JdbcAnonymizationRepository implements AnonymizationStorePort {
 
   private static final String PROFILE = "profile";
+  private static final String ACCOUNT = "account";
 
   private final JdbcClient jdbc;
 
@@ -42,7 +43,7 @@ public class JdbcAnonymizationRepository implements AnonymizationStorePort {
                     + " returning id, version")
             .param("name", placeholderName)
             .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
-            .param("account", accountId.value())
+            .param(ACCOUNT, accountId.value())
             .query(
                 (rows, n) ->
                     new Anonymized(rows.getObject("id", UUID.class), rows.getLong("version")))
@@ -63,7 +64,7 @@ public class JdbcAnonymizationRepository implements AnonymizationStorePort {
                     + " updated_at = :now where account_id = :account and anonymized_at is null"
                     + " returning id, version")
             .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
-            .param("account", accountId.value())
+            .param(ACCOUNT, accountId.value())
             .query(
                 (rows, n) ->
                     new Anonymized(rows.getObject("id", UUID.class), rows.getLong("version")))
@@ -98,7 +99,7 @@ public class JdbcAnonymizationRepository implements AnonymizationStorePort {
                 + " update professional_profiles p set profile_photo_key = null,"
                 + " profile_photo_type = null from old where p.id = old.id"
                 + " returning old.profile_photo_key")
-        .param("account", accountId.value())
+        .param(ACCOUNT, accountId.value())
         .query(String.class)
         .optional();
   }
