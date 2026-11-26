@@ -79,12 +79,25 @@ public class JdbcAvailabilityExclusionRepository
 
   @Override
   public boolean isExcluded(CandidateProfileId profileId, AccountId account) {
-    return jdbc.sql(
-            "select exists (select 1 from candidate_availability_exclusions"
-                + " where candidate_profile_id = :profile and excluded_account_id = :account)")
-        .param(PROFILE, profileId.value())
-        .param("account", account.value())
-        .query(Boolean.class)
-        .single();
+    return !excludedAmong(java.util.List.of(profileId), account).isEmpty();
+  }
+
+  // Una consulta para varios candidatos (TD-039): cuáles de ellos excluyeron a esta cuenta.
+  @Override
+  public java.util.Set<CandidateProfileId> excludedAmong(
+      java.util.Collection<CandidateProfileId> profileIds, AccountId account) {
+    if (profileIds.isEmpty()) {
+      return java.util.Set.of();
+    }
+    return new java.util.HashSet<>(
+        jdbc.sql(
+                "select candidate_profile_id from candidate_availability_exclusions"
+                    + " where candidate_profile_id = any(:profiles) and excluded_account_id = :account")
+            .param(
+                "profiles",
+                profileIds.stream().map(CandidateProfileId::value).toArray(java.util.UUID[]::new))
+            .param("account", account.value())
+            .query((rows, n) -> new CandidateProfileId(rows.getObject(1, java.util.UUID.class)))
+            .list());
   }
 }

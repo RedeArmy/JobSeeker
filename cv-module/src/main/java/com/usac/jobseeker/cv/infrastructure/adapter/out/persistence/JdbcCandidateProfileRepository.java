@@ -19,6 +19,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -48,15 +52,32 @@ public class JdbcCandidateProfileRepository
 
   @Override
   public Optional<CandidateProfile> findByAccountId(AccountId accountId) {
-    return jdbc.sql(
+    return Optional.ofNullable(findAllByAccountIds(List.of(accountId)).get(accountId));
+  }
+
+  // Una consulta para varias cuentas (TD-039); la individual es el caso de una.
+  @Override
+  public Map<AccountId, CandidateProfile> findAllByAccountIds(Collection<AccountId> accountIds) {
+    if (accountIds.isEmpty()) {
+      return Map.of();
+    }
+    Map<AccountId, CandidateProfile> found = new HashMap<>();
+    jdbc.sql(
             "select id, account_id, contact_email, contact_phone, discoverable, availability_status,"
                 + " country_of_residence, desired_modality, preferred_work_schedule,"
                 + " relocation_willingness, salary_expectation_min, salary_expectation_max,"
                 + " salary_currency, salary_period, version, updated_at"
-                + " from candidate_profiles where account_id = :account and anonymized_at is null")
-        .param(ACCOUNT, accountId.value())
-        .query((rows, n) -> profileOf(rows))
-        .optional();
+                + " from candidate_profiles where account_id = any(:accounts)"
+                + " and anonymized_at is null")
+        .param("accounts", accountIds.stream().map(AccountId::value).toArray(UUID[]::new))
+        .query(
+            (rows, n) -> {
+              CandidateProfile profile = profileOf(rows);
+              found.put(profile.accountId(), profile);
+              return profile;
+            })
+        .list();
+    return found;
   }
 
   // ON CONFLICT DO NOTHING sobre `account_id` hace atómica la creación: dos primeros guardados a la

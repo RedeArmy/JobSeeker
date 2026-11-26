@@ -1,6 +1,7 @@
 package com.usac.jobseeker.cv.application.usecase.getprofilesnapshot;
 
 import com.usac.jobseeker.common.application.observability.UseCaseMetricsPort;
+import com.usac.jobseeker.common.domain.model.AccountId;
 import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.CandidateCollectionsReadPort;
 import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.CandidateProfileReadPort;
 import com.usac.jobseeker.cv.application.usecase.getmyprofessionalprofile.ProfessionalProfileReadPort;
@@ -9,11 +10,17 @@ import com.usac.jobseeker.cv.application.usecase.saveprofessionalprofile.Candida
 import com.usac.jobseeker.cv.domain.model.CandidateCollections;
 import com.usac.jobseeker.cv.domain.model.CandidateDetails;
 import com.usac.jobseeker.cv.domain.model.CandidateProfile;
+import com.usac.jobseeker.cv.domain.model.CandidateProfileId;
 import com.usac.jobseeker.cv.domain.model.ProfessionalProfile;
+import com.usac.jobseeker.cv.domain.model.ProfessionalProfileId;
 import com.usac.jobseeker.cv.domain.model.ProfileCollections;
 import com.usac.jobseeker.cv.domain.model.SalaryExpectation;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -23,7 +30,8 @@ import org.springframework.transaction.annotation.Transactional;
  * con un dato personal sin que nadie lo note. Todo se lee en una sola transacción de solo lectura,
  * para que el perfil profesional y el de candidato sean de la misma versión.
  */
-public class GetProfileSnapshotService implements GetProfileSnapshotUseCase {
+public class GetProfileSnapshotService
+    implements GetProfileSnapshotUseCase, GetProfileSnapshotsUseCase {
 
   private static final String USE_CASE = "get_profile_snapshot";
 
@@ -54,29 +62,52 @@ public class GetProfileSnapshotService implements GetProfileSnapshotUseCase {
   @Override
   @Transactional(readOnly = true)
   public Optional<ProfileSnapshot> execute(GetProfileSnapshotQuery query) {
-    Optional<ProfileSnapshot> snapshot = build(query);
+    Optional<ProfileSnapshot> snapshot = buildAll(List.of(query.accountId())).stream().findFirst();
     metrics.count(USE_CASE, snapshot.isPresent() ? "found" : "unavailable");
     return snapshot;
   }
 
-  // Sin la capacidad el perfil se conserva pero deja de ser legible desde fuera (decisión 8 del
-  // TDD):
-  // apagarla no debe dejar el perfil en los sugeridos.
-  private Optional<ProfileSnapshot> build(GetProfileSnapshotQuery query) {
-    if (!capabilities.isCandidate(query.accountId())) {
-      return Optional.empty();
+  @Override
+  @Transactional(readOnly = true)
+  public List<ProfileSnapshot> execute(GetProfileSnapshotsQuery query) {
+    List<ProfileSnapshot> snapshots = buildAll(query.accountIds());
+    metrics.count(USE_CASE, "batch");
+    return snapshots;
+  }
+
+  // La lectura individual es el caso de una cuenta: una sola implementación de las reglas. Sin la
+  // capacidad el perfil se conserva pero deja de ser legible desde fuera (decisión 8 del TDD):
+  // apagarla no debe dejar el perfil en los sugeridos. Se leen todos los perfiles con una consulta
+  // por tabla y no una tanda por cuenta (TD-039).
+  private List<ProfileSnapshot> buildAll(List<AccountId> accounts) {
+    Set<AccountId> candidatesOnly = capabilities.candidatesAmong(accounts);
+    if (candidatesOnly.isEmpty()) {
+      return List.of();
     }
-    Optional<ProfessionalProfile> professional = professionals.findByAccountId(query.accountId());
-    Optional<CandidateProfile> candidate = candidates.findByAccountId(query.accountId());
-    if (professional.isEmpty() || candidate.isEmpty()) {
-      return Optional.empty();
+    Map<AccountId, ProfessionalProfile> professionalOf =
+        professionals.findAllByAccountIds(candidatesOnly);
+    Map<AccountId, CandidateProfile> candidateOf = candidates.findAllByAccountIds(candidatesOnly);
+    Map<ProfessionalProfileId, ProfileCollections> professionalItems =
+        professionalCollections.findAllByProfileIds(
+            professionalOf.values().stream().map(ProfessionalProfile::id).toList());
+    Map<CandidateProfileId, CandidateCollections> candidateItems =
+        candidateCollections.findAllByProfileIds(
+            candidateOf.values().stream().map(CandidateProfile::id).toList());
+    List<ProfileSnapshot> snapshots = new ArrayList<>();
+    for (AccountId account : accounts) {
+      ProfessionalProfile professional = professionalOf.get(account);
+      CandidateProfile candidate = candidateOf.get(account);
+      if (professional == null || candidate == null || !candidatesOnly.contains(account)) {
+        continue;
+      }
+      snapshots.add(
+          project(
+              professional,
+              professionalItems.get(professional.id()),
+              candidate,
+              candidateItems.get(candidate.id())));
     }
-    return Optional.of(
-        project(
-            professional.get(),
-            professionalCollections.findByProfileId(professional.get().id()),
-            candidate.get(),
-            candidateCollections.findByProfileId(candidate.get().id())));
+    return snapshots;
   }
 
   private static ProfileSnapshot project(

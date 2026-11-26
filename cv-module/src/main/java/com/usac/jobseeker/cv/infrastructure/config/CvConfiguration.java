@@ -16,9 +16,7 @@ import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.GetMyCand
 import com.usac.jobseeker.cv.application.usecase.getmyprofessionalprofile.GetMyProfessionalProfileService;
 import com.usac.jobseeker.cv.application.usecase.getmyprofessionalprofile.GetMyProfessionalProfileUseCase;
 import com.usac.jobseeker.cv.application.usecase.getprofilesnapshot.GetProfileSnapshotService;
-import com.usac.jobseeker.cv.application.usecase.getprofilesnapshot.GetProfileSnapshotUseCase;
 import com.usac.jobseeker.cv.application.usecase.getvisibleavailability.GetVisibleAvailabilityService;
-import com.usac.jobseeker.cv.application.usecase.getvisibleavailability.GetVisibleAvailabilityUseCase;
 import com.usac.jobseeker.cv.application.usecase.manageavailabilityexclusions.AccountDirectoryPort;
 import com.usac.jobseeker.cv.application.usecase.manageavailabilityexclusions.ManageAvailabilityExclusionsService;
 import com.usac.jobseeker.cv.application.usecase.manageavailabilityexclusions.ManageAvailabilityExclusionsUseCase;
@@ -228,16 +226,19 @@ class CvConfiguration {
         exclusions, directory, change, Clock.systemUTC(), metrics);
   }
 
+  // Un solo bean con las dos interfaces (individual y por lotes): dos instancias del mismo servicio
+  // darían dos candidatos para cada tipo (TD-039).
   @Bean
-  GetVisibleAvailabilityUseCase getVisibleAvailabilityUseCase(
+  GetVisibleAvailabilityService getVisibleAvailabilityService(
       JdbcCandidateProfileRepository profiles, JdbcAvailabilityExclusionRepository exclusions) {
     return new GetVisibleAvailabilityService(profiles, exclusions);
   }
 
   // ---- lectura para otros módulos (sub-paso 5 del diseño de cv) ----
 
+  // Un solo bean con las dos interfaces (individual y por lotes), por la misma razón (TD-039).
   @Bean
-  GetProfileSnapshotUseCase getProfileSnapshotUseCase(
+  GetProfileSnapshotService getProfileSnapshotService(
       CandidateCapabilityPort capabilities,
       JdbcProfessionalProfileRepository professionals,
       JdbcProfileCollectionsRepository professionalCollections,

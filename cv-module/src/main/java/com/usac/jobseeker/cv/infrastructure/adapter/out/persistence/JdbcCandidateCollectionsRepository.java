@@ -9,7 +9,11 @@ import com.usac.jobseeker.cv.domain.model.CandidateLanguage;
 import com.usac.jobseeker.cv.domain.model.CandidateProfileId;
 import com.usac.jobseeker.cv.domain.model.CandidateSkill;
 import com.usac.jobseeker.cv.domain.model.LanguageProficiency;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
@@ -26,6 +30,7 @@ public class JdbcCandidateCollectionsRepository
         WorkAuthorizationsStorePort {
 
   private static final String PROFILE = "profile";
+  private static final String PROFILES = "profiles";
 
   private final JdbcClient jdbc;
 
@@ -35,40 +40,73 @@ public class JdbcCandidateCollectionsRepository
 
   @Override
   public CandidateCollections findByProfileId(CandidateProfileId profileId) {
-    UUID profile = profileId.value();
-    // Un orden estable: el conjunto no tiene orden propio y una lectura no debe cambiarlo al azar.
-    List<CandidateSkill> skills =
-        jdbc.sql(
-                "select raw_name, proficiency from candidate_skills"
-                    + " where candidate_profile_id = :profile order by lower(btrim(raw_name))")
-            .param(PROFILE, profile)
-            .query(
-                (rows, n) -> {
-                  // `wasNull` se consulta justo tras `getInt`: cualquier otra lectura lo reinicia.
-                  int level = rows.getInt("proficiency");
-                  Integer stored = rows.wasNull() ? null : level;
-                  return new CandidateSkill(rows.getString("raw_name"), stored);
-                })
-            .list();
-    List<CandidateLanguage> languages =
-        jdbc.sql(
-                "select language, proficiency from candidate_languages"
-                    + " where candidate_profile_id = :profile order by language")
-            .param(PROFILE, profile)
-            .query(
-                (rows, n) ->
-                    new CandidateLanguage(
-                        rows.getString("language"),
-                        LanguageProficiency.valueOf(rows.getString("proficiency"))))
-            .list();
-    List<String> authorizations =
-        jdbc.sql(
-                "select country from candidate_work_authorizations"
-                    + " where candidate_profile_id = :profile order by country")
-            .param(PROFILE, profile)
-            .query(String.class)
-            .list();
-    return new CandidateCollections(skills, languages, authorizations);
+    return findAllByProfileIds(List.of(profileId)).get(profileId);
+  }
+
+  // Tres consultas para todos los perfiles pedidos, agrupadas por dueño (TD-039); la individual es
+  // el
+  // caso de uno. Un orden estable: el conjunto no tiene orden propio y una lectura no debe
+  // cambiarlo
+  // al azar.
+  @Override
+  public Map<CandidateProfileId, CandidateCollections> findAllByProfileIds(
+      Collection<CandidateProfileId> profileIds) {
+    UUID[] ids = profileIds.stream().map(CandidateProfileId::value).toArray(UUID[]::new);
+    Map<UUID, List<CandidateSkill>> skills = new HashMap<>();
+    jdbc.sql(
+            "select candidate_profile_id, raw_name, proficiency from candidate_skills"
+                + " where candidate_profile_id = any(:profiles) order by lower(btrim(raw_name))")
+        .param(PROFILES, ids)
+        .query(
+            (rows, n) -> {
+              // `wasNull` se consulta justo tras `getInt`: cualquier otra lectura lo reinicia.
+              int level = rows.getInt("proficiency");
+              Integer stored = rows.wasNull() ? null : level;
+              return skills
+                  .computeIfAbsent(owner(rows), k -> new ArrayList<>())
+                  .add(new CandidateSkill(rows.getString("raw_name"), stored));
+            })
+        .list();
+    Map<UUID, List<CandidateLanguage>> languages = new HashMap<>();
+    jdbc.sql(
+            "select candidate_profile_id, language, proficiency from candidate_languages"
+                + " where candidate_profile_id = any(:profiles) order by language")
+        .param(PROFILES, ids)
+        .query(
+            (rows, n) ->
+                languages
+                    .computeIfAbsent(owner(rows), k -> new ArrayList<>())
+                    .add(
+                        new CandidateLanguage(
+                            rows.getString("language"),
+                            LanguageProficiency.valueOf(rows.getString("proficiency")))))
+        .list();
+    Map<UUID, List<String>> authorizations = new HashMap<>();
+    jdbc.sql(
+            "select candidate_profile_id, country from candidate_work_authorizations"
+                + " where candidate_profile_id = any(:profiles) order by country")
+        .param(PROFILES, ids)
+        .query(
+            (rows, n) ->
+                authorizations
+                    .computeIfAbsent(owner(rows), k -> new ArrayList<>())
+                    .add(rows.getString("country")))
+        .list();
+    Map<CandidateProfileId, CandidateCollections> all = new HashMap<>();
+    for (CandidateProfileId profile : profileIds) {
+      UUID id = profile.value();
+      all.put(
+          profile,
+          new CandidateCollections(
+              skills.getOrDefault(id, List.of()),
+              languages.getOrDefault(id, List.of()),
+              authorizations.getOrDefault(id, List.of())));
+    }
+    return all;
+  }
+
+  private static UUID owner(java.sql.ResultSet rows) throws java.sql.SQLException {
+    return rows.getObject("candidate_profile_id", UUID.class);
   }
 
   // Una sola sentencia por conjunto, con `unnest` sobre arreglos paralelos: antes eran N
