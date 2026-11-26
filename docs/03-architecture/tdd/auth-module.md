@@ -31,6 +31,7 @@ JobSeeker es **cliente** de Clavaris: nunca emite tokens ni guarda credenciales.
 | Carpeta (`application/usecase/`) | Qué hace | Puerto de salida |
 |---|---|---|
 | `provisionaccount` | Primer login: crea la cuenta local con la capacidad de candidato si no existe (BR-ACCT-09). Idempotente: un segundo login no cambia nada | `AccountProvisioningPort` |
+| `resolveactors` | La misma resolución de `resolveactor` para **varias cuentas con una consulta**, con la misma regla; es otra clase porque `resolveactor` lo decora un componente por petición (TD-039) | interna | — |
 | `resolveactor` | Reconstruye el `Actor` desde la base local en cada petición; rechaza `PENDING_DELETION` y `ANONYMIZED` (ADR-0020, resolución de identidad) | `ActorLookupPort` |
 | `handleclavariswebhook` | Aplica un webhook de Clavaris ya verificado (§11) | `IdentityStatePort`, `ProcessedEventsPort`, `DomainEventPublisherPort` |
 | `getrecruiterverification` | Devuelve la verificación de una cuenta reclutadora activa (BR-ACCT-10), o vacío si no existe, no puede actuar o no es reclutadora. Es una lectura entre módulos: `job` la usa al publicar | `RecruiterVerificationReadPort` |

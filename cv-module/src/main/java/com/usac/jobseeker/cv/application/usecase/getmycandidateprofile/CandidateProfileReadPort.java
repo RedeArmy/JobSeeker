@@ -10,4 +10,16 @@ import java.util.Optional;
 public interface CandidateProfileReadPort {
 
   Optional<CandidateProfile> findByAccountId(AccountId accountId);
+
+  /**
+   * Varias cuentas con una consulta; ver {@code ProfessionalProfileReadPort.findAllByAccountIds}.
+   */
+  default java.util.Map<AccountId, CandidateProfile> findAllByAccountIds(
+      java.util.Collection<AccountId> accountIds) {
+    java.util.Map<AccountId, CandidateProfile> found = new java.util.HashMap<>();
+    for (AccountId id : accountIds) {
+      findByAccountId(id).ifPresent(profile -> found.put(id, profile));
+    }
+    return found;
+  }
 }

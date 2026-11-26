@@ -12,6 +12,8 @@ import com.usac.jobseeker.auth.application.usecase.provisionaccount.ProvisionAcc
 import com.usac.jobseeker.auth.application.usecase.provisionaccount.ProvisionAccountUseCase;
 import com.usac.jobseeker.auth.application.usecase.resolveactor.ResolveActorService;
 import com.usac.jobseeker.auth.application.usecase.resolveactor.ResolveActorUseCase;
+import com.usac.jobseeker.auth.application.usecase.resolveactor.ResolveActorsService;
+import com.usac.jobseeker.auth.application.usecase.resolveactor.ResolveActorsUseCase;
 import com.usac.jobseeker.auth.application.usecase.reviewrecruiter.ReviewRecruiterService;
 import com.usac.jobseeker.auth.application.usecase.reviewrecruiter.ReviewRecruiterUseCase;
 import com.usac.jobseeker.auth.infrastructure.adapter.out.persistence.JdbcAccountRepository;
@@ -71,6 +73,13 @@ class AuthConfiguration {
   @Bean
   ResolveActorUseCase resolveActorUseCase(JdbcAccountRepository repository) {
     return new ResolveActorService(repository);
+  }
+
+  // La resolución por lotes (TD-039) no pasa por el decorador por petición: lee varias cuentas y no
+  // hay nada que reutilizar entre peticiones.
+  @Bean
+  ResolveActorsUseCase resolveActorsUseCase(JdbcAccountRepository repository) {
+    return new ResolveActorsService(repository);
   }
 
   @Bean

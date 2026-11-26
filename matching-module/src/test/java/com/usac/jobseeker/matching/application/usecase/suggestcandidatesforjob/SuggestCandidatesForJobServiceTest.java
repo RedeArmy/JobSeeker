@@ -10,6 +10,7 @@ import com.usac.jobseeker.common.domain.error.SuggestionsDeniedException;
 import com.usac.jobseeker.common.domain.error.SuggestionsDeniedException.Reason;
 import com.usac.jobseeker.common.domain.model.AccountId;
 import com.usac.jobseeker.common.domain.model.RecruiterVerification;
+import com.usac.jobseeker.matching.application.usecase.embedentity.CandidateSignalsReader;
 import com.usac.jobseeker.matching.application.usecase.embedentity.EmbeddingStorePort;
 import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.OwnedJobPort.OwnedJob;
 import com.usac.jobseeker.matching.domain.model.Availability;
@@ -27,6 +28,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -116,18 +118,42 @@ class SuggestCandidatesForJobServiceTest {
               retrievedModel = model;
               return pool.stream().limit(limit).map(Pooled::nearest).toList();
             },
-            account -> {
-              calls.add("signals");
-              return Optional.ofNullable(byAccount.get(account)).map(Pooled::signals);
+            new CandidateSignalsReader() {
+              public Optional<CandidateSignals> read(AccountId account) {
+                calls.add("signals:one");
+                return Optional.ofNullable(byAccount.get(account)).map(Pooled::signals);
+              }
+
+              @Override
+              public Map<AccountId, CandidateSignals> readAll(Collection<AccountId> accounts) {
+                calls.add("signals");
+                Map<AccountId, CandidateSignals> found = new HashMap<>();
+                accounts.forEach(
+                    a ->
+                        Optional.ofNullable(byAccount.get(a))
+                            .ifPresent(p -> found.put(a, p.signals())));
+                return found;
+              }
             },
             id -> {
               calls.add("jobSignals");
               return jobSignals;
             },
-            (viewer, candidate) -> {
-              calls.add("availability");
-              availabilityAsked.add(candidate);
-              return byAccount.get(candidate).visible();
+            new AvailabilityPort() {
+              public Availability visibleTo(AccountId viewer, AccountId candidate) {
+                calls.add("availability:one");
+                return byAccount.get(candidate).visible();
+              }
+
+              @Override
+              public Map<AccountId, Availability> visibleToAll(
+                  AccountId viewer, Collection<AccountId> candidates) {
+                calls.add("availability");
+                availabilityAsked.addAll(candidates);
+                Map<AccountId, Availability> all = new HashMap<>();
+                candidates.forEach(c -> all.put(c, byAccount.get(c).visible()));
+                return all;
+              }
             }),
         new ProfileViewLogPort() {
           public void lock(AccountId viewer) {
@@ -558,6 +584,34 @@ class SuggestCandidatesForJobServiceTest {
     // 97 y 94 difieren en 3 puntos, dentro de la tolerancia de 4: OPEN_TO_WORK va primero.
     assertThat(wide)
         .containsExactly(closeOpen2.nearest().candidate(), higher2.nearest().candidate());
+  }
+
+  // TD-039: las señales y la disponibilidad se piden UNA vez por todo el conjunto recuperado, no
+  // por candidato.
+  @Test
+  void theSignalsAndTheAvailabilityAreAskedOnceForTheWholeRecoveredSet() {
+    for (int i = 0; i < 15; i++) {
+      candidate(0.5 + i * 0.01, Availability.UNSET);
+    }
+
+    ask(10);
+
+    assertThat(calls.stream().filter(c -> c.startsWith("signals")).toList())
+        .containsExactly("signals");
+    assertThat(calls.stream().filter(c -> c.startsWith("availability")).toList())
+        .containsExactly("availability");
+    // La disponibilidad solo se pide de quienes pasaron el filtro de completitud, todos juntos.
+    assertThat(availabilityAsked).hasSize(15);
+  }
+
+  @Test
+  void availabilityIsNotAskedForWhoWasDiscardedForBeingIncomplete() {
+    candidate(0.9, Availability.UNSET, true, List.of(), "Sin habilidades");
+    var complete = candidate(0.5, Availability.UNSET);
+
+    ask(5);
+
+    assertThat(availabilityAsked).containsExactly(complete.nearest().account());
   }
 
   @Test

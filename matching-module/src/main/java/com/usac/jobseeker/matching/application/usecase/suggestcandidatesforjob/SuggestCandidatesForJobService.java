@@ -9,7 +9,6 @@ import com.usac.jobseeker.common.domain.error.SuggestionsDeniedException.Reason;
 import com.usac.jobseeker.common.domain.model.AccountId;
 import com.usac.jobseeker.common.domain.model.RecruiterVerification;
 import com.usac.jobseeker.matching.domain.model.Availability;
-import com.usac.jobseeker.matching.domain.model.CandidateCard;
 import com.usac.jobseeker.matching.domain.model.CandidateProfileId;
 import com.usac.jobseeker.matching.domain.model.CandidateSignals;
 import com.usac.jobseeker.matching.domain.model.CompatibilityScore;
@@ -154,24 +153,42 @@ public class SuggestCandidatesForJobService implements SuggestCandidatesForJobUs
       LocalDate today,
       Map<CandidateProfileId, SuggestedCandidate> scored,
       List<SuggestionRanking.Entry> entries) {
+    // Todas las señales con pocas consultas, no una tanda por candidato (TD-039).
+    Map<AccountId, CandidateSignals> signalsOf =
+        sources.candidates().readAll(recovered.stream().map(NearestProfile::account).toList());
     int incomplete = 0;
+    List<ScoredPair> complete = new ArrayList<>();
     for (NearestProfile nearest : recovered) {
-      Scoring result = scoreOne(nearest, jobSignals, recruiter, today);
+      Scoring result = scoreOne(nearest, signalsOf.get(nearest.account()), jobSignals, today);
       switch (result.status()) {
         case INCOMPLETE -> incomplete++;
-        case SCORED -> {
-          SuggestedCandidate candidate = result.candidate();
-          scored.put(nearest.candidate(), candidate);
-          entries.add(
-              new SuggestionRanking.Entry(
-                  nearest.candidate().value(),
-                  candidate.score().overall(),
-                  candidate.availability()));
-        }
+        case SCORED -> complete.add(result.pair());
         case SKIPPED -> {
           // Ya no es descubrible o no tiene perfil legible: no entra y no cuenta como incompleto.
         }
       }
+    }
+    // BR-MATCH-09: la disponibilidad es la que ve ESTE reclutador (UNSET si fue excluido); se
+    // pregunta
+    // una vez por todos los que pasaron el filtro de completitud.
+    Map<AccountId, Availability> availabilityOf =
+        sources
+            .availability()
+            .visibleToAll(
+                recruiter, complete.stream().map(pair -> pair.nearest().account()).toList());
+    for (ScoredPair pair : complete) {
+      Availability availability =
+          availabilityOf.getOrDefault(pair.nearest().account(), Availability.UNSET);
+      SuggestedCandidate candidate =
+          new SuggestedCandidate(
+              pair.nearest().candidate(),
+              pair.score(),
+              availability,
+              CandidateCards.of(pair.signals(), today));
+      scored.put(pair.nearest().candidate(), candidate);
+      entries.add(
+          new SuggestionRanking.Entry(
+              pair.nearest().candidate().value(), pair.score().overall(), availability));
     }
     return incomplete;
   }
@@ -183,18 +200,21 @@ public class SuggestCandidatesForJobService implements SuggestCandidatesForJobUs
     SCORED
   }
 
-  private record Scoring(Status status, SuggestedCandidate candidate) {}
+  /** Un recuperado ya puntuado, a la espera de la disponibilidad que ve el reclutador. */
+  private record ScoredPair(
+      NearestProfile nearest, CandidateSignals signals, CompatibilityScore score) {}
 
-  // Puntúa a un recuperado con aritmética, sin llamar a ningún modelo.
+  private record Scoring(Status status, ScoredPair pair) {}
+
+  // Puntúa a un recuperado con aritmética, sin llamar a ningún modelo; `signals` ya viene leído.
   private Scoring scoreOne(
-      NearestProfile nearest, JobSignals jobSignals, AccountId recruiter, LocalDate today) {
-    Optional<CandidateSignals> signals = sources.candidates().read(nearest.account());
-    if (signals.isEmpty() || !signals.get().discoverable()) {
+      NearestProfile nearest, CandidateSignals signals, JobSignals jobSignals, LocalDate today) {
+    if (signals == null || !signals.discoverable()) {
       return new Scoring(Status.SKIPPED, null);
     }
     CompatibilityScore score =
         CompatibilityAggregator.score(
-            signals.get(),
+            signals,
             jobSignals,
             nearest.cosineSimilarity(),
             scoring.weights(),
@@ -203,11 +223,7 @@ public class SuggestCandidatesForJobService implements SuggestCandidatesForJobUs
     if (score.breakdown().completeness() < scoring.weights().minCompleteness()) {
       return new Scoring(Status.INCOMPLETE, null);
     }
-    // BR-MATCH-09: la disponibilidad es la que ve ESTE reclutador (UNSET si fue excluido).
-    Availability availability = sources.availability().visibleTo(recruiter, nearest.account());
-    CandidateCard card = CandidateCards.of(signals.get(), today);
-    return new Scoring(
-        Status.SCORED, new SuggestedCandidate(nearest.candidate(), score, availability, card));
+    return new Scoring(Status.SCORED, new ScoredPair(nearest, signals, score));
   }
 
   private void requireVerifiedRecruiter(AccountId recruiter) {

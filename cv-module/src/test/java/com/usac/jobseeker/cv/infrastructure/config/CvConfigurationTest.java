@@ -34,13 +34,13 @@ class CvConfigurationTest {
             config.manageAvailabilityExclusionsUseCase(
                 exclusions, account -> true, change, (useCase, outcome) -> {}))
         .isNotNull();
-    assertThat(config.getVisibleAvailabilityUseCase(profiles, exclusions)).isNotNull();
+    assertThat(config.getVisibleAvailabilityService(profiles, exclusions)).isNotNull();
   }
 
   @Test
   void theSnapshotUseCaseIsBuiltFromTheReadAdapters() {
     assertThat(
-            config.getProfileSnapshotUseCase(
+            config.getProfileSnapshotService(
                 account -> true,
                 config.jdbcProfessionalProfileRepository(jdbc),
                 config.jdbcProfileCollectionsRepository(jdbc),

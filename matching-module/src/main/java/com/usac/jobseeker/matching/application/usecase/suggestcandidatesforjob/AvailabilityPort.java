@@ -11,4 +11,17 @@ import com.usac.jobseeker.matching.domain.model.Availability;
 public interface AvailabilityPort {
 
   Availability visibleTo(AccountId viewer, AccountId candidate);
+
+  /**
+   * La de varios candidatos con pocas consultas; todos aparecen en la respuesta. La implementación
+   * por defecto pregunta uno a uno y el adaptador real la sustituye (TD-039).
+   */
+  default java.util.Map<AccountId, Availability> visibleToAll(
+      AccountId viewer, java.util.Collection<AccountId> candidates) {
+    java.util.Map<AccountId, Availability> all = new java.util.HashMap<>();
+    for (AccountId candidate : candidates) {
+      all.put(candidate, visibleTo(viewer, candidate));
+    }
+    return all;
+  }
 }

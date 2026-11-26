@@ -46,6 +46,31 @@ public abstract class AccountStoreContract {
     assertThat(lookup().findById(unknown)).isEmpty();
   }
 
+  // TD-039: varias cuentas con una consulta devuelven lo mismo que leerlas de a una, y callan las
+  // que no existen.
+  @Test
+  void manyAccountsAreReadAtOnceExactlyAsOneByOneAndUnknownOnesAreAbsent() {
+    AccountId candidate = newId();
+    AccountId recruiter = newId();
+    AccountId both = newId();
+    AccountId unknown = newId();
+    provisioning().insertIfAbsent(candidate, EnumSet.of(Capability.CANDIDATE));
+    provisioning().insertIfAbsent(recruiter, EnumSet.of(Capability.RECRUITER));
+    provisioning().insertIfAbsent(both, EnumSet.allOf(Capability.class));
+
+    var found = lookup().findAllById(List.of(candidate, recruiter, both, unknown));
+
+    assertThat(found).containsOnlyKeys(candidate, recruiter, both);
+    for (AccountId id : List.of(candidate, recruiter, both)) {
+      assertThat(found).containsEntry(id, lookup().findById(id).orElseThrow());
+    }
+  }
+
+  @Test
+  void anEmptyBatchIsEmpty() {
+    assertThat(lookup().findAllById(List.of())).isEmpty();
+  }
+
   @Test
   void theFirstInsertCreatesTheAccountAndSaysSo() {
     AccountId id = newId();

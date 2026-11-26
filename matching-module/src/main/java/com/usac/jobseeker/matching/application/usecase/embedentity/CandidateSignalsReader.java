@@ -12,4 +12,18 @@ import java.util.Optional;
 public interface CandidateSignalsReader {
 
   Optional<CandidateSignals> read(AccountId accountId);
+
+  /**
+   * Varias cuentas con pocas consultas, por cuenta pedida; las que no tienen perfil legible no
+   * aparecen. La implementación por defecto lee una a una, correcta pero lenta: sirve a quien
+   * simula el puerto y el adaptador real la sustituye (TD-039).
+   */
+  default java.util.Map<AccountId, CandidateSignals> readAll(
+      java.util.Collection<AccountId> accountIds) {
+    java.util.Map<AccountId, CandidateSignals> found = new java.util.HashMap<>();
+    for (AccountId id : accountIds) {
+      read(id).ifPresent(signals -> found.put(id, signals));
+    }
+    return found;
+  }
 }

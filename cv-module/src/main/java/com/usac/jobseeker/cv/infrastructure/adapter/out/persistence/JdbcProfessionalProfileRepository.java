@@ -7,6 +7,10 @@ import com.usac.jobseeker.cv.domain.model.ProfessionalIdentity;
 import com.usac.jobseeker.cv.domain.model.ProfessionalProfile;
 import com.usac.jobseeker.cv.domain.model.ProfessionalProfileId;
 import java.time.OffsetDateTime;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -28,22 +32,39 @@ public class JdbcProfessionalProfileRepository
 
   @Override
   public Optional<ProfessionalProfile> findByAccountId(AccountId accountId) {
-    return jdbc.sql(
+    return Optional.ofNullable(findAllByAccountIds(List.of(accountId)).get(accountId));
+  }
+
+  // Una consulta para varias cuentas (TD-039); la individual es el caso de una.
+  @Override
+  public Map<AccountId, ProfessionalProfile> findAllByAccountIds(Collection<AccountId> accountIds) {
+    if (accountIds.isEmpty()) {
+      return Map.of();
+    }
+    Map<AccountId, ProfessionalProfile> found = new HashMap<>();
+    jdbc.sql(
             "select id, account_id, full_name, headline, bio, version, updated_at"
-                + " from professional_profiles where account_id = :account and anonymized_at is null")
-        .param(ACCOUNT, accountId.value())
+                + " from professional_profiles where account_id = any(:accounts)"
+                + " and anonymized_at is null")
+        .param("accounts", accountIds.stream().map(AccountId::value).toArray(UUID[]::new))
         .query(
-            (rows, n) ->
-                new ProfessionalProfile(
-                    new ProfessionalProfileId(rows.getObject("id", UUID.class)),
-                    new AccountId(rows.getObject("account_id", UUID.class)),
-                    new ProfessionalIdentity(
-                        rows.getString("full_name"),
-                        rows.getString(HEADLINE),
-                        rows.getString("bio")),
-                    rows.getLong(VERSION),
-                    rows.getObject("updated_at", OffsetDateTime.class).toInstant()))
-        .optional();
+            (rows, n) -> {
+              AccountId account = new AccountId(rows.getObject("account_id", UUID.class));
+              found.put(
+                  account,
+                  new ProfessionalProfile(
+                      new ProfessionalProfileId(rows.getObject("id", UUID.class)),
+                      account,
+                      new ProfessionalIdentity(
+                          rows.getString("full_name"),
+                          rows.getString(HEADLINE),
+                          rows.getString("bio")),
+                      rows.getLong(VERSION),
+                      rows.getObject("updated_at", OffsetDateTime.class).toInstant()));
+              return account;
+            })
+        .list();
+    return found;
   }
 
   // ON CONFLICT DO NOTHING sobre `account_id` hace atómica la creación: dos primeros guardados a la

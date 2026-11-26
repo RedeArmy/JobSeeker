@@ -89,6 +89,8 @@ Carpetas de `cv-module/src/main/java/com/usac/jobseeker/cv/application/usecase/`
 | `changeavailability` | Declara el estado de disponibilidad (BR-CAND-04) | candidato | `CandidateAvailabilityChanged` |
 | `manageavailabilityexclusions` | Lista, añade y quita cuentas de la lista de exclusión (BR-CAND-05) | candidato | `CandidateAvailabilityExclusionChanged` |
 | `getprofilesnapshot` | Lectura para otros módulos, sin datos de contacto (§7) | interna | — |
+| `getprofilesnapshots` | La misma lectura para **varias cuentas con pocas consultas** (hasta 500): la individual es el caso de una, con las mismas reglas de capacidad y anonimización (TD-039) | interna | — |
+| `getvisibleavailabilities` | La disponibilidad que un reclutador puede ver de **varios** candidatos, con la misma regla de exclusión que `getvisibleavailability` (BR-CAND-05, BR-VIS-06; TD-039) | interna | — |
 | `anonymizeprofiledata` | Anonimiza los datos de `cv` de una cuenta (§9) | interna (lote) | `AccountAnonymized` |
 
 **Por qué estas granularidades.** Las colecciones con identidad propia (experiencias, formación…) se editan elemento a elemento, porque la interfaz las edita así y cada elemento tiene su historial. Los conjuntos sin identidad (habilidades, idiomas, autorizaciones) se **reemplazan enteros**: la operación es idempotente por naturaleza y evita reconciliar altas y bajas. Descubribilidad y disponibilidad llevan casos de uso aparte porque sus eventos son distintos y **no** disparan lo mismo: la descubribilidad saca al candidato de los sugeridos de inmediato, y la disponibilidad nunca recalcula un score (`domain-model.md` §6).
