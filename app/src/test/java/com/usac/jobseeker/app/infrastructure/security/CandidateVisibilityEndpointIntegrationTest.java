@@ -340,9 +340,8 @@ class CandidateVisibilityEndpointIntegrationTest {
                 new com.usac.jobseeker.common.domain.model.AccountId(id),
                 new com.usac.jobseeker.common.domain.model.AccountId(other)));
 
-    assertThat(asExcluded).isEqualTo(com.usac.jobseeker.cv.domain.model.AvailabilityStatus.UNSET);
-    assertThat(asOther)
-        .isEqualTo(com.usac.jobseeker.cv.domain.model.AvailabilityStatus.OPEN_TO_WORK);
+    assertThat(asExcluded).isEqualTo("UNSET");
+    assertThat(asOther).isEqualTo("OPEN_TO_WORK");
   }
 
   @Test

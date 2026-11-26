@@ -23,11 +23,12 @@ public class GetVisibleAvailabilityService implements GetVisibleAvailabilityUseC
 
   @Override
   @Transactional(readOnly = true)
-  public AvailabilityStatus execute(GetVisibleAvailabilityQuery query) {
+  public String execute(GetVisibleAvailabilityQuery query) {
     return profiles
         .findByAccountId(query.candidate())
         .map(profile -> visibleTo(profile, query))
-        .orElse(AvailabilityStatus.UNSET);
+        .orElse(AvailabilityStatus.UNSET)
+        .name();
   }
 
   private AvailabilityStatus visibleTo(
