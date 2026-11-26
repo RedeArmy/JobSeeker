@@ -23,7 +23,8 @@ public class ResolveActorService implements ResolveActorUseCase {
         .orElseGet(() -> new ActorResolution.Rejected(ActorResolution.Reason.NOT_PROVISIONED));
   }
 
-  private static ActorResolution resolve(Account account) {
+  // Visible en el paquete: la resolución por lotes aplica exactamente la misma regla.
+  static ActorResolution resolve(Account account) {
     // Una identidad borrada en Clavaris no vuelve (terminal), así que no puede quedar obsoleta como
     // una suspensión a la que se le perdió la reactivación: es la única que cierra el paso.
     if (account.identityStatus() == IdentityStatus.DELETED) {

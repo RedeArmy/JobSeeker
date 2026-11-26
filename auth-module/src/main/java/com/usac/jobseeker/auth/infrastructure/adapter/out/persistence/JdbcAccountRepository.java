@@ -54,10 +54,20 @@ public class JdbcAccountRepository
 
   @Override
   public Optional<Account> findById(AccountId id) {
-    return jdbc.sql(
+    return Optional.ofNullable(findAllById(java.util.List.of(id)).get(id));
+  }
+
+  // Una sola consulta para varias cuentas (TD-039); la individual es el caso de una.
+  @Override
+  public java.util.Map<AccountId, Account> findAllById(java.util.Collection<AccountId> ids) {
+    if (ids.isEmpty()) {
+      return java.util.Map.of();
+    }
+    java.util.Map<AccountId, Account> found = new java.util.HashMap<>();
+    jdbc.sql(
             "select id, is_candidate_enabled, is_recruiter_enabled, deletion_status, identity_status"
-                + " from accounts where id = :id")
-        .param("id", id.value())
+                + " from accounts where id = any(:ids)")
+        .param("ids", ids.stream().map(AccountId::value).toArray(java.util.UUID[]::new))
         .query(
             (rows, n) -> {
               Set<Capability> capabilities = EnumSet.noneOf(Capability.class);
@@ -67,12 +77,17 @@ public class JdbcAccountRepository
               if (rows.getBoolean("is_recruiter_enabled")) {
                 capabilities.add(Capability.RECRUITER);
               }
-              return new Account(
-                  new AccountId(rows.getObject("id", java.util.UUID.class)),
-                  capabilities,
-                  DeletionStatus.valueOf(rows.getString("deletion_status")),
-                  IdentityStatus.valueOf(rows.getString("identity_status")));
+              AccountId id = new AccountId(rows.getObject("id", java.util.UUID.class));
+              found.put(
+                  id,
+                  new Account(
+                      id,
+                      capabilities,
+                      DeletionStatus.valueOf(rows.getString("deletion_status")),
+                      IdentityStatus.valueOf(rows.getString("identity_status"))));
+              return id;
             })
-        .optional();
+        .list();
+    return found;
   }
 }
