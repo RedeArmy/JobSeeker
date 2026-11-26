@@ -92,7 +92,7 @@ flowchart LR
 |---|---|
 | Datos que requieren almacenamiento de binarios | CV cargado del candidato (`CandidateProfile`), respuestas de tipo `FILE_UPLOAD` a `ApplicationQuestion`/`ApplicationFollowUpRequest` (BR-APPQ-01, BR-FUP-01) |
 | Qué se persiste en PostgreSQL | Solo la referencia (`answer_value: {"fileUrl", "fileName"}`, `data-model.md` §4.16), nunca el binario en una columna de base de datos |
-| Backend de almacenamiento | **Pregunta abierta** — sistema de archivos local (solo válido para desarrollo/staging, no sobrevive a un redeploy sin volumen persistente), bucket compatible S3, o el mismo mecanismo para ambos casos de uso (CV y respuestas de postulación) |
+| Backend de almacenamiento | **Resuelto por el ADR-0021** (aprobado el 26-nov-2026): almacén S3, MinIO en desarrollo y Supabase Storage en producción, con escaneo ClamAV y URLs firmadas de 5 minutos, el mismo mecanismo para el CV y las respuestas de archivo |
 | Validación antes de almacenar | Tipo MIME y tamaño máximo (NFR-SEC-05), igual criterio que la carga de CV (`threat-model-stride.md` §3.2) |
 
 ## 7. Integración con el stack de observabilidad (ADR-0012)
