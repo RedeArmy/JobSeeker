@@ -46,6 +46,12 @@ class FileDeletionConsumerTest {
         public boolean exists(StoredObjectKey key) {
           return !deleted.contains(key);
         }
+
+        @Override
+        public com.usac.jobseeker.common.application.storage.ObjectPage list(
+            FilePurpose purpose, String startAfter, int maxKeys) {
+          throw new UnsupportedOperationException("el consumidor solo borra");
+        }
       };
 
   private final FileDeletionConsumer consumer = new FileDeletionConsumer(storage);

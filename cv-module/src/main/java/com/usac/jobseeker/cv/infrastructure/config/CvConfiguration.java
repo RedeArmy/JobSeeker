@@ -34,6 +34,9 @@ import com.usac.jobseeker.cv.application.usecase.manageexperiences.ManageExperie
 import com.usac.jobseeker.cv.application.usecase.manageexperiences.ManageExperiencesUseCase;
 import com.usac.jobseeker.cv.application.usecase.manageprojects.ManageProjectsService;
 import com.usac.jobseeker.cv.application.usecase.manageprojects.ManageProjectsUseCase;
+import com.usac.jobseeker.cv.application.usecase.reconcileorphancvfiles.OrphanReconciliationPolicy;
+import com.usac.jobseeker.cv.application.usecase.reconcileorphancvfiles.ReconcileOrphanCvFilesService;
+import com.usac.jobseeker.cv.application.usecase.reconcileorphancvfiles.ReconcileOrphanCvFilesUseCase;
 import com.usac.jobseeker.cv.application.usecase.replacecandidatelanguages.ReplaceCandidateLanguagesService;
 import com.usac.jobseeker.cv.application.usecase.replacecandidatelanguages.ReplaceCandidateLanguagesUseCase;
 import com.usac.jobseeker.cv.application.usecase.replacecandidateskills.ReplaceCandidateSkillsService;
@@ -48,6 +51,7 @@ import com.usac.jobseeker.cv.application.usecase.saveprofessionalprofile.SavePro
 import com.usac.jobseeker.cv.application.usecase.uploadcv.CvFilePolicy;
 import com.usac.jobseeker.cv.application.usecase.uploadcv.UploadCvService;
 import com.usac.jobseeker.cv.application.usecase.uploadcv.UploadCvUseCase;
+import com.usac.jobseeker.cv.infrastructure.adapter.in.scheduled.OrphanCvReconciliationJob;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcAnonymizationRepository;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcAvailabilityExclusionRepository;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcCandidateCollectionsRepository;
@@ -324,5 +328,30 @@ class CvConfiguration {
       ObjectStoragePort storage,
       UseCaseMetricsPort metrics) {
     return new DownloadMyCvService(change, profiles, files, storage, metrics);
+  }
+
+  // ---- reconciliación de CV huérfanos (TD-041) ----
+
+  @Bean
+  ReconcileOrphanCvFilesUseCase reconcileOrphanCvFilesUseCase(
+      ObjectStoragePort storage,
+      JdbcCvFileRepository files,
+      CvFileProperties properties,
+      UseCaseMetricsPort metrics) {
+    return new ReconcileOrphanCvFilesService(
+        storage,
+        files,
+        new OrphanReconciliationPolicy(
+            properties.orphanGrace(),
+            properties.orphanPageSize(),
+            properties.orphanScanLimit(),
+            properties.orphanDeleteLimit()),
+        metrics,
+        Clock.systemUTC());
+  }
+
+  @Bean
+  OrphanCvReconciliationJob orphanCvReconciliationJob(ReconcileOrphanCvFilesUseCase reconcile) {
+    return new OrphanCvReconciliationJob(reconcile);
   }
 }

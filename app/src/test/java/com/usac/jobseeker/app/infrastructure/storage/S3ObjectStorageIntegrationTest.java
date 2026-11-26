@@ -119,6 +119,45 @@ class S3ObjectStorageIntegrationTest {
     assertThat(again).isNotEqualTo(cv);
   }
 
+  // TD-041: el listado es por propósito, en orden de clave, paginado y con la fecha de cada objeto.
+  @Test
+  void listingIsPerPurposeOrderedPagedAndDated() {
+    ObjectStoragePort isolated =
+        configuration.objectStorage(
+            new StorageProperties(
+                endpoint(),
+                "us-east-1",
+                "jobseeker-list-" + System.nanoTime(),
+                ACCESS,
+                SECRET,
+                true,
+                Duration.ofMinutes(5),
+                Duration.ofSeconds(2),
+                Duration.ofSeconds(10),
+                true));
+    java.util.List<String> cvs = new java.util.ArrayList<>();
+    for (int i = 0; i < 3; i++) {
+      cvs.add(isolated.put(FilePurpose.CV, new byte[] {1}, FileType.PDF).value());
+    }
+    isolated.put(FilePurpose.PHOTO, new byte[] {1}, FileType.PNG);
+    java.util.Collections.sort(cvs);
+
+    var first = isolated.list(FilePurpose.CV, "", 2);
+    var second = isolated.list(FilePurpose.CV, first.lastKey(), 2);
+
+    assertThat(first.objects()).extracting(e -> e.key()).containsExactly(cvs.get(0), cvs.get(1));
+    assertThat(first.truncated()).isTrue();
+    assertThat(second.objects()).extracting(e -> e.key()).containsExactly(cvs.get(2));
+    assertThat(second.truncated()).isFalse();
+    assertThat(first.objects())
+        .allSatisfy(
+            e ->
+                assertThat(e.lastModified())
+                    .isBetween(
+                        java.time.Instant.now().minusSeconds(600),
+                        java.time.Instant.now().plusSeconds(60)));
+  }
+
   // El borrado se reintenta por la bandeja (ADR-0021 §6): repetirlo no puede fallar.
   @Test
   void deletingIsIdempotent() {

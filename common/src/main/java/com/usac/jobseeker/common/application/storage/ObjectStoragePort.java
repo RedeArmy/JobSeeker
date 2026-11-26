@@ -31,4 +31,11 @@ public interface ObjectStoragePort {
   void delete(StoredObjectKey key);
 
   boolean exists(StoredObjectKey key);
+
+  /**
+   * Una página de los objetos de un propósito, en orden de clave, a partir de la clave siguiente a
+   * {@code startAfter} (vacía para empezar). Sirve a la reconciliación de huérfanos (TD-041): quien
+   * lista no recibe el contenido, solo claves y fechas.
+   */
+  ObjectPage list(FilePurpose purpose, String startAfter, int maxKeys);
 }

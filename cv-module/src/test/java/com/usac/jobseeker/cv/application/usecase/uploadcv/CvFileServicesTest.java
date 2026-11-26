@@ -411,6 +411,12 @@ class CvFileServicesTest {
     public boolean exists(StoredObjectKey key) {
       return stored.contains(key) && !deleted.contains(key);
     }
+
+    @Override
+    public com.usac.jobseeker.common.application.storage.ObjectPage list(
+        FilePurpose purpose, String startAfter, int maxKeys) {
+      throw new UnsupportedOperationException("la subida no lista el almacén");
+    }
   }
 
   private static final class Scanner implements MalwareScanPort {

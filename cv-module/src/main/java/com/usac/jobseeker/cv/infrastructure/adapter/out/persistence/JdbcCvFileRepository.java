@@ -1,6 +1,7 @@
 package com.usac.jobseeker.cv.infrastructure.adapter.out.persistence;
 
 import com.usac.jobseeker.common.domain.rules.FileType;
+import com.usac.jobseeker.cv.application.usecase.reconcileorphancvfiles.CvFileReferencePort;
 import com.usac.jobseeker.cv.application.usecase.uploadcv.CvFileStorePort;
 import com.usac.jobseeker.cv.domain.model.CandidateProfileId;
 import com.usac.jobseeker.cv.domain.model.CvFile;
@@ -8,8 +9,11 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
@@ -18,7 +22,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * anonimizar no salen de ninguna lectura. «Una sola vigente por perfil» la garantiza el índice
  * único parcial; el bloqueo del perfil ordena las altas simultáneas para que nunca choquen con él.
  */
-public class JdbcCvFileRepository implements CvFileStorePort {
+public class JdbcCvFileRepository implements CvFileStorePort, CvFileReferencePort {
 
   private static final String PROFILE = "profile";
   private static final String COLUMNS =
@@ -100,6 +104,19 @@ public class JdbcCvFileRepository implements CvFileStorePort {
         .param("sha", file.sha256())
         .param("at", OffsetDateTime.ofInstant(file.uploadedAt(), ZoneOffset.UTC))
         .update();
+  }
+
+  // Una clave borrada al anonimizar ya es nula, así que no figura: su objeto sí es huérfano.
+  @Override
+  public Set<String> referenced(Collection<String> keys) {
+    if (keys.isEmpty()) {
+      return Set.of();
+    }
+    return new HashSet<>(
+        jdbc.sql("select object_key from candidate_cv_files where object_key = any(:keys)")
+            .param("keys", keys.toArray(String[]::new))
+            .query(String.class)
+            .list());
   }
 
   private static CvFile fileOf(ResultSet rows, int n) throws SQLException {

@@ -1,5 +1,6 @@
 package com.usac.jobseeker.cv.infrastructure.config;
 
+import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.util.unit.DataSize;
@@ -11,7 +12,16 @@ import org.springframework.util.unit.DataSize;
  *
  * @param cvMaxSize tamaño máximo de un CV
  * @param cvMaxVersions versiones del CV que una cuenta puede guardar
+ * @param orphanGrace edad mínima de un objeto para juzgarlo huérfano (TD-041)
+ * @param orphanPageSize objetos por página al listar el almacén
+ * @param orphanScanLimit objetos que examina una pasada
+ * @param orphanDeleteLimit freno: más huérfanos que esto en una pasada no borra ninguno
  */
 @ConfigurationProperties("jobseeker.cv")
 record CvFileProperties(
-    @DefaultValue("5MB") DataSize cvMaxSize, @DefaultValue("20") int cvMaxVersions) {}
+    @DefaultValue("5MB") DataSize cvMaxSize,
+    @DefaultValue("20") int cvMaxVersions,
+    @DefaultValue("24h") Duration orphanGrace,
+    @DefaultValue("500") int orphanPageSize,
+    @DefaultValue("10000") int orphanScanLimit,
+    @DefaultValue("500") int orphanDeleteLimit) {}

@@ -1,6 +1,7 @@
 package com.usac.jobseeker.app.infrastructure.storage;
 
 import com.usac.jobseeker.common.application.storage.FilePurpose;
+import com.usac.jobseeker.common.application.storage.ObjectPage;
 import com.usac.jobseeker.common.application.storage.ObjectStoragePort;
 import com.usac.jobseeker.common.application.storage.StoredObjectKey;
 import com.usac.jobseeker.common.domain.error.UpstreamUnavailableException;
@@ -100,6 +101,27 @@ final class S3ObjectStorage implements ObjectStoragePort, AutoCloseable {
         return false;
       }
       throw unavailable(e);
+    } catch (SdkException e) {
+      throw unavailable(e);
+    }
+  }
+
+  @Override
+  public ObjectPage list(FilePurpose purpose, String startAfter, int maxKeys) {
+    try {
+      var response =
+          s3.listObjectsV2(
+              b -> {
+                b.bucket(bucket).prefix(purpose.prefix() + "/").maxKeys(maxKeys);
+                if (startAfter != null && !startAfter.isEmpty()) {
+                  b.startAfter(startAfter);
+                }
+              });
+      return new ObjectPage(
+          response.contents().stream()
+              .map(object -> new ObjectPage.Entry(object.key(), object.lastModified()))
+              .toList(),
+          Boolean.TRUE.equals(response.isTruncated()));
     } catch (SdkException e) {
       throw unavailable(e);
     }

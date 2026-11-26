@@ -122,6 +122,24 @@ class JdbcCvFileRepositoryTest {
     assertThat(anonymization.discardCvFiles(profile.value(), T0.plusSeconds(7200))).isEmpty();
   }
 
+  // TD-041: solo cuenta como referenciada una versión viva; la anonimizada ya no tiene clave.
+  @Test
+  void onlyLiveVersionsCountAsReferences() {
+    var kept = aCandidate();
+    var anonymized = aCandidate();
+    var live = cv(kept, T0, true);
+    var gone = cv(anonymized, T0, true);
+    files.insertCurrent(live);
+    files.insertCurrent(gone);
+    anonymization.discardCvFiles(anonymized.value(), T0.plusSeconds(60));
+    String unknown = "cv/" + UUID.randomUUID();
+
+    var found = files.referenced(java.util.List.of(live.objectKey(), gone.objectKey(), unknown));
+
+    assertThat(found).containsExactly(live.objectKey());
+    assertThat(files.referenced(java.util.List.of())).isEmpty();
+  }
+
   @Test
   void theDatabaseRejectsADeletedVersionThatKeepsItsFile() {
     var profile = aCandidate();

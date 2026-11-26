@@ -1,6 +1,7 @@
 package com.usac.jobseeker.app.infrastructure.storage;
 
 import com.usac.jobseeker.common.application.storage.FilePurpose;
+import com.usac.jobseeker.common.application.storage.ObjectPage;
 import com.usac.jobseeker.common.application.storage.ObjectStoragePort;
 import com.usac.jobseeker.common.application.storage.StoredObjectKey;
 import com.usac.jobseeker.common.domain.error.UpstreamUnavailableException;
@@ -33,6 +34,11 @@ final class UnavailableObjectStorage implements ObjectStoragePort {
 
   @Override
   public boolean exists(StoredObjectKey key) {
+    throw unavailable();
+  }
+
+  @Override
+  public ObjectPage list(FilePurpose purpose, String startAfter, int maxKeys) {
     throw unavailable();
   }
 
