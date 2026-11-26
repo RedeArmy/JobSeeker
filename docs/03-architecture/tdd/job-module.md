@@ -81,6 +81,7 @@ Carpetas de `job-module/src/main/java/com/usac/jobseeker/job/application/usecase
 | `setrecruitingstage` | Cambia `HIRING` / `REVIEWING` | reclutador, dueño | `JobPostingRecruitingStageChanged` (BR-MATCH-08) |
 | `getjobposting` | Una vacante, para su dueño o para un candidato **según su visibilidad** | cualquiera | — |
 | `listjobpostings` | Listado propio del reclutador y listado general del candidato (§5) | cualquiera | — |
+| `getownedjobstate` | Estado y etapa de una vacante **propia**, como texto, sin leerla entera: vacío si no existe, está eliminada o es de otro (BR-VIS-03); lo usa `matching` para comprobar la propiedad | interna | — |
 | `getjobsignals` | Lectura para `matching`: requisitos, país, modalidad y salario con moneda y periodo, **sin** datos del reclutador | interna | — |
 
 ### 4.2 Ola 2: screening
