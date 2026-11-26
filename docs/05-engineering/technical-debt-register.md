@@ -4,7 +4,7 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | 🟡 En revisión |
-| **Versión** | 1.17 — subida del CV (ADR-0021) |
+| **Versión** | 1.18 — se paga TD-041 |
 | **Fecha** | 24 de noviembre de 2026 |
 | **Dueño del documento** | Responsable del proyecto |
 | **Revisión del registro** | Al cerrar cada sprint y antes de cada hito de la hoja de ruta |
@@ -84,7 +84,6 @@ Corte: 24-nov-2026.
 | TD-037 | El puntaje se publica sin calibrar: `α`, pesos y Platt son valores iniciales | Calidad | S2 | M | Leída | Planificada | Pares etiquetados reales (protocolo de 300 pares); las herramientas ya existen |
 | TD-038 | Taxonomía de habilidades y experiencia relevante (los aliases ya están) | Dominio | S3 | M | Leída | Planificada | ADR-0019 implementado en `cv` |
 | TD-040 | `ats` debe llamar a `snapshotapplicationprofile` al postular y al cambiar de etapa | Dominio | S3 | S | Leída | Planificada | Postulación y pipeline mínimos (`ats`) |
-| TD-041 | Un objeto del almacén puede quedar huérfano si el alta del CV falla al confirmar | Datos | S4 | S | Leída | Abierta | Antes de usuarios reales |
 
 ### Fichas
 
@@ -308,17 +307,6 @@ Corte: 24-nov-2026.
 - **Criterio de cierre:** Una postulación de punta a punta deja su copia del perfil y la foto del puntaje, probado en un e2e de `ats`.
 - **Referencias:** `docs/03-architecture/tdd/matching-module.md` §4 y §10.4
 
-#### TD-041 — Un objeto del almacén puede quedar huérfano si el alta del CV falla al confirmar
-
-**Datos** · **S4 Baja** · esfuerzo **S** · confianza **Leída** · **Abierta**
-
-- **Evidencia:** `uploadcv` guarda el objeto en el almacén antes de dar de alta la fila. Si el alta falla, el caso de uso borra el objeto; si lo que falla es la confirmación de la transacción (después de su última línea), el objeto queda sin fila que lo referencie (ADR-0021 §2).
-- **Interés (qué cuesta no pagarla):** Almacenamiento ocupado por archivos que nadie puede ver ni borrar, y un CV que el titular creyó no subido sigue en el almacén, lo que choca con BR-DATA-05 si luego elimina su cuenta.
-- **Disparador:** Antes de usuarios reales.
-- **Remediación propuesta:** Una reconciliación periódica que liste los objetos `cv/` con más de 24 horas y borre los que no tengan fila en `candidate_cv_files`.
-- **Criterio de cierre:** Un objeto sin fila con más de 24 horas desaparece en la pasada siguiente, probado contra SeaweedFS.
-- **Referencias:** ADR-0021 §2; `docs/03-architecture/tdd/cv-module.md` §10.7
-
 ## 6. Deuda resuelta
 
 | ID | Título | Tipo | Sev | Fecha | PR o decisión | Cómo se resolvió |
@@ -355,6 +343,7 @@ Corte: 24-nov-2026.
 | TD-R30 | Puntuar 200 recuperados leía sus perfiles uno a uno (antes TD-039) | Rendimiento | S3 | 2026-11-25 | #45 | Lectura por lotes en `auth` (`ResolveActorsUseCase`), `cv` (`GetProfileSnapshotsUseCase`, `GetVisibleAvailabilitiesUseCase`) y `matching`; la individual es el caso de una cuenta. Medido con 200 candidatos: **p50 1.246 ms a 118 ms**, de ≈ 2.400 consultas a ≈ 20 fijas; probado que el número de sentencias no crece con los perfiles y que ningún adaptador de producción olvida el método por lotes (`BatchReadsAreOverriddenTest`). |
 | TD-R31 | El puntaje no se persistía, cacheaba ni recalculaba, y el candidato no veía el suyo (antes TD-036) | Dominio | S3 | 2026-11-25 | #46 | Tablas del puntaje vigente, fotos y copia del perfil canónico; casos de uso `calculatecompatibilityscore`, `recomputescoresforentity`, `explainscore` (con «qué pasaría si»), `snapshotapplicationprofile` y `migratealgorithmversion`; endpoints del candidato con su visibilidad y «actualizando…»; anonimización que conserva el par y el puntaje. Sin caché en Redis (ADR-0031, aprobado). Lo que depende de `ats` queda en TD-040. |
 | TD-R32 | Habilidades por texto normalizado sin alias (parte de TD-038) | Dominio | S3 | 2026-11-25 | #47 | 36 grupos de alias inequívocos («JS» = «JavaScript», «k8s» = «Kubernetes»); una prueba garantiza que ningún nombre está en dos grupos y otra que lo que solo se parece («Spring» y «Spring Boot») no se une. El código del algoritmo pasa a 2 para que la migración recalcule los puntajes guardados. La taxonomía y la experiencia relevante siguen en TD-038. |
+| TD-R33 | Un objeto del almacén podía quedar huérfano si el alta del CV fallaba al confirmar (antes TD-041) | Datos | S4 | 2026-11-26 | #51 | `reconcileorphancvfiles`, cada 6 h: lista los objetos `cv/` por páginas y borra los que no tienen versión viva, también los que dejó un borrado por anonimización que agotó sus reintentos. No juzga objetos de menos de 24 h, nunca borra una clave de formato ajeno y se frena sin borrar nada si una pasada halla más de 500. Probado contra PostgreSQL y SeaweedFS reales. |
 
 ## 7. Deuda aceptada
 
@@ -389,6 +378,7 @@ Corte: 24-nov-2026.
 | 1.15 | 2026-11-25 | Se paga la parte de aliases de TD-038 (PR #47, TD-R32): 36 grupos de alias inequívocos y el código del algoritmo pasa a 2. TD-037 sigue abierta con las herramientas listas (`emit-config`, `retrieval-recall`), a la espera de pares etiquetados reales; TD-038 sigue abierta por la taxonomía y la experiencia relevante. Quedan 20 abiertas o planificadas, 32 resueltas y 6 aceptadas. |
 | 1.16 | 2026-11-26 | TD-016 actualiza su evidencia: el ADR-0021 (almacenamiento de archivos y escaneo de malware) queda aprobado y quedan por escribir los ADR-0022 a 0025. Sin cambios en los recuentos. |
 | 1.17 | 2026-11-26 | Subida, consulta y descarga del CV (ADR-0021, sub-paso 7 de `cv`) y borrado físico de sus archivos al anonimizar. Entra TD-041 (objetos huérfanos si un alta falla al confirmar). Quedan 21 abiertas o planificadas, 32 resueltas y 6 aceptadas. |
+| 1.18 | 2026-11-26 | Se paga TD-041 (PR #51, TD-R33): reconciliación periódica de CV huérfanos con espera de 24 h y freno ante borrados masivos. Quedan 20 abiertas o planificadas, 33 resueltas y 6 aceptadas. |
 
 ## 9. Plantilla de ficha
 

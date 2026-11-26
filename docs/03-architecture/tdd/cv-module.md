@@ -95,6 +95,7 @@ Carpetas de `cv-module/src/main/java/com/usac/jobseeker/cv/application/usecase/`
 | `uploadcv` | Sube una versión nueva del CV: valida tamaño y tipo real, escanea, guarda y la marca vigente (ADR-0021, §10.7) | candidato | — |
 | `getmycv` | El CV vigente y las versiones anteriores, sin URL | candidato | — |
 | `downloadmycv` | URL firmada de 5 minutos de una versión propia (ADR-0021 §3) | candidato | — |
+| `reconcileorphancvfiles` | Borra del almacén los CV sin versión que los referencie, con más de 24 h y con un freno ante muchos de golpe (TD-041) | interna (planificada) | — |
 | `uploadprofilephoto` | **Planificado (ADR-0021).** Subir la foto de perfil, re-codificada sin metadatos EXIF | cuenta | — |
 | `checkapplicationreadiness` | **Planificado para `ats`.** Qué le falta a la cuenta para postular (BR-CAND-01: nombre, contacto y CV) y el CV vigente (`tdd/ats-tracker-modules.md` §5) | interna | — |
 | `getapplicantprofiles` | **Planificado para `ats`.** Por lotes, nombre, titular y contacto de postulantes; solo tras autorizar al reclutador en `ats` (REQ-C-07) | interna | — |
@@ -314,7 +315,7 @@ Cada sub-paso sale como una PR propia con su definición de hecho completa (Open
 - **La política de límite `upload` se asigna por tipo de contenido** (`multipart/`), no por ruta: cualquier subida futura (la foto, las respuestas de archivo) queda limitada sin tocar las reglas.
 - **El límite de `multipart` de Spring es de 6 MB**, algo mayor que el del CV: un archivo de 5 a 6 MB recibe el `FILE_REJECTED` del caso de uso y uno mayor se corta antes de leerlo, con el mismo `422 FILE_REJECTED / TOO_LARGE`, no un `413` genérico.
 - **`cv` gana la dependencia `spring-boot`** para `CvFileProperties` (`jobseeker.cv.cv-max-size`, `jobseeker.cv.cv-max-versions`), como `job` y `matching`.
-- **La reconciliación de objetos huérfanos** (un alta cuya transacción falla al confirmar) queda en TD-041.
+- **Reconciliación de huérfanos (TD-041, resuelta).** `reconcileorphancvfiles`, disparado cada 6 h por un planificador de `cv` (15 min después de arrancar), lista los objetos `cv/` por páginas y borra los que no tienen versión viva. Cubre dos casos: un alta que falló al confirmar y un borrado por anonimización que agotó sus reintentos. Reglas de seguridad: no juzga objetos de menos de 24 h (una subida en curso), nunca borra una clave con un formato que la aplicación no crea y, si una pasada encuentra más de 500 huérfanos, **no borra ninguno** y lo registra como error (una base restaurada desde una copia anterior al almacén los haría parecer huérfanos a todos). Cada pasada examina hasta 10 000 objetos y la siguiente sigue donde quedó.
 ## 11. Pruebas
 
 - **Dominio y casos de uso:** unitarias sin Spring, con puertos en memoria. Cada invariante de §3 y cada error de §6 tiene su caso, y se pasa PIT con los mutadores `STRONGER` como en `auth`.
