@@ -21,6 +21,8 @@ import com.usac.jobseeker.cv.application.usecase.getmycv.GetMyCvService;
 import com.usac.jobseeker.cv.application.usecase.getmycv.GetMyCvUseCase;
 import com.usac.jobseeker.cv.application.usecase.getmyprofessionalprofile.GetMyProfessionalProfileService;
 import com.usac.jobseeker.cv.application.usecase.getmyprofessionalprofile.GetMyProfessionalProfileUseCase;
+import com.usac.jobseeker.cv.application.usecase.getmyprofilephoto.GetMyProfilePhotoService;
+import com.usac.jobseeker.cv.application.usecase.getmyprofilephoto.GetMyProfilePhotoUseCase;
 import com.usac.jobseeker.cv.application.usecase.getprofilesnapshot.GetProfileSnapshotService;
 import com.usac.jobseeker.cv.application.usecase.getvisibleavailability.GetVisibleAvailabilityService;
 import com.usac.jobseeker.cv.application.usecase.manageavailabilityexclusions.AccountDirectoryPort;
@@ -37,6 +39,8 @@ import com.usac.jobseeker.cv.application.usecase.manageprojects.ManageProjectsUs
 import com.usac.jobseeker.cv.application.usecase.reconcileorphancvfiles.OrphanReconciliationPolicy;
 import com.usac.jobseeker.cv.application.usecase.reconcileorphancvfiles.ReconcileOrphanCvFilesService;
 import com.usac.jobseeker.cv.application.usecase.reconcileorphancvfiles.ReconcileOrphanCvFilesUseCase;
+import com.usac.jobseeker.cv.application.usecase.removeprofilephoto.RemoveProfilePhotoService;
+import com.usac.jobseeker.cv.application.usecase.removeprofilephoto.RemoveProfilePhotoUseCase;
 import com.usac.jobseeker.cv.application.usecase.replacecandidatelanguages.ReplaceCandidateLanguagesService;
 import com.usac.jobseeker.cv.application.usecase.replacecandidatelanguages.ReplaceCandidateLanguagesUseCase;
 import com.usac.jobseeker.cv.application.usecase.replacecandidateskills.ReplaceCandidateSkillsService;
@@ -52,7 +56,12 @@ import com.usac.jobseeker.cv.application.usecase.uploadcv.CvFilePolicy;
 import com.usac.jobseeker.cv.application.usecase.uploadcv.CvFileSources;
 import com.usac.jobseeker.cv.application.usecase.uploadcv.UploadCvService;
 import com.usac.jobseeker.cv.application.usecase.uploadcv.UploadCvUseCase;
+import com.usac.jobseeker.cv.application.usecase.uploadprofilephoto.ProfilePhotoPolicy;
+import com.usac.jobseeker.cv.application.usecase.uploadprofilephoto.ProfilePhotoSources;
+import com.usac.jobseeker.cv.application.usecase.uploadprofilephoto.UploadProfilePhotoService;
+import com.usac.jobseeker.cv.application.usecase.uploadprofilephoto.UploadProfilePhotoUseCase;
 import com.usac.jobseeker.cv.infrastructure.adapter.in.scheduled.OrphanCvReconciliationJob;
+import com.usac.jobseeker.cv.infrastructure.adapter.out.image.ImageIoPhotoProcessor;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcAnonymizationRepository;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcAvailabilityExclusionRepository;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcCandidateCollectionsRepository;
@@ -63,6 +72,7 @@ import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcEducatio
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcExperienceRepository;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcProfessionalProfileRepository;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcProfileCollectionsRepository;
+import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcProfilePhotoRepository;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcProjectRepository;
 import java.time.Clock;
 import java.util.UUID;
@@ -358,5 +368,48 @@ class CvConfiguration {
   @Bean
   OrphanCvReconciliationJob orphanCvReconciliationJob(ReconcileOrphanCvFilesUseCase reconcile) {
     return new OrphanCvReconciliationJob(reconcile);
+  }
+
+  // ---- foto de perfil (sub-paso 8 del diseño de cv, ADR-0021) ----
+
+  @Bean
+  JdbcProfilePhotoRepository jdbcProfilePhotoRepository(JdbcClient jdbc) {
+    return new JdbcProfilePhotoRepository(jdbc);
+  }
+
+  @Bean
+  ImageIoPhotoProcessor imageIoPhotoProcessor(CvFileProperties properties) {
+    return new ImageIoPhotoProcessor(properties.photoMaxSide(), properties.photoMaxPixels());
+  }
+
+  @Bean
+  UploadProfilePhotoUseCase uploadProfilePhotoUseCase(
+      JdbcProfilePhotoRepository photos,
+      ObjectStoragePort storage,
+      MalwareScanPort scanner,
+      ImageIoPhotoProcessor processor,
+      CvFileProperties properties,
+      DomainEventPublisherPort events,
+      UseCaseMetricsPort metrics) {
+    return new UploadProfilePhotoService(
+        new ProfilePhotoSources(photos, storage, scanner, processor),
+        new ProfilePhotoPolicy(properties.photoMaxSize().toBytes()),
+        events,
+        metrics,
+        Stamp.system());
+  }
+
+  @Bean
+  RemoveProfilePhotoUseCase removeProfilePhotoUseCase(
+      JdbcProfilePhotoRepository photos,
+      DomainEventPublisherPort events,
+      UseCaseMetricsPort metrics) {
+    return new RemoveProfilePhotoService(photos, events, metrics, Stamp.system());
+  }
+
+  @Bean
+  GetMyProfilePhotoUseCase getMyProfilePhotoUseCase(
+      JdbcProfilePhotoRepository photos, ObjectStoragePort storage, UseCaseMetricsPort metrics) {
+    return new GetMyProfilePhotoService(photos, storage, metrics);
   }
 }
