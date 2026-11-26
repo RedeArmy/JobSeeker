@@ -136,4 +136,17 @@ public class JdbcEmbeddingWorkQueue implements EmbeddingWorkQueuePort {
   private static OffsetDateTime at(Instant instant) {
     return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
   }
+
+  // Pendiente = esperando ser procesado, incluida la ventana de agrupación: la interfaz dice
+  // «actualizando…» desde que hay un cambio (BR-MATCH-03). Un trabajo FAILED necesita revisión.
+  @Override
+  public boolean isPending(EmbeddingEntity entity, UUID key) {
+    return jdbc.sql(
+            "select exists (select 1 from matching_work_queue where entity_type = :type"
+                + " and entity_key = :key and status = 'PENDING')")
+        .param("type", entity.name())
+        .param("key", key)
+        .query(Boolean.class)
+        .single();
+  }
 }

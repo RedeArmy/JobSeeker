@@ -3,6 +3,7 @@ package com.usac.jobseeker.matching.infrastructure.adapter.out.persistence;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.usac.jobseeker.common.domain.model.AccountId;
+import com.usac.jobseeker.matching.application.usecase.embedentity.EmbeddingEntity;
 import com.usac.jobseeker.matching.domain.model.CandidateProfileId;
 import com.usac.jobseeker.matching.domain.model.EmbeddingVector;
 import com.usac.jobseeker.matching.domain.model.EntityEmbedding;
@@ -146,5 +147,20 @@ class JdbcPairSimilarityTest {
         .containsEntry(profile, account);
     assertThat(repository.accountOf(goneProfile)).isEmpty();
     assertThat(repository.profileOf(new AccountId(UUID.randomUUID()))).isEmpty();
+  }
+
+  // ---- «actualizando…» (BR-MATCH-03) ----
+
+  @Test
+  void aQueuedChangeIsPendingUntilItIsCompleted() {
+    var key = UUID.randomUUID();
+
+    assertThat(queue.isPending(EmbeddingEntity.PROFILE, key)).isFalse();
+    queue.request(EmbeddingEntity.PROFILE, key, NOW);
+    assertThat(queue.isPending(EmbeddingEntity.PROFILE, key)).isTrue();
+    assertThat(queue.isPending(EmbeddingEntity.JOB, key)).isFalse();
+
+    queue.discard(EmbeddingEntity.PROFILE, key);
+    assertThat(queue.isPending(EmbeddingEntity.PROFILE, key)).isFalse();
   }
 }
