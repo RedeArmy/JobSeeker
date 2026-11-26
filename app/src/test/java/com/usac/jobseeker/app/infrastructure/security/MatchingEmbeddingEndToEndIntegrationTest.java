@@ -100,6 +100,13 @@ class MatchingEmbeddingEndToEndIntegrationTest {
     registry.add("jobseeker.matching.embedding.host", () -> "localhost");
     registry.add("jobseeker.matching.embedding.port", () -> OLLAMA.getAddress().getPort());
     registry.add("jobseeker.matching.queue.window", () -> "0s");
+    // Las pruebas entregan eventos y procesan la cola a mano (deliverEvents, runWorker). Si los
+    // trabajadores programados siguieran activos, podrían reservar un evento antes que la llamada
+    // manual, que lo saltaría (SKIP LOCKED), y la prueba seguiría sin él: fallaba de forma
+    // intermitente. Con una hora de intervalo solo corren al arrancar, cuando aún no hay datos.
+    registry.add("jobseeker.outbox.poll-interval", () -> "1h");
+    registry.add("jobseeker.matching.queue.poll-interval", () -> "1h");
+    registry.add("jobseeker.matching.scoring.maintenance-interval", () -> "1h");
   }
 
   @AfterAll
