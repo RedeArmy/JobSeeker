@@ -1064,7 +1064,7 @@ class MatchingEmbeddingEndToEndIntegrationTest {
         millis.add(elapsed);
       }
     }
-    java.util.Collections.sort(millis);
+    millis.sort(null);
     System.out.printf(
         "%n| Candidatos con vector | Mostrados | p50 ms | máx ms |%n|---|---|---|---|%n| %d | %d | %.0f | %.0f |%n",
         embedded, shown, millis.get(millis.size() / 2), millis.get(millis.size() - 1));

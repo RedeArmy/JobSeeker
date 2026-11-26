@@ -62,7 +62,7 @@ public abstract class AccountStoreContract {
 
     assertThat(found).containsOnlyKeys(candidate, recruiter, both);
     for (AccountId id : List.of(candidate, recruiter, both)) {
-      assertThat(found.get(id)).isEqualTo(lookup().findById(id).orElseThrow());
+      assertThat(found).containsEntry(id, lookup().findById(id).orElseThrow());
     }
   }
 

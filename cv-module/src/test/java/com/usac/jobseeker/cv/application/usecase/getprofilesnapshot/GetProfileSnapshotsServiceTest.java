@@ -59,6 +59,7 @@ class GetProfileSnapshotsServiceTest {
               return candidates.contains(id);
             }
 
+            @Override
             public Set<AccountId> candidatesAmong(Collection<AccountId> ids) {
               calls.add("capability:batch");
               Set<AccountId> found = new HashSet<>(ids);
@@ -72,6 +73,7 @@ class GetProfileSnapshotsServiceTest {
               return Optional.ofNullable(professionalOf.get(id));
             }
 
+            @Override
             public Map<AccountId, ProfessionalProfile> findAllByAccountIds(
                 Collection<AccountId> ids) {
               calls.add("professional:batch");
@@ -86,6 +88,7 @@ class GetProfileSnapshotsServiceTest {
               return itemsOf.getOrDefault(id, ProfileCollections.empty());
             }
 
+            @Override
             public Map<ProfessionalProfileId, ProfileCollections> findAllByProfileIds(
                 Collection<ProfessionalProfileId> ids) {
               calls.add("items:batch");
@@ -101,6 +104,7 @@ class GetProfileSnapshotsServiceTest {
               return Optional.ofNullable(candidateOf.get(id));
             }
 
+            @Override
             public Map<AccountId, CandidateProfile> findAllByAccountIds(Collection<AccountId> ids) {
               calls.add("candidate:batch");
               Map<AccountId, CandidateProfile> found = new HashMap<>(candidateOf);
@@ -114,6 +118,7 @@ class GetProfileSnapshotsServiceTest {
               return setsOf.getOrDefault(id, CandidateCollections.empty());
             }
 
+            @Override
             public Map<CandidateProfileId, CandidateCollections> findAllByProfileIds(
                 Collection<CandidateProfileId> ids) {
               calls.add("sets:batch");

@@ -41,6 +41,7 @@ class GetVisibleAvailabilitiesServiceTest {
               return Optional.ofNullable(profiles.get(id));
             }
 
+            @Override
             public Map<AccountId, CandidateProfile> findAllByAccountIds(Collection<AccountId> ids) {
               calls.add("profiles:batch");
               Map<AccountId, CandidateProfile> found = new HashMap<>(profiles);
@@ -54,6 +55,7 @@ class GetVisibleAvailabilitiesServiceTest {
               return exclusions.contains(profile.value() + ":" + account.value());
             }
 
+            @Override
             public Set<CandidateProfileId> excludedAmong(
                 Collection<CandidateProfileId> ids, AccountId account) {
               calls.add("exclusions:batch");
@@ -130,8 +132,8 @@ class GetVisibleAvailabilitiesServiceTest {
     var batch = ask(viewer, a, b);
 
     for (AccountId id : List.of(a, b)) {
-      assertThat(batch.get(id))
-          .isEqualTo(service.execute(new GetVisibleAvailabilityQuery(id, viewer)));
+      assertThat(batch)
+          .containsEntry(id, service.execute(new GetVisibleAvailabilityQuery(id, viewer)));
     }
   }
 

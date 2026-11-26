@@ -43,12 +43,12 @@ class ResolveActorsServiceTest {
 
     assertThat(resolved).containsOnlyKeys(active, pending, anonymized, unknown);
     for (AccountId id : List.of(active, pending, anonymized, unknown)) {
-      assertThat(resolved.get(id)).isEqualTo(single.execute(new ResolveActorQuery(id)));
+      assertThat(resolved).containsEntry(id, single.execute(new ResolveActorQuery(id)));
     }
-    assertThat(resolved.get(unknown))
-        .isEqualTo(new ActorResolution.Rejected(Reason.NOT_PROVISIONED));
-    assertThat(resolved.get(pending))
-        .isEqualTo(new ActorResolution.Rejected(Reason.PENDING_DELETION));
+    assertThat(resolved)
+        .containsEntry(unknown, new ActorResolution.Rejected(Reason.NOT_PROVISIONED));
+    assertThat(resolved)
+        .containsEntry(pending, new ActorResolution.Rejected(Reason.PENDING_DELETION));
   }
 
   @Test

@@ -148,7 +148,7 @@ class JdbcBatchReadsTest {
     assertThat(batch).hasSize(7);
     for (Person person : people) {
       ProfileCollections single = reader.findByProfileId(person.professional());
-      assertThat(batch.get(person.professional())).isEqualTo(single);
+      assertThat(batch).containsEntry(person.professional(), single);
     }
     // Una persona con un solo puesto y otra con tres: nada se cuela de una a otra.
     assertThat(batch.get(people.get(0).professional()).experiences()).hasSize(1);
@@ -164,7 +164,7 @@ class JdbcBatchReadsTest {
 
     for (Person person : people) {
       CandidateCollections single = reader.findByProfileId(person.candidate());
-      assertThat(batch.get(person.candidate())).isEqualTo(single);
+      assertThat(batch).containsEntry(person.candidate(), single);
     }
   }
 
@@ -195,10 +195,12 @@ class JdbcBatchReadsTest {
     assertThat(professionalBatch).hasSize(5).doesNotContainKey(stranger);
     assertThat(candidateBatch).hasSize(5).doesNotContainKey(stranger);
     for (Person person : people) {
-      assertThat(professionalBatch.get(person.account()))
-          .isEqualTo(professionals.findByAccountId(person.account()).orElseThrow());
-      assertThat(candidateBatch.get(person.account()))
-          .isEqualTo(candidates.findByAccountId(person.account()).orElseThrow());
+      assertThat(professionalBatch)
+          .containsEntry(
+              person.account(), professionals.findByAccountId(person.account()).orElseThrow());
+      assertThat(candidateBatch)
+          .containsEntry(
+              person.account(), candidates.findByAccountId(person.account()).orElseThrow());
     }
   }
 
