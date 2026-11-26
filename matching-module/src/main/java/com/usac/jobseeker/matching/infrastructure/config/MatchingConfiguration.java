@@ -26,6 +26,8 @@ import com.usac.jobseeker.matching.application.usecase.migratealgorithmversion.M
 import com.usac.jobseeker.matching.application.usecase.migratealgorithmversion.MigrateAlgorithmVersionUseCase;
 import com.usac.jobseeker.matching.application.usecase.recomputescoresforentity.RecomputeScoresForEntityService;
 import com.usac.jobseeker.matching.application.usecase.recomputescoresforentity.RecomputeScoresForEntityUseCase;
+import com.usac.jobseeker.matching.application.usecase.snapshotapplicationprofile.SnapshotApplicationProfileService;
+import com.usac.jobseeker.matching.application.usecase.snapshotapplicationprofile.SnapshotApplicationProfileUseCase;
 import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.AvailabilityPort;
 import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.OwnedJobPort;
 import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.RecruiterTrustPort;
@@ -296,5 +298,21 @@ class MatchingConfiguration {
   @Bean
   ScoreMaintenanceWorker scoreMaintenanceWorker(MigrateAlgorithmVersionUseCase maintenance) {
     return new ScoreMaintenanceWorker(maintenance);
+  }
+
+  @Bean
+  SnapshotApplicationProfileUseCase snapshotApplicationProfileUseCase(
+      ScoringSources sources,
+      CalculateCompatibilityScoreUseCase calculate,
+      ScoreCalculator calculator,
+      UseCaseMetricsPort metrics,
+      MatchingProperties properties) {
+    return new SnapshotApplicationProfileService(
+        sources,
+        calculate,
+        calculator,
+        properties.embedding().maxCharacters(),
+        metrics,
+        Clock.systemUTC());
   }
 }
