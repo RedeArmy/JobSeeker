@@ -2,6 +2,7 @@ package com.usac.jobseeker.matching.application.usecase.embedentity;
 
 import com.usac.jobseeker.common.application.observability.UseCaseMetricsPort;
 import com.usac.jobseeker.common.domain.model.AccountId;
+import com.usac.jobseeker.matching.application.usecase.recomputescoresforentity.RecomputeScoresCommand;
 import com.usac.jobseeker.matching.domain.model.JobPostingId;
 import java.time.Clock;
 import java.time.Duration;
@@ -31,8 +32,7 @@ public class ProcessEmbeddingQueueService implements ProcessEmbeddingQueueUseCas
   private static final String USE_CASE = "process_embedding_queue";
 
   private final EmbeddingWorkQueuePort queue;
-  private final EmbedProfileUseCase embedProfile;
-  private final EmbedJobUseCase embedJob;
+  private final EmbeddingJobHandlers handlers;
   private final EmbeddingQueuePolicy policy;
   private final UseCaseMetricsPort metrics;
   private final EmbeddingFreshnessPort freshness;
@@ -40,15 +40,13 @@ public class ProcessEmbeddingQueueService implements ProcessEmbeddingQueueUseCas
 
   public ProcessEmbeddingQueueService(
       EmbeddingWorkQueuePort queue,
-      EmbedProfileUseCase embedProfile,
-      EmbedJobUseCase embedJob,
+      EmbeddingJobHandlers handlers,
       EmbeddingQueuePolicy policy,
       UseCaseMetricsPort metrics,
       EmbeddingFreshnessPort freshness,
       Clock clock) {
     this.queue = Objects.requireNonNull(queue, "queue");
-    this.embedProfile = Objects.requireNonNull(embedProfile, "embedProfile");
-    this.embedJob = Objects.requireNonNull(embedJob, "embedJob");
+    this.handlers = Objects.requireNonNull(handlers, "handlers");
     this.policy = Objects.requireNonNull(policy, "policy");
     this.metrics = Objects.requireNonNull(metrics, "metrics");
     this.freshness = Objects.requireNonNull(freshness, "freshness");
@@ -91,9 +89,14 @@ public class ProcessEmbeddingQueueService implements ProcessEmbeddingQueueUseCas
   // Perfiles y vacantes comparten cola, trabajador y reintentos; solo cambia qué se calcula.
   private void calculate(EmbeddingWorkQueuePort.Job job) {
     switch (job.entity()) {
-      case PROFILE -> embedProfile.execute(new EmbedProfileCommand(new AccountId(job.key())));
-      case JOB -> embedJob.execute(new EmbedJobCommand(new JobPostingId(job.key())));
+      case PROFILE -> handlers.profile().execute(new EmbedProfileCommand(new AccountId(job.key())));
+      case JOB -> handlers.job().execute(new EmbedJobCommand(new JobPostingId(job.key())));
     }
+    // Aunque el vector no haya cambiado (un cambio solo de datos estructurados no llama al modelo),
+    // los puntajes guardados cambian: se recalculan siempre. Es aritmética, no una llamada externa,
+    // y
+    // si falla el trabajo se reintenta sin volver a llamar al modelo (el *hash* no cambió).
+    handlers.recompute().execute(new RecomputeScoresCommand(job.entity(), job.key()));
   }
 
   private void retry(EmbeddingWorkQueuePort.Job job, String outcome) {

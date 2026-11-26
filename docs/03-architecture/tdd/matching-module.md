@@ -172,7 +172,7 @@ Se construyó el puntaje explicable y se aplicó a los sugeridos; la recuperaci�
 - **Tarjeta enmascarada (REQ-C-07), sin un caso de uso nuevo de `cv`.** `CandidateSignals` ya llega sin nombre, foto, contacto, enlaces ni instituciones; la tarjeta (titular, país, años, formación más alta, hasta cinco habilidades) sale de ahí y el titular pasa por `PiiRedactor`, porque es texto libre. El contacto no es parte de la tarjeta: se entrega después, bajo solicitud, que no existe todavía.
 - **`JobSignals` creció** con modalidad, país y salario (que `job` ya entregaba) y la recuperación devuelve la cuenta dueña del perfil (unión con `profile_embedding_accounts`, fuera de la subconsulta ordenada para no perder el índice HNSW, y sin cuentas con lápida).
 
-**No implementado** (registrado en `technical-debt-register.md`): la **persistencia** del puntaje (`compatibility_scores_current`, fotos, caché en Redis por huella), el recálculo por eventos, el endpoint del puntaje del candidato, `explainscore` y el «qué pasaría si», y `snapshotapplicationprofile` (TD-036); la **calibración** con el protocolo de 300 pares y los controles C1, C2 y C5 (TD-037); la normalización de habilidades por taxonomía y los años de experiencia *relevantes* (TD-038). La lectura de 200 perfiles uno a uno (TD-039) se resolvió después, §10.3. El control **C3** (declarar un dato que coincide nunca baja el puntaje) y la monotonía, los límites y la idempotencia sí están probados como propiedades.
+**No implementado en ese corte** (hecho después, §10.3 y §10.4): la lectura por lotes (TD-039) y la persistencia del puntaje, el recálculo, el endpoint del candidato, `explainscore`, el «qué pasaría si» y `snapshotapplicationprofile` (TD-036). Siguen pendientes: la **calibración** con el protocolo de 300 pares y los controles C1, C2 y C5 (TD-037) y la normalización de habilidades por taxonomía y los años de experiencia *relevantes* (TD-038). El control **C3** (declarar un dato que coincide nunca baja el puntaje) y la monotonía, los límites y la idempotencia sí están probados como propiedades.
 
 **Controles de aceptación de los ADR aprobados con condiciones**, que este orden debe cumplir: C1 (*recall* de la recuperación) en el sub-paso 6; C2 (calibración y evaluación separadas por vacante) y C5 (umbral contrafactual) en el arnés; C3 (declarar un dato que coincide nunca baja el puntaje) en el sub-paso 1; C4 (frescura medida con Ollama real) en el sub-paso 4; D1 a D4 de la taxonomía, con su sub-paso en `cv`.
 
@@ -186,6 +186,16 @@ La etapa 2 leía las señales y la disponibilidad de cada recuperado una a una (
 - **La etapa 2** lee las señales de todos con una llamada y, tras el filtro de completitud, pide la disponibilidad de quienes lo pasaron en otra; un descartado no cuesta ninguna consulta de disponibilidad.
 - **Medido** con 200 candidatos en la pila real: p50 de 1.246 ms a 118 ms; el número de sentencias no crece con los perfiles (`JdbcBatchReadsTest`).
 - **Protección:** los puertos de salida tienen un método por lotes `default` que pregunta de a uno; `BatchReadsAreOverriddenTest` falla si un adaptador de producción no lo sustituye (`coding-standards.md` §8.1).
+
+### 10.4 Puntaje guardado y recálculo (25-nov-2026, TD-036): qué se construyó y en qué se desvió
+
+Se construyeron los sub-pasos 2, 4, 5 y 7 del orden de entrega (ver `12-lectura-por-lotes-y-persistencia-del-puntaje.md`):
+
+- **Casos de uso** `calculatecompatibilityscore`, `recomputescoresforentity`, `explainscore` (con el «qué pasaría si»), `snapshotapplicationprofile` y `migratealgorithmversion` (que también purga las fotos de más de 24 meses). Comparten `ScoringSources` y `ScoreCalculator` para no repetir las lecturas ni el modelo de puntaje.
+- **Tablas** `compatibility_scores_current`, `compatibility_score_snapshots` y `application_profile_snapshots` (migración `V20261126100000`), solo para pares con motivo.
+- **API** `GET /api/v1/matching/jobs/{id}/score` (`202 PENDING_EMBEDDING` si falta un vector) y `POST /api/v1/matching/jobs/{id}/score/what-if`.
+- **Desvío del ADR-0017 (ADR-0031, aprobado):** no hay caché en Redis por huella; el recálculo corre dentro del trabajador de la cola; el puntaje del candidato se calcula al pedirlo (p50 42 ms).
+- **Pendiente de `ats` (TD-040):** quien postule o cambie de etapa debe llamar a `snapshotapplicationprofile`; hasta que `ats` exista nadie la invoca.
 
 ## 11. Decisiones abiertas
 

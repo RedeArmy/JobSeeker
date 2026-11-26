@@ -11,6 +11,13 @@ jobseeker:
     scoring:
       alpha: ${MATCHING_SCORING_ALPHA:0.30}
       min-completeness: ${MATCHING_SCORING_MIN_COMPLETENESS:0.5}
+      # Puntaje guardado (TD-036): pares guardados que se recalculan por entidad y pasada.
+      recompute-max-pairs: ${MATCHING_SCORING_RECOMPUTE_MAX_PAIRS:200}
+      # Migración de versión del algoritmo: pares por lote, retención de las fotos (24 meses,
+      # ADR-0017) y cada cuánto corre el mantenimiento.
+      migration-batch-size: ${MATCHING_SCORING_MIGRATION_BATCH_SIZE:100}
+      snapshot-retention: ${MATCHING_SCORING_SNAPSHOT_RETENTION:730d}
+      maintenance-interval: ${MATCHING_SCORING_MAINTENANCE_INTERVAL:10m}
     suggestions:
       view-quota: ${MATCHING_PROFILE_VIEW_QUOTA:200}
       # Tolerancia (puntos) con que OPEN_TO_WORK adelanta en el orden; 1 es la resolución del porcentaje mostrado (BR-MATCH-07, ADR-0030).

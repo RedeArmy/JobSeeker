@@ -51,4 +51,13 @@ public interface EmbeddingWorkQueuePort {
 
   /** Descarta lo pendiente de una entidad (la anonimizaron: no hay nada que calcular). */
   void discard(EmbeddingEntity entity, UUID key);
+
+  /**
+   * ¿Hay un cambio de esta entidad esperando ser procesado? Lo usa la interfaz para decir
+   * «actualizando…» en vez de mostrar un valor viejo como si fuera el vigente (BR-MATCH-03). Por
+   * defecto no hay nada pendiente; el adaptador real consulta la cola.
+   */
+  default boolean isPending(EmbeddingEntity entity, UUID key) {
+    return false;
+  }
 }

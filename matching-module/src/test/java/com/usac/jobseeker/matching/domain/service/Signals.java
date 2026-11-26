@@ -170,6 +170,7 @@ final class Signals {
           1,
           true,
           false,
+          "PUBLISHED",
           "Backend",
           "Descripción",
           modality,

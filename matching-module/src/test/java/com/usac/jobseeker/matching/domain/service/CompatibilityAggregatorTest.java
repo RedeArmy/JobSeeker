@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 
 import com.usac.jobseeker.matching.domain.model.Calibration;
+import com.usac.jobseeker.matching.domain.model.CandidateSignals;
 import com.usac.jobseeker.matching.domain.model.CompatibilityScore;
 import com.usac.jobseeker.matching.domain.model.DataStatus;
 import com.usac.jobseeker.matching.domain.model.Dimension;
@@ -12,6 +13,7 @@ import com.usac.jobseeker.matching.domain.model.DimensionScore;
 import com.usac.jobseeker.matching.domain.model.Weights;
 import java.time.LocalDate;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import org.junit.jupiter.api.Test;
@@ -325,5 +327,25 @@ class CompatibilityAggregatorTest {
 
     assertThatThrownBy(() -> score(candidate, job, Double.NaN))
         .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  // REQ-C-01 (TD-036): el «qué pasaría si» suma lo que el candidato agregaría; lo que ya declaraba
+  // se sustituye y nada más cambia.
+  @Test
+  void theWhatIfCopyAddsAndReplacesOnlySkillsAndLanguages() {
+    var original = Signals.candidate().skill("Java", 2).language("en", "B1").build();
+
+    var copy =
+        original.withAdditional(
+            List.of(new CandidateSignals.Skill("java", 4), new CandidateSignals.Skill("SQL", 3)),
+            List.of(new CandidateSignals.Language("en", "C1")));
+
+    assertThat(copy.skills())
+        .containsExactlyInAnyOrder(
+            new CandidateSignals.Skill("java", 4), new CandidateSignals.Skill("SQL", 3));
+    assertThat(copy.languages()).containsExactly(new CandidateSignals.Language("en", "C1"));
+    assertThat(copy.experiences()).isEqualTo(original.experiences());
+    assertThat(copy.salary()).isEqualTo(original.salary());
+    assertThat(original.skills()).containsExactly(new CandidateSignals.Skill("Java", 2));
   }
 }

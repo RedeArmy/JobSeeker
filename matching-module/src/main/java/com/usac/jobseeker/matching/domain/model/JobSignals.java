@@ -23,12 +23,22 @@ public record JobSignals(
     long version,
     boolean published,
     boolean reviewing,
+    String status,
     String title,
     String description,
     String modality,
     String country,
     Salary salary,
     List<Requirement> requirements) {
+
+  /**
+   * Una vacante que un candidato puede ver y puntuarse contra ella: publicada o cerrada, nunca un
+   * borrador, archivada ni eliminada (BR-JOB-11). El estado desconocido no es visible: ante la duda
+   * no se muestra.
+   */
+  public boolean visibleToCandidates() {
+    return "PUBLISHED".equals(status) || "CLOSED".equals(status);
+  }
 
   public JobSignals {
     Objects.requireNonNull(jobId, "jobId");
@@ -46,7 +56,18 @@ public record JobSignals(
       String title,
       String description,
       List<Requirement> requirements) {
-    this(jobId, version, published, reviewing, title, description, null, null, null, requirements);
+    this(
+        jobId,
+        version,
+        published,
+        reviewing,
+        null,
+        title,
+        description,
+        null,
+        null,
+        null,
+        requirements);
   }
 
   /** Rango salarial con moneda y periodo (BR-JOB-21); cualquier extremo puede faltar. */

@@ -41,6 +41,7 @@ class CanonicalJobComposerTest {
             3,
             true,
             false,
+            "PUBLISHED",
             "Ingeniero Backend",
             "Construirás servicios.",
             "ONSITE",

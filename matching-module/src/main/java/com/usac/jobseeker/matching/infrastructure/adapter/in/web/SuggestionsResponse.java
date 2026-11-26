@@ -130,20 +130,11 @@ public record SuggestionsResponse(
   }
 
   private static Candidate candidate(int rank, SuggestedCandidate suggested) {
-    CompatibilityScore score = suggested.score();
-    List<Dimension> dimensions =
-        score.breakdown().dimensions().stream().map(SuggestionsResponse::dimension).toList();
     CandidateCard card = suggested.card();
     return new Candidate(
         rank,
         suggested.profile().toString(),
-        new Score(
-            (int) Math.round(score.overall()),
-            score.breakdown().completeness(),
-            score.breakdown().alpha(),
-            score.breakdown().structured(),
-            score.breakdown().semantic(),
-            dimensions),
+        scoreOf(suggested.score()),
         suggested.availability().name(),
         new Profile(
             card.headline(),
@@ -151,6 +142,19 @@ public record SuggestionsResponse(
             card.yearsOfExperience(),
             card.highestEducation(),
             card.topSkills()));
+  }
+
+  /** El puntaje con su desglose tal como sale en cualquier respuesta (sugeridos y candidato). */
+  static Score scoreOf(CompatibilityScore score) {
+    List<Dimension> dimensions =
+        score.breakdown().dimensions().stream().map(SuggestionsResponse::dimension).toList();
+    return new Score(
+        (int) Math.round(score.overall()),
+        score.breakdown().completeness(),
+        score.breakdown().alpha(),
+        score.breakdown().structured(),
+        score.breakdown().semantic(),
+        dimensions);
   }
 
   private static Dimension dimension(DimensionScore d) {

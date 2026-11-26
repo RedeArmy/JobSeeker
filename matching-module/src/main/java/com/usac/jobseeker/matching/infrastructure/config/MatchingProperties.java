@@ -89,13 +89,19 @@ public record MatchingProperties(
    * @param minCompleteness completitud mínima para entrar a las listas de sugeridos
    * @param mandatoryFactor veces que pesa un requisito obligatorio frente a uno deseable
    * @param calibration parámetros de Platt; sin ellos el puntaje se marca no calibrado
+   * @param recomputeMaxPairs tope de pares guardados que se recalculan por entidad y pasada
+   * @param migrationBatchSize pares por lote al migrar de versión del algoritmo
+   * @param snapshotRetention cuánto se conservan las fotos del puntaje (24 meses, ADR-0017)
    */
   public record Scoring(
       @DefaultValue Weights weights,
       @DefaultValue("0.30") double alpha,
       @DefaultValue("0.5") double minCompleteness,
       @DefaultValue("2.0") double mandatoryFactor,
-      @DefaultValue Calibration calibration) {}
+      @DefaultValue Calibration calibration,
+      @DefaultValue("200") int recomputeMaxPairs,
+      @DefaultValue("100") int migrationBatchSize,
+      @DefaultValue("730d") Duration snapshotRetention) {}
 
   /**
    * Pesos por dimensión (`03-lld.md` §2.3): habilidades 35, experiencia 25, formación 15, ubicación

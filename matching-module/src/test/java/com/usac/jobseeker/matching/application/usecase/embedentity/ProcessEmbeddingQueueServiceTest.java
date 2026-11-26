@@ -28,6 +28,8 @@ class ProcessEmbeddingQueueServiceTest {
   private final Map<AccountId, RuntimeException> failures = new HashMap<>();
   private final Map<JobPostingId, RuntimeException> jobFailures = new HashMap<>();
   private final List<JobPostingId> embeddedJobs = new ArrayList<>();
+  private final List<String> recomputed = new ArrayList<>();
+  private RuntimeException recomputeFailure;
   private final EmbeddingQueuePolicy policy =
       new EmbeddingQueuePolicy(
           10, Duration.ofMinutes(5), 5, Duration.ofSeconds(5), Duration.ofMinutes(5));
@@ -59,21 +61,29 @@ class ProcessEmbeddingQueueServiceTest {
               throw new UnsupportedOperationException();
             }
           },
-          command -> {
-            RuntimeException failure = failures.get(command.accountId());
-            if (failure != null) {
-              throw failure;
-            }
-            return EmbedProfileUseCase.Result.EMBEDDED;
-          },
-          command -> {
-            embeddedJobs.add(command.jobId());
-            RuntimeException failure = jobFailures.get(command.jobId());
-            if (failure != null) {
-              throw failure;
-            }
-            return EmbedJobUseCase.Result.EMBEDDED;
-          },
+          new EmbeddingJobHandlers(
+              command -> {
+                RuntimeException failure = failures.get(command.accountId());
+                if (failure != null) {
+                  throw failure;
+                }
+                return EmbedProfileUseCase.Result.EMBEDDED;
+              },
+              command -> {
+                embeddedJobs.add(command.jobId());
+                RuntimeException failure = jobFailures.get(command.jobId());
+                if (failure != null) {
+                  throw failure;
+                }
+                return EmbedJobUseCase.Result.EMBEDDED;
+              },
+              command -> {
+                recomputed.add(command.entity() + ":" + command.key());
+                if (recomputeFailure != null) {
+                  throw recomputeFailure;
+                }
+                return 3;
+              }),
           policy,
           (useCase, outcome) -> metrics.add(outcome),
           freshness::add,
@@ -254,5 +264,57 @@ class ProcessEmbeddingQueueServiceTest {
     service.execute();
 
     assertThat(freshness).containsExactly(Duration.ofSeconds(61));
+  }
+
+  // TD-036: tras embeber, los puntajes guardados de esa entidad se recalculan (BR-MATCH-03).
+  @Test
+  void afterEmbeddingAProfileItsStoredScoresAreRecomputedWithTheSameKey() {
+    var job = job(0);
+
+    service.execute();
+
+    assertThat(recomputed).containsExactly("PROFILE:" + job.key());
+    assertThat(outcomes).containsExactly("complete");
+  }
+
+  @Test
+  void afterEmbeddingAJobItsStoredScoresAreRecomputedToo() {
+    var job = queued(EmbeddingEntity.JOB, 0, NOW.minusSeconds(5));
+
+    service.execute();
+
+    assertThat(recomputed).containsExactly("JOB:" + job.key());
+  }
+
+  // Un cambio solo de datos estructurados no llama al modelo, pero el puntaje sí cambia.
+  @Test
+  void theScoresAreRecomputedEvenWhenTheEmbeddingDidNotChange() {
+    job(0);
+
+    service.execute();
+
+    assertThat(recomputed).hasSize(1);
+  }
+
+  @Test
+  void aFailureRecomputingRetriesTheJobInsteadOfLosingTheUpdate() {
+    recomputeFailure = new IllegalStateException("base de datos caída");
+    job(0);
+
+    service.execute();
+
+    assertThat(outcomes).singleElement().asString().startsWith("retry@");
+    assertThat(freshness).isEmpty();
+  }
+
+  @Test
+  void whenTheModelRejectsTheEntityNothingIsRecomputed() {
+    var job = job(0);
+    failures.put(accountOf(job), new EmbeddingRejectedException("texto fuera de contexto"));
+
+    service.execute();
+
+    assertThat(recomputed).isEmpty();
+    assertThat(outcomes).containsExactly("fail");
   }
 }
