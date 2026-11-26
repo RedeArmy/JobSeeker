@@ -1,5 +1,6 @@
 package com.usac.jobseeker.matching.domain.model;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
 
@@ -24,6 +25,9 @@ public record JobSignals(
     boolean reviewing,
     String title,
     String description,
+    String modality,
+    String country,
+    Salary salary,
     List<Requirement> requirements) {
 
   public JobSignals {
@@ -32,6 +36,21 @@ public record JobSignals(
     Objects.requireNonNull(description, "description");
     requirements = List.copyOf(requirements);
   }
+
+  /** Una vacante sin modalidad, país ni salario: lo que basta para representarla textualmente. */
+  public JobSignals(
+      JobPostingId jobId,
+      long version,
+      boolean published,
+      boolean reviewing,
+      String title,
+      String description,
+      List<Requirement> requirements) {
+    this(jobId, version, published, reviewing, title, description, null, null, null, requirements);
+  }
+
+  /** Rango salarial con moneda y periodo (BR-JOB-21); cualquier extremo puede faltar. */
+  public record Salary(BigDecimal min, BigDecimal max, String currency, String period) {}
 
   /**
    * Un requisito estructurado. Los campos que no son de su tipo van nulos.

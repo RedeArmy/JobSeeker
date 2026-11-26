@@ -44,6 +44,12 @@ public class JobPostingSignalsReader implements JobSignalsReader {
         REVIEWING.equals(s.recruitingStage()),
         s.title(),
         s.description(),
+        s.modality(),
+        s.country(),
+        s.salary() == null
+            ? null
+            : new JobSignals.Salary(
+                s.salary().min(), s.salary().max(), s.salary().currency(), s.salary().period()),
         s.requirements().stream().map(JobPostingSignalsReader::requirement).toList());
   }
 

@@ -89,13 +89,21 @@ class JobPostingSignalsReaderTest {
     assertThat(reader.read(new JobPostingId(id))).isEmpty();
   }
 
-  // job nunca entrega al reclutador, y el tipo propio no tiene dónde guardarlo.
+  // job nunca entrega al reclutador, y el tipo propio no tiene dónde guardarlo. Sí lleva la
+  // modalidad, el país y el salario, que el puntaje compara (no entran al texto que se embebe).
   @Test
-  void theTranslatedSignalsCarryNothingAboutTheRecruiterOrTheStructuralDimensions() {
+  void theTranslatedSignalsCarryTheStructuralDimensionsButNothingAboutTheRecruiter() {
     answer = Optional.of(snapshot("PUBLISHED", "HIRING"));
 
-    String text = reader.read(new JobPostingId(id)).orElseThrow().toString();
+    var signals = reader.read(new JobPostingId(id)).orElseThrow();
 
-    assertThat(text).doesNotContain("3000").doesNotContain("REMOTE").doesNotContain("GT");
+    assertThat(signals.modality()).isEqualTo("REMOTE");
+    assertThat(signals.country()).isEqualTo("GT");
+    assertThat(signals.salary().min()).isEqualByComparingTo("3000");
+    assertThat(
+            java.util.Arrays.stream(
+                    com.usac.jobseeker.matching.domain.model.JobSignals.class.getRecordComponents())
+                .map(c -> c.getName().toLowerCase(java.util.Locale.ROOT)))
+        .noneMatch(n -> n.contains("recruiter") || n.contains("owner") || n.contains("account"));
   }
 }

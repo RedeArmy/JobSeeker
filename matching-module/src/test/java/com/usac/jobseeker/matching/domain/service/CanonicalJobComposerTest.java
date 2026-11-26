@@ -30,6 +30,43 @@ class CanonicalJobComposerTest {
     return CanonicalJobComposer.compose(signals, max).text().value();
   }
 
+  // La modalidad, el país y el salario viajan en las señales para puntuar, pero no son semántica:
+  // no
+  // entran al texto que se embebe ni, por tanto, salen hacia el modelo (ADR-0017, decisión 2).
+  @Test
+  void modalityCountryAndSalaryAreInTheSignalsButNeverInTheEmbeddedText() {
+    var withStructure =
+        new JobSignals(
+            new JobPostingId(UUID.randomUUID()),
+            3,
+            true,
+            false,
+            "Ingeniero Backend",
+            "Construirás servicios.",
+            "ONSITE",
+            "GT",
+            new JobSignals.Salary(
+                new java.math.BigDecimal("98765"),
+                new java.math.BigDecimal("123456"),
+                "GTQ",
+                "MONTH"),
+            List.of(skill("Java", true, 3)));
+
+    String text = text(withStructure, ROOMY);
+
+    assertThat(text)
+        .doesNotContain("ONSITE")
+        .doesNotContain("GT")
+        .doesNotContain("98765")
+        .doesNotContain("GTQ");
+    assertThat(text(withStructure, ROOMY))
+        .isEqualTo(
+            text(
+                signals(
+                    "Ingeniero Backend", "Construirás servicios.", List.of(skill("Java", true, 3))),
+                ROOMY));
+  }
+
   @Test
   void theTextCarriesTitleDescriptionAndEveryKindOfRequirement() {
     var signals =
