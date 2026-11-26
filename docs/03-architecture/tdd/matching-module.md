@@ -172,11 +172,20 @@ Se construyó el puntaje explicable y se aplicó a los sugeridos; la recuperaci�
 - **Tarjeta enmascarada (REQ-C-07), sin un caso de uso nuevo de `cv`.** `CandidateSignals` ya llega sin nombre, foto, contacto, enlaces ni instituciones; la tarjeta (titular, país, años, formación más alta, hasta cinco habilidades) sale de ahí y el titular pasa por `PiiRedactor`, porque es texto libre. El contacto no es parte de la tarjeta: se entrega después, bajo solicitud, que no existe todavía.
 - **`JobSignals` creció** con modalidad, país y salario (que `job` ya entregaba) y la recuperación devuelve la cuenta dueña del perfil (unión con `profile_embedding_accounts`, fuera de la subconsulta ordenada para no perder el índice HNSW, y sin cuentas con lápida).
 
-**No implementado** (registrado en `technical-debt-register.md`): la **persistencia** del puntaje (`compatibility_scores_current`, fotos, caché en Redis por huella), el recálculo por eventos, el endpoint del puntaje del candidato, `explainscore` y el «qué pasaría si», y `snapshotapplicationprofile` (TD-036); la **calibración** con el protocolo de 300 pares y los controles C1, C2 y C5 (TD-037); la normalización de habilidades por taxonomía y los años de experiencia *relevantes* (TD-038); y la medición del costo de leer 200 perfiles uno a uno frente a NFR-PERF-04 (TD-039). El control **C3** (declarar un dato que coincide nunca baja el puntaje) y la monotonía, los límites y la idempotencia sí están probados como propiedades.
+**No implementado** (registrado en `technical-debt-register.md`): la **persistencia** del puntaje (`compatibility_scores_current`, fotos, caché en Redis por huella), el recálculo por eventos, el endpoint del puntaje del candidato, `explainscore` y el «qué pasaría si», y `snapshotapplicationprofile` (TD-036); la **calibración** con el protocolo de 300 pares y los controles C1, C2 y C5 (TD-037); la normalización de habilidades por taxonomía y los años de experiencia *relevantes* (TD-038). La lectura de 200 perfiles uno a uno (TD-039) se resolvió después, §10.3. El control **C3** (declarar un dato que coincide nunca baja el puntaje) y la monotonía, los límites y la idempotencia sí están probados como propiedades.
 
 **Controles de aceptación de los ADR aprobados con condiciones**, que este orden debe cumplir: C1 (*recall* de la recuperación) en el sub-paso 6; C2 (calibración y evaluación separadas por vacante) y C5 (umbral contrafactual) en el arnés; C3 (declarar un dato que coincide nunca baja el puntaje) en el sub-paso 1; C4 (frescura medida con Ollama real) en el sub-paso 4; D1 a D4 de la taxonomía, con su sub-paso en `cv`.
 
 El **arnés de evaluación** corre en paralelo desde el sub-paso 2 y debe estar antes de calibrar `α` y los parámetros del sub-paso 5.
+
+### 10.3 Lectura por lotes de los recuperados (25-nov-2026, TD-039)
+
+La etapa 2 leía las señales y la disponibilidad de cada recuperado una a una (≈ 12 consultas por candidato). Ahora:
+
+- **Lecturas por lotes** en `auth` (`ResolveActorsUseCase`) y en `cv` (`GetProfileSnapshotsUseCase`, `GetVisibleAvailabilitiesUseCase`), con las mismas reglas que la lectura individual, que pasa a ser el caso de una cuenta.
+- **La etapa 2** lee las señales de todos con una llamada y, tras el filtro de completitud, pide la disponibilidad de quienes lo pasaron en otra; un descartado no cuesta ninguna consulta de disponibilidad.
+- **Medido** con 200 candidatos en la pila real: p50 de 1.246 ms a 118 ms; el número de sentencias no crece con los perfiles (`JdbcBatchReadsTest`).
+- **Protección:** los puertos de salida tienen un método por lotes `default` que pregunta de a uno; `BatchReadsAreOverriddenTest` falla si un adaptador de producción no lo sustituye (`coding-standards.md` §8.1).
 
 ## 11. Decisiones abiertas
 

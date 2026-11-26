@@ -69,6 +69,15 @@ Todo comentario explica el **por qué**, nunca el qué (el código se explica so
 - Excepciones de dominio (p. ej. violación de una invariante como BR-JOB-02) se definen en `domain/` como excepciones específicas del contexto, extendiendo tipos base de `shared-kernel` — nunca excepciones genéricas de framework lanzadas desde el dominio.
 - La traducción de una excepción de dominio al formato de error de `api-contract-overview.md` §6 ocurre en `infrastructure/adapter/in/web/`, no antes.
 
+## 8.1 Lecturas por lotes y servicios con dos interfaces (TD-039)
+
+Una lectura que un consumidor repite para cientos de entidades (los sugeridos puntúan hasta 200) **no se hace en un bucle de lecturas individuales**: tiene una variante por lotes con una consulta por tabla. Reglas que se aprendieron al construirlas:
+
+- **La individual es el caso de una.** Una sola implementación de las reglas (capacidad, anonimización, exclusión), para que lote e individual no se desvíen; se prueba que dan lo mismo.
+- **Interfaz nueva, no un método nuevo.** El lote es otra interfaz de caso de uso y el puerto de salida gana un método `default` que pregunta de a uno. Así no se rompe a quien simula el puerto con una lambda. A cambio, el adaptador **real** debe sustituirlo: lo garantiza `BatchReadsAreOverriddenTest`, que falla si un adaptador de producción lo olvida.
+- **Un servicio con dos interfaces es un solo bean.** Dos instancias darían a Spring dos candidatos para cada tipo y la aplicación no arrancaría. El método de `@Configuration` devuelve el tipo concreto. **Excepción:** si un componente decora una de las interfaces (`resolveactor` lo decora el contexto de petición), el lote es una clase aparte que comparte la regla.
+- **El costo no puede crecer con el número de entidades.** Se prueba contando sentencias (`JdbcBatchReadsTest`), no solo midiendo tiempo.
+
 ## 9. Documentación de API, rate limiting y observabilidad (ADR-0010 a 0012)
 
 - **OpenAPI:** todo método de `infrastructure/adapter/in/web/*Controller` lleva `@Operation(summary = ...)` con descripción de negocio (no repetir el nombre del método) y `@ApiResponse` por cada código de estado posible (`api-contract-overview.md` §6); los DTOs de request/response llevan `@Schema(description = ...)` en cada campo no obvio.

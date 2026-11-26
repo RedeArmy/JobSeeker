@@ -4,7 +4,7 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | 🟡 En revisión |
-| **Versión** | 1.12 — se paga TD-034 |
+| **Versión** | 1.13 — se paga TD-039 |
 | **Fecha** | 24 de noviembre de 2026 |
 | **Dueño del documento** | Responsable del proyecto |
 | **Revisión del registro** | Al cerrar cada sprint y antes de cada hito de la hoja de ruta |
@@ -84,7 +84,6 @@ Corte: 24-nov-2026.
 | TD-036 | El puntaje no se persiste, ni se cachea, ni se recalcula, y el candidato no ve el suyo | Dominio | S3 | L | Leída | Planificada | Postulación y pipeline mínimos (`ats`, `tracker`) |
 | TD-037 | El puntaje se publica sin calibrar: `α`, pesos y Platt son valores iniciales | Calidad | S2 | L | Leída | Planificada | Protocolo de 300 pares y arnés de evaluación |
 | TD-038 | Habilidades por texto normalizado y experiencia total, no relevante | Dominio | S3 | M | Leída | Planificada | ADR-0019 implementado en `cv` |
-| TD-039 | Puntuar 200 recuperados lee sus perfiles uno a uno | Rendimiento | S3 | M | Hipótesis | Abierta | Antes de dar sugeridos a usuarios reales |
 
 ### Fichas
 
@@ -308,17 +307,6 @@ Corte: 24-nov-2026.
 - **Criterio de cierre:** Sinónimos conocidos cubren el mismo requisito y la experiencia relevante sustituye al total, medido en el conjunto dorado.
 - **Referencias:** ADR-0019; `docs/03-architecture/tdd/matching-module.md` §3 y §10.2
 
-#### TD-039 — Puntuar 200 recuperados lee sus perfiles uno a uno
-
-**Rendimiento** · **S3 Media** · esfuerzo **M** · confianza **Hipótesis** · **Abierta**
-
-- **Evidencia:** La etapa 2 lee las señales de cada recuperado con `getprofilesnapshot` y su disponibilidad con `getvisibleavailability`, uno por uno: hasta 200 lecturas de varias consultas cada una por petición. Con unos pocos perfiles es instantáneo, pero no se ha medido con 200 frente a NFR-PERF-04 (sugeridos en ≤ 3 s).
-- **Interés (qué cuesta no pagarla):** Si no cabe, el endpoint más sensible se vuelve lento justo bajo el límite de 10 peticiones por minuto, o se baja el tope de recuperación y se pierde *recall*.
-- **Disparador:** Antes de dar sugeridos a usuarios reales.
-- **Remediación propuesta:** Medir con 200 perfiles reales; si no cabe, una lectura por lotes en `cv` (varias cuentas por llamada) y una caché corta de las señales, sin cambiar el contrato público de los sugeridos.
-- **Criterio de cierre:** p95 de los sugeridos medido con 200 recuperados y dentro de NFR-PERF-04.
-- **Referencias:** `docs/03-architecture/tdd/matching-module.md` §8 y §10.2
-
 ## 6. Deuda resuelta
 
 | ID | Título | Tipo | Sev | Fecha | PR o decisión | Cómo se resolvió |
@@ -352,6 +340,7 @@ Corte: 24-nov-2026.
 | TD-R27 | Las sugerencias no exigían un reclutador verificado ni cuota de perfiles vistos (antes TD-033) | Seguridad | S2 | 2026-11-25 | #42 | `suggestcandidatesforjob` niega con `403` a quien no sea `VERIFIED` (antes de tocar la vacante), exige ser dueño de una vacante publicada y cuenta como visto cada perfil único mostrado (200 por 24 h, configurable, `429 QUOTA_EXCEEDED`), bajo un candado por reclutador y en la misma transacción que `profile_view_log`; la cuota vive en la base y no en Redis, así no hay un camino en que una caída la deje pasar. Endpoint con su propio límite de tasa (10/min). Probado de punta a punta; la respuesta no lleva similitud ni datos personales. |
 | TD-R28 | Recuperación vectorial con filtros sin validar ni aplicar (antes TD-012) | Rendimiento | S2 | 2026-11-25 | #43 | `nearestDiscoverable` fija `hnsw.iterative_scan = relaxed_order` y `ef_search` no menor que la página, local a la transacción y con reordenado exterior; `ef_search` configurable (100). Medido con la consulta real y el HNSW forzado (comprobado por `EXPLAIN`): con un 90 % de vectores de otro modelo, sin la regla una página de 50 devuelve 3,6 filas (recall 0,07) y con ella 50 filas con recall ≈ 0,95; sin coste de latencia medible (p50 ≈ 30 ms). Prueba de regresión y medición repetible en `11-medicion-recuperacion-vectorial-y-latencia-de-embeddings.md`. |
 | TD-R29 | Los sugeridos solo devolvían el orden: sin puntaje, prioridad, exclusión ni tarjeta (antes TD-034) | Dominio | S2 | 2026-11-25 | #44 | Puntaje explicable de seis dimensiones más la afinidad semántica con `α` visible, completitud mínima, `algorithm_version` por *hash* de pesos y calibración y marca de no calibrado; desempate `OPEN_TO_WORK` con una tolerancia de un punto, configurable (BR-MATCH-07, ADR-0030), que respeta la exclusión (BR-MATCH-09) preguntándola a `cv`; tarjeta enmascarada con el titular redactado (REQ-C-07). Propiedades probadas (límites, idempotencia, monotonía y C3) y de punta a punta con la exclusión, la completitud y sin datos personales ni coseno crudo en la respuesta. Lo que queda fuera: TD-036 a TD-039. |
+| TD-R30 | Puntuar 200 recuperados leía sus perfiles uno a uno (antes TD-039) | Rendimiento | S3 | 2026-11-25 | #45 | Lectura por lotes en `auth` (`ResolveActorsUseCase`), `cv` (`GetProfileSnapshotsUseCase`, `GetVisibleAvailabilitiesUseCase`) y `matching`; la individual es el caso de una cuenta. Medido con 200 candidatos: **p50 1.246 ms a 118 ms**, de ≈ 2.400 consultas a ≈ 20 fijas; probado que el número de sentencias no crece con los perfiles y que ningún adaptador de producción olvida el método por lotes (`BatchReadsAreOverriddenTest`). |
 
 ## 7. Deuda aceptada
 
@@ -381,6 +370,7 @@ Corte: 24-nov-2026.
 | 1.10 | 2026-11-25 | Se paga TD-033 (PR #42, TD-R27): los sugeridos exigen un reclutador verificado y cuentan una cuota de perfiles únicos. Se confirma la verificación manual por operadores (ADR-0029). Entran TD-034 (puntaje, prioridad, exclusión y lectura enmascarada) y TD-035 (retención de `profile_view_log`); TD-012 ve cumplido su disparador. Quedan 19 abiertas o planificadas, 27 resueltas y 6 aceptadas. |
 | 1.11 | 2026-11-25 | Se paga TD-012 (PR #43, TD-R28): la regla de escaneo iterativo ya estaba medida pero no aplicada; ahora se aplica, se mide con la consulta real y la protege una prueba de regresión. TD-029 sigue abierta: la VM no tiene AVX2, pero el instrumento de medición ya existe y está probado. Quedan 18 abiertas o planificadas, 28 resueltas y 6 aceptadas. |
 | 1.12 | 2026-11-25 | Se paga TD-034 (PR #44, TD-R29): puntaje explicable, prioridad por disponibilidad, exclusión y tarjeta enmascarada en los sugeridos. Entran TD-036 (persistencia, caché, recálculo y puntaje del candidato), TD-037 (calibración), TD-038 (taxonomía de habilidades y experiencia relevante) y TD-039 (costo de leer 200 perfiles uno a uno). El ADR-0030 formaliza el desempate por tolerancia, la completitud aplicable y el puntaje preliminar, con un indicador de calibración. Quedan 21 abiertas o planificadas, 29 resueltas y 6 aceptadas. |
+| 1.13 | 2026-11-25 | Se paga TD-039 (PR #45, TD-R30): lectura por lotes en `auth`, `cv` y `matching`, medida con 200 candidatos (p50 de 1.246 ms a 118 ms) y protegida por una prueba de arquitectura. Se documenta la regla en `coding-standards.md` §8.1. Quedan 20 abiertas o planificadas, 30 resueltas y 6 aceptadas. |
 
 ## 9. Plantilla de ficha
 
