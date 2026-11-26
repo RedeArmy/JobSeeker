@@ -132,6 +132,16 @@ class MatchingEmbeddingEndToEndIntegrationTest {
   private com.usac.jobseeker.cv.application.usecase.getprofilesnapshot.GetProfileSnapshotUseCase
       snapshots;
 
+  @Autowired
+  private com.usac.jobseeker.matching.application.usecase.migratealgorithmversion
+          .MigrateAlgorithmVersionUseCase
+      migrate;
+
+  @Autowired
+  private com.usac.jobseeker.matching.application.usecase.snapshotapplicationprofile
+          .SnapshotApplicationProfileUseCase
+      snapshotApplication;
+
   @Autowired private com.usac.jobseeker.app.infrastructure.outbox.OutboxStore store;
   @Autowired private org.springframework.transaction.PlatformTransactionManager transactions;
 
@@ -177,6 +187,9 @@ class MatchingEmbeddingEndToEndIntegrationTest {
     jdbc.update("delete from profile_view_log");
     jdbc.update("delete from profile_embeddings");
     jdbc.update("delete from profile_embedding_accounts");
+    jdbc.update("delete from compatibility_scores_current");
+    jdbc.update("delete from compatibility_score_snapshots");
+    jdbc.update("delete from application_profile_snapshots");
   }
 
   private UUID candidateWithEverything() throws Exception {
@@ -1020,6 +1033,286 @@ class MatchingEmbeddingEndToEndIntegrationTest {
         .andExpect(status().isUnauthorized());
   }
 
+  // ---- puntaje del candidato, persistencia y recálculo (TD-036) ----
+
+  private String scoreOf(String jobId) {
+    return "/api/v1/matching/jobs/" + jobId + "/score";
+  }
+
+  /** Un candidato completo, una vacante publicada y los vectores de ambos ya calculados. */
+  private record Pair(UUID candidate, UUID owner, String jobId, UUID profileId) {}
+
+  private Pair candidateAndPublishedJob() throws Exception {
+    UUID candidate = candidateWithEverything();
+    UUID owner = recruiterWith("VERIFIED");
+    String jobId = publishedJob(owner, "Backend");
+    deliverEvents();
+    runWorker();
+    return new Pair(candidate, owner, jobId, profileOf(candidate));
+  }
+
+  private Integer storedCount() {
+    return jdbc.queryForObject("select count(*) from compatibility_scores_current", Integer.class);
+  }
+
+  @Test
+  void aCandidateSeesItsScoreWithTheBreakdownAndItIsStoredAsViewedByTheCandidate()
+      throws Exception {
+    Pair pair = candidateAndPublishedJob();
+
+    String body =
+        mvc.perform(authed(get(scoreOf(pair.jobId())), pair.candidate()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("OK"))
+            .andExpect(jsonPath("$.calibrated").value(false))
+            .andExpect(jsonPath("$.updating").value(false))
+            .andExpect(jsonPath("$.algorithmVersion").isNotEmpty())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    assertThat((java.util.List<?>) com.jayway.jsonpath.JsonPath.read(body, "$.score.dimensions"))
+        .hasSize(6);
+    assertThat(((Number) com.jayway.jsonpath.JsonPath.read(body, "$.score.overall")).intValue())
+        .isBetween(0, 100);
+    assertThat(body)
+        .doesNotContainIgnoringCase("cosine")
+        .doesNotContainIgnoringCase("similarity")
+        .doesNotContain(SECRET_NAME)
+        .doesNotContain(SECRET_EMAIL);
+    assertThat(
+            jdbc.queryForObject(
+                "select reason from compatibility_scores_current where candidate_profile_id = ?"
+                    + " and job_posting_id = ?::uuid",
+                String.class,
+                pair.profileId(),
+                pair.jobId()))
+        .isEqualTo("CANDIDATE_VIEW");
+  }
+
+  @Test
+  void aJobTheCandidatesCannotSeeOrThatIsTheirOwnDoesNotExistForThem() throws Exception {
+    UUID candidate = candidateWithEverything();
+    UUID owner = recruiterWith("VERIFIED");
+    String draft = draftJob(owner, "Borrador");
+    UUID both = UUID.randomUUID();
+    jdbc.update(
+        "insert into accounts (id, is_candidate_enabled, is_recruiter_enabled) values (?, true, true)",
+        both);
+    String own = publishedJob(both, "Mi propia vacante");
+    deliverEvents();
+    runWorker();
+
+    mvc.perform(authed(get(scoreOf(draft)), candidate)).andExpect(status().isNotFound());
+    mvc.perform(authed(get(scoreOf(own)), both)).andExpect(status().isNotFound());
+    mvc.perform(authed(get(scoreOf(UUID.randomUUID().toString())), candidate))
+        .andExpect(status().isNotFound());
+    mvc.perform(authed(get(scoreOf("no-es-un-uuid")), candidate)).andExpect(status().isNotFound());
+    assertThat(storedCount()).isZero();
+  }
+
+  @Test
+  void aRecruiterOnlyAccountIsForbiddenAndACandidateWithoutAProfileGetsAConflict()
+      throws Exception {
+    Pair pair = candidateAndPublishedJob();
+    UUID noProfile = candidate();
+
+    mvc.perform(authed(get(scoreOf(pair.jobId())), pair.owner()))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath(ERROR_CODE).value("FORBIDDEN_CAPABILITY"));
+    mvc.perform(authed(get(scoreOf(pair.jobId())), noProfile))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath(ERROR_CODE).value("INVALID_STATE"));
+  }
+
+  @Test
+  void withoutVectorsYetTheAnswerIsAcceptedAsPendingAndNeverAPartialScore() throws Exception {
+    UUID candidate = candidateWithEverything();
+    UUID owner = recruiterWith("VERIFIED");
+    String jobId = publishedJob(owner, "Backend");
+
+    mvc.perform(authed(get(scoreOf(jobId)), candidate))
+        .andExpect(status().isAccepted())
+        .andExpect(jsonPath("$.status").value("PENDING_EMBEDDING"))
+        .andExpect(jsonPath("$.updating").value(true))
+        .andExpect(jsonPath("$.score").doesNotExist());
+
+    assertThat(storedCount()).isZero();
+  }
+
+  @Test
+  void whatIfDeclaringARequiredSkillIsAnsweredWithoutStoringOrChangingAnything() throws Exception {
+    Pair pair = candidateAndPublishedJob();
+    int before = storedCount();
+
+    String body =
+        mvc.perform(
+                json(
+                    post(scoreOf(pair.jobId()) + "/what-if"),
+                    pair.candidate(),
+                    "{\"skills\":[{\"name\":\"Kubernetes\",\"level\":3}],\"languages\":[{\"language\":\"en\",\"proficiency\":\"B2\"}]}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("OK"))
+            .andExpect(jsonPath("$.current.overall").isNumber())
+            .andExpect(jsonPath("$.hypothetical.overall").isNumber())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    int delta = ((Number) com.jayway.jsonpath.JsonPath.read(body, "$.delta")).intValue();
+    int current =
+        ((Number) com.jayway.jsonpath.JsonPath.read(body, "$.current.overall")).intValue();
+    int hypothetical =
+        ((Number) com.jayway.jsonpath.JsonPath.read(body, "$.hypothetical.overall")).intValue();
+    assertThat(delta).isEqualTo(hypothetical - current);
+    assertThat(storedCount()).isEqualTo(before);
+  }
+
+  @Test
+  void whatIfRejectsInvalidHypothesesAndHasTheSameVisibilityRules() throws Exception {
+    Pair pair = candidateAndPublishedJob();
+
+    mvc.perform(
+            json(
+                post(scoreOf(pair.jobId()) + "/what-if"),
+                pair.candidate(),
+                "{\"skills\":[{\"name\":\" \"}]}"))
+        .andExpect(status().isBadRequest());
+    mvc.perform(json(post(scoreOf(pair.jobId()) + "/what-if"), pair.owner(), "{}"))
+        .andExpect(status().isForbidden());
+    mvc.perform(
+            json(post(scoreOf(UUID.randomUUID().toString()) + "/what-if"), pair.candidate(), "{}"))
+        .andExpect(status().isNotFound());
+  }
+
+  // BR-MATCH-03: editar el perfil recalcula el puntaje guardado, aunque el texto a embeber no
+  // cambie.
+  @Test
+  void editingTheProfileRecomputesTheStoredScoreOfThatPair() throws Exception {
+    Pair pair = candidateAndPublishedJob();
+    mvc.perform(authed(get(scoreOf(pair.jobId())), pair.candidate())).andExpect(status().isOk());
+    double before =
+        jdbc.queryForObject("select overall from compatibility_scores_current", Double.class);
+
+    // La vacante pide Java: declarar solo Go baja el puntaje de ese par.
+    mvc.perform(
+            json(
+                put(CANDIDATE + "/skills"),
+                pair.candidate(),
+                "{\"skills\":[{\"name\":\"Go\",\"level\":3}],\"version\":2}"))
+        .andExpect(status().isOk());
+    deliverEvents();
+    runWorker();
+
+    double after =
+        jdbc.queryForObject("select overall from compatibility_scores_current", Double.class);
+    assertThat(after).isLessThan(before);
+    assertThat(storedCount()).isEqualTo(1);
+  }
+
+  @Test
+  void theSuggestionsAReruiterSawAreStoredAsCurrentScoresWithTheSuggestedReason() throws Exception {
+    Pair pair = candidateAndPublishedJob();
+
+    mvc.perform(authed(get(suggestionsOf(pair.jobId())), pair.owner())).andExpect(status().isOk());
+
+    assertThat(
+            jdbc.queryForObject(
+                "select reason from compatibility_scores_current where candidate_profile_id = ?"
+                    + " and job_posting_id = ?::uuid",
+                String.class,
+                pair.profileId(),
+                pair.jobId()))
+        .isEqualTo("SUGGESTED");
+  }
+
+  // BR-DATA-05: anonymizar vacía lo derivado del perfil y conserva el par, el puntaje y la versión.
+  @Test
+  void anonymizingTheCandidateEmptiesTheStoredBreakdownButKeepsThePairAndTheScore()
+      throws Exception {
+    Pair pair = candidateAndPublishedJob();
+    mvc.perform(authed(get(scoreOf(pair.jobId())), pair.candidate())).andExpect(status().isOk());
+    assertThat(
+            jdbc.queryForObject(
+                "select breakdown::text like '%explanation%' from compatibility_scores_current",
+                Boolean.class))
+        .isTrue();
+
+    anonymize.execute(
+        new com.usac.jobseeker.cv.application.usecase.anonymizeprofiledata
+            .AnonymizeProfileDataCommand(
+            new com.usac.jobseeker.common.domain.model.AccountId(pair.candidate())));
+    deliverEvents();
+
+    assertThat(storedCount()).isEqualTo(1);
+    assertThat(
+            jdbc.queryForObject(
+                "select breakdown::text from compatibility_scores_current", String.class))
+        .isEqualTo("{}");
+    assertThat(
+            jdbc.queryForObject(
+                "select anonymized_at is not null from compatibility_scores_current",
+                Boolean.class))
+        .isTrue();
+  }
+
+  // ADR-0017, decisión 10: la migración conserva la foto del puntaje anterior y deja el actual al
+  // día.
+  @Test
+  void migratingAStaleVersionKeepsASnapshotOfTheOldScoreAndRefreshesTheCurrentOne()
+      throws Exception {
+    Pair pair = candidateAndPublishedJob();
+    mvc.perform(authed(get(scoreOf(pair.jobId())), pair.candidate())).andExpect(status().isOk());
+    jdbc.update(
+        "update compatibility_scores_current set algorithm_version = '0|viejo|aaaaaaaa|bbbbbbbb'");
+
+    int processed = migrate.execute();
+
+    assertThat(processed).isEqualTo(1);
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from compatibility_score_snapshots where reason = 'VERSION_CHANGED' and algorithm_version = '0|viejo|aaaaaaaa|bbbbbbbb'",
+                Integer.class))
+        .isEqualTo(1);
+    assertThat(
+            jdbc.queryForObject(
+                "select algorithm_version <> '0|viejo|aaaaaaaa|bbbbbbbb' from compatibility_scores_current",
+                Boolean.class))
+        .isTrue();
+    assertThat(migrate.execute()).isZero();
+  }
+
+  // La postulación (cuando `ats` exista) guarda el perfil canónico y la foto del puntaje.
+  @Test
+  void snapshottingAnApplicationStoresTheCanonicalProfileAndTheScoreSnapshot() throws Exception {
+    Pair pair = candidateAndPublishedJob();
+    UUID application = UUID.randomUUID();
+
+    var result =
+        snapshotApplication.execute(
+            new com.usac.jobseeker.matching.application.usecase.snapshotapplicationprofile
+                .SnapshotApplicationProfileCommand(
+                new com.usac.jobseeker.common.domain.model.AccountId(pair.candidate()),
+                new com.usac.jobseeker.matching.domain.model.JobPostingId(
+                    UUID.fromString(pair.jobId())),
+                application,
+                com.usac.jobseeker.matching.domain.model.SnapshotReason.APPLIED));
+
+    assertThat(result.profileSnapshotted()).isTrue();
+    assertThat(result.scoreSnapshotted()).isTrue();
+    String text =
+        jdbc.queryForObject(
+            "select canonical_text from application_profile_snapshots where application_id = ?",
+            String.class,
+            application);
+    assertThat(text)
+        .doesNotContain(SECRET_NAME)
+        .doesNotContain(SECRET_EMAIL)
+        .doesNotContain(SECRET_PHONE);
+    assertThat(jdbc.queryForObject("select reason from compatibility_scores_current", String.class))
+        .isEqualTo("APPLIED");
+  }
+
   // ---- medición de TD-039 (no es una prueba de regresión: solo corre con
   // -Dsuggestions.measure=true) ----
 
@@ -1068,6 +1361,35 @@ class MatchingEmbeddingEndToEndIntegrationTest {
     System.out.printf(
         "%n| Candidatos con vector | Mostrados | p50 ms | máx ms |%n|---|---|---|---|%n| %d | %d | %.0f | %.0f |%n",
         embedded, shown, millis.get(millis.size() / 2), millis.get(millis.size() - 1));
+    System.out.flush();
+  }
+
+  /**
+   * Mide cuánto tarda el candidato en ver su puntaje, que se calcula al pedirlo (ADR-0031): lectura
+   * de señales de los dos lados, similitud entre vectores, aritmética y guardado. Solo corre con
+   * `-Dsuggestions.measure=true`; imprime una tabla Markdown para el informe 12.
+   */
+  @Test
+  @org.junit.jupiter.api.condition.EnabledIfSystemProperty(
+      named = "suggestions.measure",
+      matches = "true")
+  void measureTheCandidateScoreEndpoint() throws Exception {
+    Pair pair = candidateAndPublishedJob();
+    java.util.List<Double> millis = new java.util.ArrayList<>();
+    for (int call = 0; call < 31; call++) {
+      long started = System.nanoTime();
+      mvc.perform(authed(get(scoreOf(pair.jobId())), pair.candidate())).andExpect(status().isOk());
+      if (call > 0) {
+        millis.add((System.nanoTime() - started) / 1e6);
+      }
+    }
+    millis.sort(null);
+    System.out.printf(
+        "%n| Llamadas | p50 ms | p95 ms | máx ms |%n|---|---|---|---|%n| %d | %.0f | %.0f | %.0f |%n",
+        millis.size(),
+        millis.get(millis.size() / 2),
+        millis.get((int) Math.ceil(millis.size() * 0.95) - 1),
+        millis.get(millis.size() - 1));
     System.out.flush();
   }
 }
