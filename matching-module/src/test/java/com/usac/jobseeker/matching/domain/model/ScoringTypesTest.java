@@ -47,13 +47,30 @@ class ScoringTypesTest {
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(() -> new Weights(notANumber, 0.3, 0.5, 2))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> new Weights(all(0), 0.3, 0.5, 2))
+    Map<Dimension, Double> zeros = all(0);
+    Map<Dimension, Double> ones = all(1);
+
+    assertThatThrownBy(() -> new Weights(zeros, 0.3, 0.5, 2))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> new Weights(all(1), 1.1, 0.5, 2))
+    assertThatThrownBy(() -> new Weights(ones, 1.1, 0.5, 2))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> new Weights(all(1), 0.3, -0.1, 2))
+    assertThatThrownBy(() -> new Weights(ones, 0.3, -0.1, 2))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> new Weights(all(1), 0.3, 0.5, 0.5))
+    assertThatThrownBy(() -> new Weights(ones, 0.3, 0.5, 0.5))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  // Un NaN no es menor ni mayor que nada: con una comparación de rango «invertida» pasaría la
+  // validación.
+  @Test
+  void aNotANumberParameterIsRefusedNotLetThroughByTheRangeCheck() {
+    Map<Dimension, Double> ones = all(1);
+
+    assertThatThrownBy(() -> new Weights(ones, Double.NaN, 0.5, 2))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> new Weights(ones, 0.3, Double.NaN, 2))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> new Weights(ones, 0.3, 0.5, Double.NaN))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
@@ -90,8 +107,9 @@ class ScoringTypesTest {
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(() -> new Calibration("m", Calibration.Kind.PLATT, 1, Double.NaN))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> Calibration.uncalibrated("m").apply(Double.NaN))
-        .isInstanceOf(IllegalArgumentException.class);
+    Calibration none = Calibration.uncalibrated("m");
+
+    assertThatThrownBy(() -> none.apply(Double.NaN)).isInstanceOf(IllegalArgumentException.class);
   }
 
   @Test

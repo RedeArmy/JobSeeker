@@ -320,7 +320,10 @@ class CompatibilityAggregatorTest {
 
   @Test
   void aNonNumericCosineIsRefused() {
-    assertThatThrownBy(() -> score(Signals.candidate(), Signals.job(), Double.NaN))
+    var candidate = Signals.candidate();
+    var job = Signals.job();
+
+    assertThatThrownBy(() -> score(candidate, job, Double.NaN))
         .isInstanceOf(IllegalArgumentException.class);
   }
 }

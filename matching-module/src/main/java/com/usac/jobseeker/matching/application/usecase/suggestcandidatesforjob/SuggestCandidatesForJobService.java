@@ -156,32 +156,58 @@ public class SuggestCandidatesForJobService implements SuggestCandidatesForJobUs
       List<SuggestionRanking.Entry> entries) {
     int incomplete = 0;
     for (NearestProfile nearest : recovered) {
-      Optional<CandidateSignals> signals = sources.candidates().read(nearest.account());
-      if (signals.isEmpty() || !signals.get().discoverable()) {
-        continue;
+      Scoring result = scoreOne(nearest, jobSignals, recruiter, today);
+      switch (result.status()) {
+        case INCOMPLETE -> incomplete++;
+        case SCORED -> {
+          SuggestedCandidate candidate = result.candidate();
+          scored.put(nearest.candidate(), candidate);
+          entries.add(
+              new SuggestionRanking.Entry(
+                  nearest.candidate().value(),
+                  candidate.score().overall(),
+                  candidate.availability()));
+        }
+        case SKIPPED -> {
+          // Ya no es descubrible o no tiene perfil legible: no entra y no cuenta como incompleto.
+        }
       }
-      CompatibilityScore score =
-          CompatibilityAggregator.score(
-              signals.get(),
-              jobSignals,
-              nearest.cosineSimilarity(),
-              scoring.weights(),
-              scoring.calibration(),
-              today);
-      if (score.breakdown().completeness() < scoring.weights().minCompleteness()) {
-        incomplete++;
-        continue;
-      }
-      // BR-MATCH-09: la disponibilidad es la que ve ESTE reclutador (UNSET si fue excluido).
-      Availability availability = sources.availability().visibleTo(recruiter, nearest.account());
-      CandidateCard card = CandidateCards.of(signals.get(), today);
-      scored.put(
-          nearest.candidate(),
-          new SuggestedCandidate(nearest.candidate(), score, availability, card));
-      entries.add(
-          new SuggestionRanking.Entry(nearest.candidate().value(), score.overall(), availability));
     }
     return incomplete;
+  }
+
+  /** Cómo quedó un recuperado en la etapa 2. */
+  private enum Status {
+    SKIPPED,
+    INCOMPLETE,
+    SCORED
+  }
+
+  private record Scoring(Status status, SuggestedCandidate candidate) {}
+
+  // Puntúa a un recuperado con aritmética, sin llamar a ningún modelo.
+  private Scoring scoreOne(
+      NearestProfile nearest, JobSignals jobSignals, AccountId recruiter, LocalDate today) {
+    Optional<CandidateSignals> signals = sources.candidates().read(nearest.account());
+    if (signals.isEmpty() || !signals.get().discoverable()) {
+      return new Scoring(Status.SKIPPED, null);
+    }
+    CompatibilityScore score =
+        CompatibilityAggregator.score(
+            signals.get(),
+            jobSignals,
+            nearest.cosineSimilarity(),
+            scoring.weights(),
+            scoring.calibration(),
+            today);
+    if (score.breakdown().completeness() < scoring.weights().minCompleteness()) {
+      return new Scoring(Status.INCOMPLETE, null);
+    }
+    // BR-MATCH-09: la disponibilidad es la que ve ESTE reclutador (UNSET si fue excluido).
+    Availability availability = sources.availability().visibleTo(recruiter, nearest.account());
+    CandidateCard card = CandidateCards.of(signals.get(), today);
+    return new Scoring(
+        Status.SCORED, new SuggestedCandidate(nearest.candidate(), score, availability, card));
   }
 
   private void requireVerifiedRecruiter(AccountId recruiter) {

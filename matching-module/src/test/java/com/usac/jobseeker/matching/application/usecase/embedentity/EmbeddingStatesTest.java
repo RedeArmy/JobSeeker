@@ -28,7 +28,9 @@ class EmbeddingStatesTest {
 
   @Test
   void aNearestProfileNeedsItsCandidate() {
-    assertThatThrownBy(() -> new NearestProfile(null, new AccountId(UUID.randomUUID()), 0.5))
+    AccountId account = new AccountId(UUID.randomUUID());
+
+    assertThatThrownBy(() -> new NearestProfile(null, account, 0.5))
         .isInstanceOf(NullPointerException.class);
     assertThat(
             new NearestProfile(

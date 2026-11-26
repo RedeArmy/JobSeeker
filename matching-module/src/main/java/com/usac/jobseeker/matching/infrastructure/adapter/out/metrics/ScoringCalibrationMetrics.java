@@ -45,7 +45,7 @@ public class ScoringCalibrationMetrics implements MeterBinder {
             "1 si el puntaje de compatibilidad usa una calibración ajustada; 0 si es preliminar")
         .tag("algorithm_version", version.value())
         .register(meters);
-    if (!calibrated) {
+    if (!calibrated && LOG.isWarnEnabled()) {
       LOG.warn(
           "event=scoring_uncalibrated algorithm_version={} El puntaje de compatibilidad se publica"
               + " sin calibrar: es preliminar, sirve para ordenar y explicar, y no debe usarse para"

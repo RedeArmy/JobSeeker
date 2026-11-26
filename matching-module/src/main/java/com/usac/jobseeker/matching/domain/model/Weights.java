@@ -40,13 +40,14 @@ public record Weights(
     if (sum <= 0) {
       throw new IllegalArgumentException("los pesos no pueden sumar cero");
     }
-    if (!(alpha >= 0 && alpha <= 1)) {
+    // Un NaN no es menor ni mayor que nada: se rechaza aparte o pasaría la comprobación de rango.
+    if (Double.isNaN(alpha) || alpha < 0 || alpha > 1) {
       throw new IllegalArgumentException("alpha debe estar entre 0 y 1");
     }
-    if (!(minCompleteness >= 0 && minCompleteness <= 1)) {
+    if (Double.isNaN(minCompleteness) || minCompleteness < 0 || minCompleteness > 1) {
       throw new IllegalArgumentException("la completitud mínima debe estar entre 0 y 1");
     }
-    if (!(mandatoryFactor >= 1)) {
+    if (Double.isNaN(mandatoryFactor) || mandatoryFactor < 1) {
       throw new IllegalArgumentException(
           "un requisito obligatorio no puede pesar menos que uno deseable");
     }

@@ -6,6 +6,8 @@ import com.usac.jobseeker.matching.domain.model.JobSignals;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 /** Las dimensiones de ajuste: ubicación y modalidad (10 %) y salario (10 %). Funciones puras. */
 final class FitDimensions {
@@ -14,6 +16,9 @@ final class FitDimensions {
   private static final String HYBRID = "HYBRID";
   private static final int MONTHS_PER_YEAR = 12;
   private static final String MONTH = "MONTH";
+  // Los ajustes toman solo estos valores exactos (1, 0 y 0,5), así que compararlos es seguro.
+  private static final double FULL_FIT = 1.0;
+  private static final double NO_FIT = 0.0;
 
   private FitDimensions() {}
 
@@ -23,36 +28,56 @@ final class FitDimensions {
    * si no declaró ninguno, la dimensión queda sin declarar.
    */
   static DimensionResult locationModality(CandidateSignals candidate, JobSignals job) {
-    boolean remote = REMOTE.equals(job.modality());
-    boolean countryMatters = !remote && notBlank(job.country());
+    boolean countryMatters = !REMOTE.equals(job.modality()) && notBlank(job.country());
     if (!notBlank(job.modality()) && !countryMatters) {
       return DimensionResult.notApplicable("La vacante no define modalidad ni país.");
     }
-    List<Double> components = new ArrayList<>();
-    List<String> notes = new ArrayList<>();
-    if (notBlank(job.modality()) && notBlank(candidate.desiredModality())) {
-      double fit = modalityFit(job.modality(), candidate.desiredModality());
-      components.add(fit);
-      notes.add(
-          fit == 1
-              ? "modalidad compatible"
-              : fit == 0 ? "modalidad incompatible" : "modalidad parcialmente compatible");
-    }
-    if (countryMatters && notBlank(candidate.countryOfResidence())) {
-      double fit = countryFit(candidate, job);
-      components.add(fit);
-      notes.add(
-          fit == 1
-              ? "mismo país"
-              : fit == 0
-                  ? "otro país sin disposición a reubicarse"
-                  : "otro país con disposición a reubicarse");
+    List<Component> components = new ArrayList<>();
+    modalityComponent(candidate, job).ifPresent(components::add);
+    if (countryMatters) {
+      countryComponent(candidate, job).ifPresent(components::add);
     }
     if (components.isEmpty()) {
       return DimensionResult.notDeclared("Dato no declarado: modalidad o país.");
     }
-    double mean = components.stream().mapToDouble(Double::doubleValue).average().orElse(0);
-    return DimensionResult.available(mean, capitalize(String.join("; ", notes)) + ".");
+    double mean = components.stream().mapToDouble(Component::fit).average().orElse(0);
+    String notes = components.stream().map(Component::note).collect(Collectors.joining("; "));
+    return DimensionResult.available(mean, capitalize(notes) + ".");
+  }
+
+  /** Un componente del ajuste: qué tanto encaja (0 a 1) y cómo se dice en el desglose. */
+  private record Component(double fit, String note) {}
+
+  private static Optional<Component> modalityComponent(CandidateSignals candidate, JobSignals job) {
+    if (!notBlank(job.modality()) || !notBlank(candidate.desiredModality())) {
+      return Optional.empty();
+    }
+    double fit = modalityFit(job.modality(), candidate.desiredModality());
+    return Optional.of(new Component(fit, modalityNote(fit)));
+  }
+
+  private static Optional<Component> countryComponent(CandidateSignals candidate, JobSignals job) {
+    if (!notBlank(candidate.countryOfResidence())) {
+      return Optional.empty();
+    }
+    double fit = countryFit(candidate, job);
+    return Optional.of(new Component(fit, countryNote(fit)));
+  }
+
+  private static String modalityNote(double fit) {
+    if (fit == FULL_FIT) {
+      return "modalidad compatible";
+    }
+    return fit == NO_FIT ? "modalidad incompatible" : "modalidad parcialmente compatible";
+  }
+
+  private static String countryNote(double fit) {
+    if (fit == FULL_FIT) {
+      return "mismo país";
+    }
+    return fit == NO_FIT
+        ? "otro país sin disposición a reubicarse"
+        : "otro país con disposición a reubicarse";
   }
 
   /**
