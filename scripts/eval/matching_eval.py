@@ -381,6 +381,108 @@ def run_calibration(rows, folds, repetitions, seed, k):
 
 
 # ---------------------------------------------------------------------------
+# Recall de la recuperación (control C1) y emisión de la calibración
+# ---------------------------------------------------------------------------
+
+
+def retrieval_recall(rows, cap):
+    """Recall medio por vacante de los `cap` primeros por coseno frente a puntuar a todos (C1).
+
+    Para cada vacante con al menos un par relevante (etiqueta >= 2): qué fracción de sus relevantes
+    queda entre los `cap` de mayor coseno, que es lo que la etapa 1 recupera. Una vacante cuyo
+    conjunto es menor o igual que `cap` recupera todo y no informa de nada: se cuenta aparte."""
+    by_vacancy = defaultdict(list)
+    for row in rows:
+        by_vacancy[row["vacancy_id"]].append(row)
+    recalls, trivial = [], 0
+    for items in by_vacancy.values():
+        relevant = [r for r in items if r["relevant"]]
+        if not relevant:
+            continue
+        if len(items) <= cap:
+            trivial += 1
+        recovered = sorted(items, key=lambda r: -r["cosine"])[:cap]
+        recalls.append(sum(r["relevant"] for r in recovered) / len(relevant))
+    return mean_without_nan(recalls), len(recalls), trivial
+
+
+def run_retrieval_recall(rows, cap, minimum, repetitions, seed):
+    value, vacancies, trivial = retrieval_recall(rows, cap)
+    result = {"cap": cap, "minimum": minimum, "vacancies": vacancies, "trivial": trivial, "recall": value, "warnings": []}
+    if vacancies == 0:
+        result["warnings"].append("ninguna vacante tiene pares relevantes: no hay nada que medir")
+        return result
+    if trivial == vacancies:
+        result["warnings"].append(
+            "todas las vacantes tienen %d pares o menos: se recupera todo y el control C1 no informa de nada" % cap
+        )
+    result["ci"] = bootstrap_by_vacancy(rows, lambda sample: retrieval_recall(sample, cap)[0], repetitions, seed)
+    result["passes"] = value >= minimum
+    return result
+
+
+def print_retrieval_recall(result):
+    print("Recall de la recuperación (C1): %d vacantes con relevantes, tope %d" % (result["vacancies"], result["cap"]))
+    for warning in result["warnings"]:
+        print("  AVISO: " + warning)
+    if "ci" not in result:
+        return
+    low, high = result["ci"]
+    print("  recall %s (IC 95 %% %s a %s); mínimo exigido %s -> %s" % (
+        num(result["recall"]), num(low), num(high), num(result["minimum"]), "CUMPLE" if result["passes"] else "NO CUMPLE"))
+    if result["trivial"]:
+        print("  %d de %d vacantes tienen un conjunto <= tope (recuperan todo)" % (result["trivial"], result["vacancies"]))
+
+
+class Refusal(Exception):
+    """La calibración no cumple el protocolo y no debe publicarse."""
+
+
+def emit_config(rows, model, folds, seed, min_pairs, min_vacancies, max_ece):
+    """Ajusta Platt sobre TODOS los pares y devuelve las propiedades de Spring, o lanza Refusal.
+
+    Solo emite si el protocolo (ADR-0017, C2) se cumple: tamaño mínimo, ambas clases, pendiente
+    positiva (monótona) y, sobre los pares **fuera de pliegue** (nunca los de ajuste), un error de
+    calibración acotado y un Brier mejor que predecir siempre la tasa base. Publicar parámetros que
+    no pasan estas pruebas haría `calibrated: true` sin serlo."""
+    labels = [r["relevant"] for r in rows]
+    vacancies = len({r["vacancy_id"] for r in rows})
+    problems = []
+    if len(rows) < min_pairs:
+        problems.append("hay %d pares y el protocolo pide al menos %d" % (len(rows), min_pairs))
+    if vacancies < min_vacancies:
+        problems.append("hay %d vacantes y el protocolo pide al menos %d (C2)" % (vacancies, min_vacancies))
+    if sum(labels) == 0 or sum(labels) == len(labels):
+        problems.append("falta una de las dos clases (relevante o no): no se puede ajustar")
+    if problems:
+        raise Refusal("; ".join(problems))
+    a, c = fit_platt([r["cosine"] for r in rows], labels)
+    if not a > 0:
+        raise Refusal("la pendiente ajustada (%s) no es positiva: la función no sería monótona" % num(a))
+    probs, _skipped = out_of_fold_probabilities(rows, folds, seed, "platt")
+    usable = [i for i, p in enumerate(probs) if p is not None]
+    if not usable:
+        raise Refusal("ningún pliegue tenía ambas clases: no se puede validar fuera de pliegue")
+    held_probs = [probs[i] for i in usable]
+    held_labels = [labels[i] for i in usable]
+    ece = expected_calibration_error(held_probs, held_labels)
+    held_brier = brier(held_probs, held_labels)
+    baseline = brier([sum(held_labels) / len(held_labels)] * len(held_labels), held_labels)
+    if ece > max_ece:
+        raise Refusal("el error de calibración fuera de pliegue (%s) supera el máximo %s" % (num(ece), num(max_ece)))
+    if not held_brier < baseline:
+        raise Refusal("el Brier fuera de pliegue (%s) no mejora el de la tasa base (%s)" % (num(held_brier), num(baseline)))
+    lines = [
+        "# Calibración de Platt del modelo %s: %d pares, %d vacantes; fuera de pliegue ECE %s y Brier %s (base %s)"
+        % (model, len(rows), vacancies, num(ece), num(held_brier), num(baseline)),
+        "# Pegar en la configuración de producción; cambia la algorithm_version y el puntaje pasa a calibrated=true.",
+        "jobseeker.matching.scoring.calibration.a=%r" % a,
+        "jobseeker.matching.scoring.calibration.b=%r" % c,
+    ]
+    return lines
+
+
+# ---------------------------------------------------------------------------
 # Cobertura de ESCO
 # ---------------------------------------------------------------------------
 
@@ -547,7 +649,33 @@ def main(argv=None):
     cal.add_argument("--bootstrap", type=int, default=1000)
     cal.add_argument("--seed", type=int, default=7)
     cal.add_argument("--k", type=int, default=10)
+    rec = sub.add_parser("retrieval-recall", help="control C1: recall de la recuperación frente a puntuar a todos")
+    rec.add_argument("--pairs", required=True, help="CSV: vacancy_id, candidate_id, cosine, label (0-3); el conjunto COMPLETO de cada vacante")
+    rec.add_argument("--cap", type=int, default=200, help="tope de la recuperación (jobseeker.matching.suggestions.retrieval-cap)")
+    rec.add_argument("--min", type=float, default=0.95, dest="minimum")
+    rec.add_argument("--bootstrap", type=int, default=1000)
+    rec.add_argument("--seed", type=int, default=7)
+    emit = sub.add_parser("emit-config", help="ajusta Platt y emite las propiedades, o se niega si no cumple el protocolo")
+    emit.add_argument("--pairs", required=True, help="CSV: vacancy_id, candidate_id, cosine, label (0-3)")
+    emit.add_argument("--model", required=True, help="modelo de embeddings al que pertenecen los parámetros (ADR-0018)")
+    emit.add_argument("--folds", type=int, default=5)
+    emit.add_argument("--seed", type=int, default=7)
+    emit.add_argument("--min-pairs", type=int, default=300)
+    emit.add_argument("--min-vacancies", type=int, default=30)
+    emit.add_argument("--max-ece", type=float, default=0.10)
     args = parser.parse_args(argv)
+    if args.command == "retrieval-recall":
+        result = run_retrieval_recall(read_pairs(args.pairs), args.cap, args.minimum, args.bootstrap, args.seed)
+        print_retrieval_recall(result)
+        return 0 if result.get("passes") else 1
+    if args.command == "emit-config":
+        try:
+            lines = emit_config(read_pairs(args.pairs), args.model, args.folds, args.seed, args.min_pairs, args.min_vacancies, args.max_ece)
+        except Refusal as refusal:
+            print("NO SE EMITE LA CALIBRACIÓN: %s" % refusal, file=sys.stderr)
+            return 1
+        print("\n".join(lines))
+        return 0
     if args.command == "coverage":
         index, concepts = read_esco(args.esco)
         print_coverage(run_coverage(index, read_skills(args.skills), args.top), concepts)

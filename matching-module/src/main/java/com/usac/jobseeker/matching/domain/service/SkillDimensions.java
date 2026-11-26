@@ -32,7 +32,7 @@ final class SkillDimensions {
       CandidateSignals candidate, JobSignals job, double mandatoryFactor) {
     List<JobSignals.Requirement> required =
         job.requirements().stream()
-            .filter(r -> SKILL.equals(r.type()) && !ScoreCatalogs.nameKey(r.skillName()).isEmpty())
+            .filter(r -> SKILL.equals(r.type()) && !ScoreCatalogs.skillKey(r.skillName()).isEmpty())
             .toList();
     if (required.isEmpty()) {
       return DimensionResult.notApplicable("La vacante no pide habilidades.");
@@ -43,7 +43,7 @@ final class SkillDimensions {
     Map<String, Integer> declared = new HashMap<>();
     for (CandidateSignals.Skill skill : candidate.skills()) {
       declared.merge(
-          ScoreCatalogs.nameKey(skill.name()),
+          ScoreCatalogs.skillKey(skill.name()),
           skill.level() == null ? UNKNOWN : skill.level(),
           Math::max);
     }
@@ -54,7 +54,7 @@ final class SkillDimensions {
     for (JobSignals.Requirement requirement : required) {
       double weight = requirement.mandatory() ? mandatoryFactor : 1;
       total += weight;
-      String key = ScoreCatalogs.nameKey(requirement.skillName());
+      String key = ScoreCatalogs.skillKey(requirement.skillName());
       if (!declared.containsKey(key)) {
         missing.add(requirement.skillName());
         continue;

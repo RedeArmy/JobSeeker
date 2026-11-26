@@ -172,7 +172,7 @@ Se construyó el puntaje explicable y se aplicó a los sugeridos; la recuperaci�
 - **Tarjeta enmascarada (REQ-C-07), sin un caso de uso nuevo de `cv`.** `CandidateSignals` ya llega sin nombre, foto, contacto, enlaces ni instituciones; la tarjeta (titular, país, años, formación más alta, hasta cinco habilidades) sale de ahí y el titular pasa por `PiiRedactor`, porque es texto libre. El contacto no es parte de la tarjeta: se entrega después, bajo solicitud, que no existe todavía.
 - **`JobSignals` creció** con modalidad, país y salario (que `job` ya entregaba) y la recuperación devuelve la cuenta dueña del perfil (unión con `profile_embedding_accounts`, fuera de la subconsulta ordenada para no perder el índice HNSW, y sin cuentas con lápida).
 
-**No implementado en ese corte** (hecho después, §10.3 y §10.4): la lectura por lotes (TD-039) y la persistencia del puntaje, el recálculo, el endpoint del candidato, `explainscore`, el «qué pasaría si» y `snapshotapplicationprofile` (TD-036). Siguen pendientes: la **calibración** con el protocolo de 300 pares y los controles C1, C2 y C5 (TD-037) y la normalización de habilidades por taxonomía y los años de experiencia *relevantes* (TD-038). El control **C3** (declarar un dato que coincide nunca baja el puntaje) y la monotonía, los límites y la idempotencia sí están probados como propiedades.
+**No implementado en ese corte** (hecho después, §10.3 y §10.4): la lectura por lotes (TD-039) y la persistencia del puntaje, el recálculo, el endpoint del candidato, `explainscore`, el «qué pasaría si» y `snapshotapplicationprofile` (TD-036). Siguen pendientes: la **calibración** con el protocolo de 300 pares y los controles C1, C2 y C5 (TD-037) y la normalización de habilidades por taxonomía y los años de experiencia *relevantes* (TD-038; los aliases inequívocos ya están, §10.5). El control **C3** (declarar un dato que coincide nunca baja el puntaje) y la monotonía, los límites y la idempotencia sí están probados como propiedades.
 
 **Controles de aceptación de los ADR aprobados con condiciones**, que este orden debe cumplir: C1 (*recall* de la recuperación) en el sub-paso 6; C2 (calibración y evaluación separadas por vacante) y C5 (umbral contrafactual) en el arnés; C3 (declarar un dato que coincide nunca baja el puntaje) en el sub-paso 1; C4 (frescura medida con Ollama real) en el sub-paso 4; D1 a D4 de la taxonomía, con su sub-paso en `cv`.
 
@@ -196,6 +196,12 @@ Se construyeron los sub-pasos 2, 4, 5 y 7 del orden de entrega (ver `12-lectura-
 - **API** `GET /api/v1/matching/jobs/{id}/score` (`202 PENDING_EMBEDDING` si falta un vector) y `POST /api/v1/matching/jobs/{id}/score/what-if`.
 - **Desvío del ADR-0017 (ADR-0031, aprobado):** no hay caché en Redis por huella; el recálculo corre dentro del trabajador de la cola; el puntaje del candidato se calcula al pedirlo (p50 42 ms).
 - **Pendiente de `ats` (TD-040):** quien postule o cambie de etapa debe llamar a `snapshotapplicationprofile`; hasta que `ats` exista nadie la invoca.
+
+### 10.5 Aliases de habilidades y herramientas de calibración (25-nov-2026, TD-038 y TD-037)
+
+- **Aliases (parte de TD-038):** una habilidad cubre un requisito si su nombre normalizado coincide o ambos pertenecen al mismo grupo de alias (36 grupos inequívocos en `SkillAliases`: «JS» y «JavaScript», «k8s» y «Kubernetes»). Lo que solo se parece no se une. Es provisional hasta la taxonomía del ADR-0019.
+- **Versión del algoritmo:** el cambio altera el puntaje de habilidades, así que `CompatibilityAggregator.CODE_VERSION` pasa a 2 y la migración por lotes recalcula los puntajes guardados con la 1 (BR-MATCH-04).
+- **Calibración (TD-037, sigue abierta):** `scripts/eval/matching_eval.py` gana `emit-config`, que emite los parámetros de Platt o se niega si no se cumple el protocolo, y `retrieval-recall` para el control C1. Falta lo único que no se puede construir: pares etiquetados reales.
 
 ## 11. Decisiones abiertas
 

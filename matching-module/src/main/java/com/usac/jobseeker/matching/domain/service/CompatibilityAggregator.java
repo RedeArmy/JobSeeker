@@ -32,8 +32,12 @@ import java.util.Map;
  */
 public final class CompatibilityAggregator {
 
-  /** Versión del código del algoritmo; cambia con cualquier regla de las dimensiones. */
-  public static final String CODE_VERSION = "1";
+  /**
+   * Versión del código del algoritmo; cambia con cualquier regla de las dimensiones. La 2 compara
+   * las habilidades por grupo de alias (TD-038): un puntaje de la 1 ya no es comparable y la
+   * migración por lotes lo recalcula (BR-MATCH-04).
+   */
+  public static final String CODE_VERSION = "2";
 
   private CompatibilityAggregator() {}
 
