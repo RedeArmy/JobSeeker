@@ -22,6 +22,12 @@ import com.usac.jobseeker.matching.application.usecase.embedentity.HandleProfile
 import com.usac.jobseeker.matching.application.usecase.embedentity.JobSignalsReader;
 import com.usac.jobseeker.matching.application.usecase.embedentity.ProcessEmbeddingQueueService;
 import com.usac.jobseeker.matching.application.usecase.embedentity.ProcessEmbeddingQueueUseCase;
+import com.usac.jobseeker.matching.application.usecase.explainscore.CandidateAccessPort;
+import com.usac.jobseeker.matching.application.usecase.explainscore.CandidateJobAccess;
+import com.usac.jobseeker.matching.application.usecase.explainscore.ExplainScoreService;
+import com.usac.jobseeker.matching.application.usecase.explainscore.ExplainScoreUseCase;
+import com.usac.jobseeker.matching.application.usecase.explainscore.WhatIfScoreService;
+import com.usac.jobseeker.matching.application.usecase.explainscore.WhatIfScoreUseCase;
 import com.usac.jobseeker.matching.application.usecase.migratealgorithmversion.MigrateAlgorithmVersionService;
 import com.usac.jobseeker.matching.application.usecase.migratealgorithmversion.MigrateAlgorithmVersionUseCase;
 import com.usac.jobseeker.matching.application.usecase.recomputescoresforentity.RecomputeScoresForEntityService;
@@ -314,5 +320,29 @@ class MatchingConfiguration {
         properties.embedding().maxCharacters(),
         metrics,
         Clock.systemUTC());
+  }
+
+  @Bean
+  CandidateJobAccess candidateJobAccess(
+      CandidateAccessPort access, OwnedJobPort owned, JobSignalsReader jobs) {
+    return new CandidateJobAccess(access, owned, jobs);
+  }
+
+  @Bean
+  ExplainScoreUseCase explainScoreUseCase(
+      CandidateJobAccess access,
+      CalculateCompatibilityScoreUseCase calculate,
+      JdbcEmbeddingWorkQueue queue,
+      UseCaseMetricsPort metrics) {
+    return new ExplainScoreService(access, calculate, queue, metrics);
+  }
+
+  @Bean
+  WhatIfScoreUseCase whatIfScoreUseCase(
+      CandidateJobAccess access,
+      ScoringSources sources,
+      ScoreCalculator calculator,
+      UseCaseMetricsPort metrics) {
+    return new WhatIfScoreService(access, sources, calculator, metrics);
   }
 }
