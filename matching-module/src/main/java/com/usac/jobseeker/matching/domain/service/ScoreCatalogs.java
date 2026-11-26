@@ -33,6 +33,15 @@ final class ScoreCatalogs {
   }
 
   /**
+   * La clave con que se comparan **habilidades**: el nombre normalizado y, si pertenece a un grupo
+   * de alias, el del grupo («JS» y «JavaScript» son la misma). Los idiomas no la usan: son códigos
+   * ISO validados en ambos lados.
+   */
+  static String skillKey(String raw) {
+    return SkillAliases.canonical(nameKey(raw));
+  }
+
+  /**
    * La clave con que se comparan nombres escritos por personas: sin mayúsculas, acentos ni
    * puntuación, para que «Node.js», «node js» y «NODEJS» no sean tres habilidades. Sigue siendo
    * coincidencia por texto: la normalización por taxonomía es TD-038 (ADR-0019).

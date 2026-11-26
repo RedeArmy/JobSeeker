@@ -115,6 +115,87 @@ class StructuredDimensionsTest {
         .isEqualTo(1.0);
   }
 
+  // ---- alias de habilidades (TD-038) ----
+
+  @Test
+  void differentWritingsOfTheSameSkillCoverTheRequirement() {
+    var job =
+        Signals.job()
+            .skill("JavaScript", true, null)
+            .skill("Kubernetes", true, null)
+            .skill("PostgreSQL", true, null)
+            .skill("Machine Learning", true, null)
+            .build();
+    var candidate =
+        Signals.candidate()
+            .skill("JS", 3)
+            .skill("k8s", 3)
+            .skill("Postgres", 3)
+            .skill("aprendizaje automático", 3)
+            .build();
+
+    assertThat(SkillDimensions.skills(candidate, job, MANDATORY).score()).isEqualTo(1.0);
+  }
+
+  @Test
+  void aliasesWorkInBothDirections() {
+    var job = Signals.job().skill("JS", true, null).skill("K8s", true, null).build();
+    var candidate = Signals.candidate().skill("JavaScript", 3).skill("Kubernetes", 3).build();
+
+    assertThat(SkillDimensions.skills(candidate, job, MANDATORY).score()).isEqualTo(1.0);
+  }
+
+  // Un falso positivo infla un puntaje: lo que se parece pero es distinto no se une.
+  @Test
+  void skillsThatMerelyLookAlikeAreNeverMerged() {
+    var job =
+        Signals.job()
+            .skill("Java", true, null)
+            .skill("Spring", true, null)
+            .skill("Angular", true, null)
+            .build();
+    var candidate =
+        Signals.candidate()
+            .skill("JavaScript", 3)
+            .skill("Spring Boot", 3)
+            .skill("AngularJS", 3)
+            .build();
+
+    assertThat(SkillDimensions.skills(candidate, job, MANDATORY).score()).isZero();
+  }
+
+  @Test
+  void aNameWithoutAliasesStaysItself() {
+    assertThat(ScoreCatalogs.skillKey("Terraform")).isEqualTo("terraform");
+    assertThat(ScoreCatalogs.skillKey("Node.js")).isEqualTo("nodejs");
+    assertThat(ScoreCatalogs.skillKey("node")).isEqualTo("nodejs");
+    assertThat(ScoreCatalogs.skillKey("C#")).isEqualTo(ScoreCatalogs.skillKey("CSharp"));
+  }
+
+  // Un nombre en dos grupos haría que dos habilidades se confundieran según el orden de lectura.
+  @Test
+  void noNameBelongsToTwoGroupsAndEveryGroupHasMoreThanOneName() {
+    var seen = new java.util.HashSet<String>();
+    for (var group : SkillAliases.groups()) {
+      assertThat(group).hasSizeGreaterThan(1);
+      for (String name : group) {
+        assertThat(seen.add(name)).as("«%s» está en dos grupos", name).isTrue();
+        assertThat(name).isEqualTo(ScoreCatalogs.nameKey(name));
+        assertThat(SkillAliases.canonical(name)).isEqualTo(group.get(0));
+      }
+    }
+  }
+
+  @Test
+  void anAliasedSkillStillCountsItsLevel() {
+    var job = Signals.job().skill("Kubernetes", true, 4).build();
+
+    assertThat(
+            SkillDimensions.skills(Signals.candidate().skill("k8s", 2).build(), job, MANDATORY)
+                .score())
+        .isEqualTo(0.5);
+  }
+
   // ---- idiomas ----
 
   @Test
