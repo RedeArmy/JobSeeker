@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.usac.jobseeker.common.domain.model.AccountId;
 import com.usac.jobseeker.cv.application.usecase.getprofilesnapshot.GetProfileSnapshotQuery;
+import com.usac.jobseeker.cv.application.usecase.getprofilesnapshot.GetProfileSnapshotsQuery;
 import com.usac.jobseeker.cv.application.usecase.getprofilesnapshot.ProfileSnapshot;
 import com.usac.jobseeker.matching.domain.model.CandidateSignals;
 import java.lang.reflect.RecordComponent;
@@ -25,6 +26,7 @@ class CvCandidateSignalsReaderTest {
   private final AccountId account = new AccountId(UUID.randomUUID());
   private final UUID profile = UUID.randomUUID();
   private final List<GetProfileSnapshotQuery> asked = new ArrayList<>();
+  private final List<GetProfileSnapshotsQuery> batchAsked = new ArrayList<>();
 
   private ProfileSnapshot snapshot() {
     return new ProfileSnapshot(
@@ -60,6 +62,10 @@ class CvCandidateSignalsReaderTest {
         query -> {
           asked.add(query);
           return answer;
+        },
+        batch -> {
+          batchAsked.add(batch);
+          return answer.map(List::of).orElse(List.of());
         });
   }
 
@@ -167,5 +173,40 @@ class CvCandidateSignalsReaderTest {
     }
 
     assertThat(found).isEmpty();
+  }
+
+  // TD-039: todas las cuentas con una consulta a `cv`, traducidas igual que la lectura individual.
+  @Test
+  void manyAccountsAreReadWithOneQueryAndTranslatedTheSameWay() {
+    var all = reader(Optional.of(snapshot())).readAll(List.of(account));
+
+    assertThat(batchAsked)
+        .singleElement()
+        .satisfies(q -> assertThat(q.accountIds()).containsExactly(account));
+    assertThat(asked).isEmpty();
+    assertThat(all).containsOnlyKeys(account);
+    assertThat(all.get(account).skills())
+        .containsExactly(
+            new CandidateSignals.Skill("Java", 4), new CandidateSignals.Skill("SQL", null));
+  }
+
+  @Test
+  void anAccountWithoutAReadableProfileIsNotInTheBatchResult() {
+    assertThat(reader(Optional.empty()).readAll(List.of(account))).isEmpty();
+  }
+
+  // Más cuentas que el máximo por consulta se piden en tandas, sin perder ninguna.
+  @Test
+  void moreAccountsThanTheLimitAreReadInChunks() {
+    var many = new ArrayList<AccountId>();
+    for (int i = 0; i < GetProfileSnapshotsQuery.MAX_ACCOUNTS + 10; i++) {
+      many.add(new AccountId(UUID.randomUUID()));
+    }
+
+    reader(Optional.empty()).readAll(many);
+
+    assertThat(batchAsked).hasSize(2);
+    assertThat(batchAsked.get(0).accountIds()).hasSize(GetProfileSnapshotsQuery.MAX_ACCOUNTS);
+    assertThat(batchAsked.get(1).accountIds()).hasSize(10);
   }
 }

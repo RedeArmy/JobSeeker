@@ -1019,4 +1019,55 @@ class MatchingEmbeddingEndToEndIntegrationTest {
     mvc.perform(get(suggestionsOf(UUID.randomUUID().toString())))
         .andExpect(status().isUnauthorized());
   }
+
+  // ---- medición de TD-039 (no es una prueba de regresión: solo corre con
+  // -Dsuggestions.measure=true) ----
+
+  /**
+   * Crea muchos candidatos completos, los embebe con el Ollama simulado y mide cuánto tarda pedir
+   * los sugeridos cuando la etapa 2 puntúa a todos los recuperados. Imprime una tabla Markdown para
+   * el informe 12. La latencia es la de este PostgreSQL local; con la ida y vuelta de red de un
+   * PostgreSQL gestionado, cada consulta cuesta más, de ahí que el informe también cuente
+   * consultas.
+   */
+  @Test
+  @org.junit.jupiter.api.condition.EnabledIfSystemProperty(
+      named = "suggestions.measure",
+      matches = "true")
+  void measureTheCostOfScoringTheRecoveredCandidates() throws Exception {
+    int count = Integer.getInteger("suggestions.measure.count", 200);
+    for (int i = 0; i < count; i++) {
+      candidateWithEverything();
+    }
+    UUID owner = recruiterWith("VERIFIED");
+    String jobId = publishedJob(owner, "Backend");
+    for (int round = 0; round < 40; round++) {
+      deliverEvents();
+      runWorker();
+    }
+    Integer embedded =
+        jdbc.queryForObject(
+            "select count(*) from profile_embeddings where embedding is not null", Integer.class);
+    java.util.List<Double> millis = new java.util.ArrayList<>();
+    int shown = 0;
+    for (int call = 0; call < 7; call++) {
+      long started = System.nanoTime();
+      String body =
+          mvc.perform(authed(get(suggestionsOf(jobId)).param("size", "50"), owner))
+              .andExpect(status().isOk())
+              .andReturn()
+              .getResponse()
+              .getContentAsString();
+      double elapsed = (System.nanoTime() - started) / 1e6;
+      shown = ((java.util.List<?>) com.jayway.jsonpath.JsonPath.read(body, "$.candidates")).size();
+      if (call > 0) {
+        millis.add(elapsed);
+      }
+    }
+    java.util.Collections.sort(millis);
+    System.out.printf(
+        "%n| Candidatos con vector | Mostrados | p50 ms | máx ms |%n|---|---|---|---|%n| %d | %d | %.0f | %.0f |%n",
+        embedded, shown, millis.get(millis.size() / 2), millis.get(millis.size() - 1));
+    System.out.flush();
+  }
 }

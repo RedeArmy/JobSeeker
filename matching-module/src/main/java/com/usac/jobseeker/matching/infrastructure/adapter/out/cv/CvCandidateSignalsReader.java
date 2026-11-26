@@ -3,10 +3,16 @@ package com.usac.jobseeker.matching.infrastructure.adapter.out.cv;
 import com.usac.jobseeker.common.domain.model.AccountId;
 import com.usac.jobseeker.cv.application.usecase.getprofilesnapshot.GetProfileSnapshotQuery;
 import com.usac.jobseeker.cv.application.usecase.getprofilesnapshot.GetProfileSnapshotUseCase;
+import com.usac.jobseeker.cv.application.usecase.getprofilesnapshot.GetProfileSnapshotsQuery;
+import com.usac.jobseeker.cv.application.usecase.getprofilesnapshot.GetProfileSnapshotsUseCase;
 import com.usac.jobseeker.cv.application.usecase.getprofilesnapshot.ProfileSnapshot;
 import com.usac.jobseeker.matching.application.usecase.embedentity.CandidateSignalsReader;
 import com.usac.jobseeker.matching.domain.model.CandidateProfileId;
 import com.usac.jobseeker.matching.domain.model.CandidateSignals;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
 
@@ -24,14 +30,32 @@ import org.springframework.stereotype.Component;
 public class CvCandidateSignalsReader implements CandidateSignalsReader {
 
   private final GetProfileSnapshotUseCase snapshots;
+  private final GetProfileSnapshotsUseCase batch;
 
-  public CvCandidateSignalsReader(GetProfileSnapshotUseCase snapshots) {
+  public CvCandidateSignalsReader(
+      GetProfileSnapshotUseCase snapshots, GetProfileSnapshotsUseCase batch) {
     this.snapshots = snapshots;
+    this.batch = batch;
   }
 
   @Override
   public Optional<CandidateSignals> read(AccountId accountId) {
     return snapshots.execute(new GetProfileSnapshotQuery(accountId)).map(this::translate);
+  }
+
+  // Todas las cuentas con pocas consultas (TD-039), con las mismas reglas que la lectura
+  // individual.
+  @Override
+  public Map<AccountId, CandidateSignals> readAll(Collection<AccountId> accountIds) {
+    Map<AccountId, CandidateSignals> found = new HashMap<>();
+    for (int from = 0; from < accountIds.size(); from += GetProfileSnapshotsQuery.MAX_ACCOUNTS) {
+      List<AccountId> chunk =
+          accountIds.stream().skip(from).limit(GetProfileSnapshotsQuery.MAX_ACCOUNTS).toList();
+      for (ProfileSnapshot snapshot : batch.execute(new GetProfileSnapshotsQuery(chunk))) {
+        found.put(new AccountId(snapshot.accountId()), translate(snapshot));
+      }
+    }
+    return found;
   }
 
   private CandidateSignals translate(ProfileSnapshot s) {
