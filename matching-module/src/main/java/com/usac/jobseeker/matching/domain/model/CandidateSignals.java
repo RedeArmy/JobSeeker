@@ -46,6 +46,41 @@ public record CandidateSignals(
     workAuthorizations = List.copyOf(workAuthorizations);
   }
 
+  /**
+   * El mismo candidato **como si además declarara** estas habilidades e idiomas: es lo que usa el
+   * «qué pasaría si» (REQ-C-01). Una habilidad o idioma que ya declaraba se sustituye por el nuevo
+   * valor, y nada más cambia. No se persiste ni sale de aquí: es aritmética sobre una copia.
+   */
+  public CandidateSignals withAdditional(List<Skill> extraSkills, List<Language> extraLanguages) {
+    List<Skill> mergedSkills = new java.util.ArrayList<>(skills);
+    for (Skill extra : extraSkills) {
+      mergedSkills.removeIf(existing -> existing.name().equalsIgnoreCase(extra.name()));
+      mergedSkills.add(extra);
+    }
+    List<Language> mergedLanguages = new java.util.ArrayList<>(languages);
+    for (Language extra : extraLanguages) {
+      mergedLanguages.removeIf(existing -> existing.language().equalsIgnoreCase(extra.language()));
+      mergedLanguages.add(extra);
+    }
+    return new CandidateSignals(
+        profileId,
+        accountId,
+        discoverable,
+        headline,
+        countryOfResidence,
+        desiredModality,
+        preferredWorkSchedule,
+        relocationWillingness,
+        salary,
+        experiences,
+        education,
+        certifications,
+        projects,
+        mergedSkills,
+        mergedLanguages,
+        workAuthorizations);
+  }
+
   public record Salary(BigDecimal min, BigDecimal max, String currency, String period) {}
 
   public record Experience(

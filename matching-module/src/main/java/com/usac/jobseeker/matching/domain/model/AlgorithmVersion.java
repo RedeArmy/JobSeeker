@@ -17,6 +17,20 @@ public record AlgorithmVersion(
     Objects.requireNonNull(calibrationHash, "calibrationHash");
   }
 
+  /**
+   * Reconstruye la versión desde su forma corta (`código|modelo|hash8|hash8`). Los *hashes* quedan
+   * abreviados a 8 caracteres, que es lo único que se guarda; sirve para mostrar y comparar, no
+   * para recalcular el *hash* completo.
+   */
+  public static AlgorithmVersion parse(String value) {
+    String[] parts = value.split("\\|", -1);
+    final int expectedParts = 4;
+    if (parts.length != expectedParts) {
+      throw new IllegalArgumentException("una versión del algoritmo tiene cuatro partes");
+    }
+    return new AlgorithmVersion(parts[0], parts[1], parts[2], parts[3]);
+  }
+
   /** La forma corta que se guarda y se muestra; los *hashes* se abrevian a 8 caracteres. */
   public String value() {
     return code

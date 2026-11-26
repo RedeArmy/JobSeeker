@@ -146,4 +146,39 @@ class ScoringTypesTest {
     assertThat(Availability.of("lo-que-sea")).isEqualTo(Availability.UNSET);
     assertThat(Availability.of(null)).isEqualTo(Availability.UNSET);
   }
+
+  // TD-036: la versión se guarda abreviada y se reconstruye para mostrarla y compararla.
+  @Test
+  void anAlgorithmVersionRoundTripsThroughItsShortForm() {
+    var full = new AlgorithmVersion("1", "qwen3-embedding:0.6b", "a".repeat(64), "b".repeat(64));
+
+    var parsed = AlgorithmVersion.parse(full.value());
+
+    assertThat(parsed.value()).isEqualTo(full.value());
+    assertThat(parsed.code()).isEqualTo("1");
+    assertThat(parsed.model()).isEqualTo("qwen3-embedding:0.6b");
+  }
+
+  @Test
+  void aMalformedVersionIsRefused() {
+    assertThatThrownBy(() -> AlgorithmVersion.parse("1|modelo|abc"))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> AlgorithmVersion.parse("1|a|b|c|d"))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void onlyPublishedAndClosedJobsAreVisibleToCandidates() {
+    var id = new JobPostingId(java.util.UUID.randomUUID());
+    java.util.function.Function<String, JobSignals> job =
+        status ->
+            new JobSignals(id, 1, false, false, status, "t", "d", null, null, null, List.of());
+
+    assertThat(job.apply("PUBLISHED").visibleToCandidates()).isTrue();
+    assertThat(job.apply("CLOSED").visibleToCandidates()).isTrue();
+    for (String hidden : new String[] {"DRAFT", "ARCHIVED", "DELETED", "OTRO"}) {
+      assertThat(job.apply(hidden).visibleToCandidates()).as(hidden).isFalse();
+    }
+    assertThat(job.apply(null).visibleToCandidates()).isFalse();
+  }
 }

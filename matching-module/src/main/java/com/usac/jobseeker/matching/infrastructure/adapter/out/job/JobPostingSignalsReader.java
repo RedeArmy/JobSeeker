@@ -42,6 +42,7 @@ public class JobPostingSignalsReader implements JobSignalsReader {
         s.version(),
         PUBLISHED.equals(s.status()),
         REVIEWING.equals(s.recruitingStage()),
+        s.status(),
         s.title(),
         s.description(),
         s.modality(),
