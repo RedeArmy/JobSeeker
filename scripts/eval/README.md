@@ -57,3 +57,18 @@ Usan datos sintéticos con verdad conocida (dos clases normales, cuya calibraci�
 logística exacta) y comprueban, entre otras cosas, que Platt la recupera, que el *bootstrap* no
 fusiona vacantes repetidas y que una etiqueta ambigua nunca se enlaza sola. Se comprobó además, con
 errores introducidos a propósito, que las pruebas detectan los fallos que importan.
+
+## Recall de la recuperación (control C1) y emisión de la calibración (TD-037)
+
+```
+python3 -I scripts/eval/matching_eval.py retrieval-recall --pairs pares.csv --cap 200 --min 0.95
+python3 -I scripts/eval/matching_eval.py emit-config --pairs pares.csv --model qwen3-embedding:0.6b
+```
+
+Ambos leen el mismo CSV de pares etiquetados que `calibrate` (`vacancy_id`, `candidate_id`, `cosine`, `label` 0-3).
+
+- **`retrieval-recall`** informa qué fracción de los pares relevantes (etiqueta ≥ 2) queda entre los `--cap` de mayor coseno por vacante, que es lo que recupera la etapa 1 de los sugeridos, con intervalo de confianza remuestreando vacantes y veredicto frente a `--min`. El CSV debe traer el conjunto **completo** de cada vacante; si todos los conjuntos tienen `--cap` pares o menos, avisa de que el control no informa de nada. Código de salida 0 si cumple, 1 si no.
+- **`emit-config`** ajusta Platt y emite `jobseeker.matching.scoring.calibration.a` y `.b` para pegarlos en la configuración. **Se niega a emitir** (código 1, sin salida estándar) si hay menos de `--min-pairs` pares o `--min-vacancies` vacantes, si falta una clase, si la pendiente no es positiva (la función no sería monótona), si el error de calibración **fuera de pliegue** supera `--max-ece` o si el Brier fuera de pliegue no mejora el de la tasa base: publicar parámetros que no pasan esas pruebas haría `calibrated: true` sin serlo.
+
+Con datos sintéticos solo demuestran que las guardas se comportan; los parámetros que se publiquen salen de pares reales etiquetados por dos personas (κ ≥ 0,6).
+
