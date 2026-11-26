@@ -13,8 +13,8 @@
 # publican solo en 127.0.0.1: nada del stack es accesible desde la red. Los valores salen de `.env`
 # (ver .env.example); `scripts/dev-up.sh` lo genera la primera vez.
 #
-# Aún no incluidos, porque sus ADR no están escritos: ClamAV y MinIO (ADR-0021, almacenamiento de
-# archivos). Clavaris, el proveedor de identidad, vive en ../Clavaris con su propio compose.
+# Aún no incluidos: SeaweedFS y ClamAV (ADR-0021, almacenamiento de archivos), que entran con su
+# bloque; ClamAV irá en un perfil opcional por su memoria (hasta 1,85 GiB al recargar firmas). Clavaris, el proveedor de identidad, vive en ../Clavaris con su propio compose.
 name: jobseeker
 
 services:
