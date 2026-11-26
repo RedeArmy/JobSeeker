@@ -1,5 +1,6 @@
 package com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob;
 
+import com.usac.jobseeker.matching.application.usecase.calculatecompatibilityscore.ScoreStorePort;
 import com.usac.jobseeker.matching.application.usecase.embedentity.CandidateSignalsReader;
 import com.usac.jobseeker.matching.application.usecase.embedentity.EmbeddingStorePort;
 import com.usac.jobseeker.matching.application.usecase.embedentity.JobSignalsReader;
@@ -17,7 +18,8 @@ public record SuggestionsSources(
     CandidateRetrievalPort retrieval,
     CandidateSignalsReader candidates,
     JobSignalsReader jobs,
-    AvailabilityPort availability) {
+    AvailabilityPort availability,
+    ScoreStorePort scores) {
 
   public SuggestionsSources {
     Objects.requireNonNull(ownedJobs, "ownedJobs");
@@ -26,5 +28,6 @@ public record SuggestionsSources(
     Objects.requireNonNull(candidates, "candidates");
     Objects.requireNonNull(jobs, "jobs");
     Objects.requireNonNull(availability, "availability");
+    Objects.requireNonNull(scores, "scores");
   }
 }

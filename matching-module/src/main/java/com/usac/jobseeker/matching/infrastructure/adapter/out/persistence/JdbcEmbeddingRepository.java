@@ -1,6 +1,8 @@
 package com.usac.jobseeker.matching.infrastructure.adapter.out.persistence;
 
 import com.usac.jobseeker.common.domain.model.AccountId;
+import com.usac.jobseeker.matching.application.usecase.calculatecompatibilityscore.PairSimilarityPort;
+import com.usac.jobseeker.matching.application.usecase.calculatecompatibilityscore.ProfileDirectoryPort;
 import com.usac.jobseeker.matching.application.usecase.embedentity.EmbeddingStorePort;
 import com.usac.jobseeker.matching.application.usecase.embedentity.JobEmbeddingState;
 import com.usac.jobseeker.matching.application.usecase.embedentity.ProfileEmbeddingState;
@@ -15,7 +17,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -25,7 +30,11 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * viajan como texto `[a,b,c]` y se convierten con `cast(... as vector)`: es el formato que pgvector
  * admite sin necesidad de un tipo propio del driver.
  */
-public class JdbcEmbeddingRepository implements EmbeddingStorePort, CandidateRetrievalPort {
+public class JdbcEmbeddingRepository
+    implements EmbeddingStorePort,
+        CandidateRetrievalPort,
+        PairSimilarityPort,
+        ProfileDirectoryPort {
 
   /**
    * El parámetro de la copia (`discoverable` o `published`), el mismo nombre en todas las
@@ -311,6 +320,96 @@ public class JdbcEmbeddingRepository implements EmbeddingStorePort, CandidateRet
                     new AccountId(rows.getObject("account_id", UUID.class)),
                     rows.getDouble("similarity")))
         .list();
+  }
+
+  // ---- similitud de pares y directorio de perfiles (TD-036) ----
+
+  // Solo se compara con el MISMO modelo (ADR-0018) y con ambos vectores presentes: sin uno de los
+  // dos no hay similitud y el par queda pendiente, nunca puntuado a medias.
+  @Override
+  public Optional<Double> cosine(CandidateProfileId profile, JobPostingId job) {
+    return jdbc.sql(
+            "select 1 - (p.embedding <=> j.embedding) from profile_embeddings p"
+                + " join job_embeddings j on j.embedding_model = p.embedding_model"
+                + " where p.candidate_profile_id = :profile and j.job_posting_id = :job"
+                + " and p.embedding is not null and j.embedding is not null")
+        .param("profile", profile.value())
+        .param("job", job.value())
+        .query(Double.class)
+        .optional();
+  }
+
+  @Override
+  public Map<CandidateProfileId, Double> cosinesForJob(
+      JobPostingId job, Collection<CandidateProfileId> profiles) {
+    Map<CandidateProfileId, Double> found = new HashMap<>();
+    if (profiles.isEmpty()) {
+      return found;
+    }
+    jdbc.sql(
+            "select p.candidate_profile_id, 1 - (p.embedding <=> j.embedding) from profile_embeddings p"
+                + " join job_embeddings j on j.job_posting_id = :job"
+                + " and j.embedding_model = p.embedding_model"
+                + " where p.candidate_profile_id = any(:profiles) and p.embedding is not null"
+                + " and j.embedding is not null")
+        .param("job", job.value())
+        .param("profiles", profiles.stream().map(CandidateProfileId::value).toArray(UUID[]::new))
+        .query(
+            (rows, n) ->
+                found.put(new CandidateProfileId(rows.getObject(1, UUID.class)), rows.getDouble(2)))
+        .list();
+    return found;
+  }
+
+  @Override
+  public Map<JobPostingId, Double> cosinesForProfile(
+      CandidateProfileId profile, Collection<JobPostingId> jobs) {
+    Map<JobPostingId, Double> found = new HashMap<>();
+    if (jobs.isEmpty()) {
+      return found;
+    }
+    jdbc.sql(
+            "select j.job_posting_id, 1 - (p.embedding <=> j.embedding) from profile_embeddings p"
+                + " join job_embeddings j on j.embedding_model = p.embedding_model"
+                + " where p.candidate_profile_id = :profile and j.job_posting_id = any(:jobs)"
+                + " and p.embedding is not null and j.embedding is not null")
+        .param("profile", profile.value())
+        .param("jobs", jobs.stream().map(JobPostingId::value).toArray(UUID[]::new))
+        .query(
+            (rows, n) ->
+                found.put(new JobPostingId(rows.getObject(1, UUID.class)), rows.getDouble(2)))
+        .list();
+    return found;
+  }
+
+  // Una cuenta con lápida no tiene perfil legible: no aparece (BR-DATA-05).
+  @Override
+  public Optional<AccountId> accountOf(CandidateProfileId profile) {
+    return Optional.ofNullable(accountsOf(List.of(profile)).get(profile));
+  }
+
+  @Override
+  public Map<CandidateProfileId, AccountId> accountsOf(Collection<CandidateProfileId> profiles) {
+    Map<CandidateProfileId, AccountId> found = new HashMap<>();
+    if (profiles.isEmpty()) {
+      return found;
+    }
+    jdbc.sql(
+            "select candidate_profile_id, account_id from profile_embedding_accounts"
+                + " where candidate_profile_id = any(:profiles) and anonymized_at is null")
+        .param("profiles", profiles.stream().map(CandidateProfileId::value).toArray(UUID[]::new))
+        .query(
+            (rows, n) ->
+                found.put(
+                    new CandidateProfileId(rows.getObject(1, UUID.class)),
+                    new AccountId(rows.getObject(2, UUID.class))))
+        .list();
+    return found;
+  }
+
+  @Override
+  public Optional<CandidateProfileId> profileOf(AccountId account) {
+    return findProfileIdByAccount(account);
   }
 
   // ---- conversiones ----

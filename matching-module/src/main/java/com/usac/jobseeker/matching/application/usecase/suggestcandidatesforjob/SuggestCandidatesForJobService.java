@@ -14,6 +14,8 @@ import com.usac.jobseeker.matching.domain.model.CandidateSignals;
 import com.usac.jobseeker.matching.domain.model.CompatibilityScore;
 import com.usac.jobseeker.matching.domain.model.EntityEmbedding;
 import com.usac.jobseeker.matching.domain.model.JobSignals;
+import com.usac.jobseeker.matching.domain.model.ScoreReason;
+import com.usac.jobseeker.matching.domain.model.StoredScore;
 import com.usac.jobseeker.matching.domain.service.CandidateCards;
 import com.usac.jobseeker.matching.domain.service.CompatibilityAggregator;
 import com.usac.jobseeker.matching.domain.service.SuggestionRanking;
@@ -135,6 +137,17 @@ public class SuggestCandidatesForJobService implements SuggestCandidatesForJobUs
     }
     views.append(query.recruiter(), query.job(), allowance.allowed(), now);
     List<SuggestedCandidate> shown = allowance.allowed().stream().map(scored::get).toList();
+    // Lo que un reclutador vio es un par «con motivo» (ADR-0017, decisión 9): se guarda su puntaje
+    // vigente, y los recálculos lo mantienen al día. Una sola sentencia para todos los mostrados.
+    sources
+        .scores()
+        .upsertCurrent(
+            shown.stream()
+                .map(
+                    c ->
+                        new StoredScore(
+                            c.profile(), query.job(), c.score(), ScoreReason.SUGGESTED, now))
+                .toList());
     return served(
         SuggestionsResult.Status.OK, shown, allowance.remaining(), recovered.size(), incomplete);
   }

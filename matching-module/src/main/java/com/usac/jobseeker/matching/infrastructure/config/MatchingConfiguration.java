@@ -2,6 +2,10 @@ package com.usac.jobseeker.matching.infrastructure.config;
 
 import com.usac.jobseeker.common.application.observability.UseCaseMetricsPort;
 import com.usac.jobseeker.common.application.outbox.OutboxEventConsumer;
+import com.usac.jobseeker.matching.application.usecase.calculatecompatibilityscore.CalculateCompatibilityScoreService;
+import com.usac.jobseeker.matching.application.usecase.calculatecompatibilityscore.CalculateCompatibilityScoreUseCase;
+import com.usac.jobseeker.matching.application.usecase.calculatecompatibilityscore.ScoreCalculator;
+import com.usac.jobseeker.matching.application.usecase.calculatecompatibilityscore.ScoringSources;
 import com.usac.jobseeker.matching.application.usecase.embedentity.CandidateSignalsReader;
 import com.usac.jobseeker.matching.application.usecase.embedentity.EmbedJobService;
 import com.usac.jobseeker.matching.application.usecase.embedentity.EmbedJobUseCase;
@@ -37,6 +41,7 @@ import com.usac.jobseeker.matching.infrastructure.adapter.out.metrics.ScoringCal
 import com.usac.jobseeker.matching.infrastructure.adapter.out.persistence.JdbcEmbeddingRepository;
 import com.usac.jobseeker.matching.infrastructure.adapter.out.persistence.JdbcEmbeddingWorkQueue;
 import com.usac.jobseeker.matching.infrastructure.adapter.out.persistence.JdbcProfileViewLog;
+import com.usac.jobseeker.matching.infrastructure.adapter.out.persistence.JdbcScoreStore;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.time.Clock;
@@ -124,10 +129,11 @@ class MatchingConfiguration {
   HandleProfileEventUseCase handleProfileEventUseCase(
       JdbcEmbeddingWorkQueue queue,
       JdbcEmbeddingRepository store,
+      JdbcScoreStore scores,
       UseCaseMetricsPort metrics,
       MatchingProperties properties) {
     return new HandleProfileEventService(
-        queue, store, metrics, Clock.systemUTC(), properties.queue().window());
+        queue, store, scores, metrics, Clock.systemUTC(), properties.queue().window());
   }
 
   @Bean
@@ -176,6 +182,7 @@ class MatchingConfiguration {
       CandidateSignalsReader candidates,
       JobSignalsReader jobs,
       AvailabilityPort availability,
+      JdbcScoreStore scoreStore,
       JdbcProfileViewLog views,
       ScoringModel scoring,
       UseCaseMetricsPort metrics,
@@ -183,7 +190,8 @@ class MatchingConfiguration {
     MatchingProperties.Suggestions s = properties.suggestions();
     return new SuggestCandidatesForJobService(
         trust,
-        new SuggestionsSources(ownedJobs, embeddings, embeddings, candidates, jobs, availability),
+        new SuggestionsSources(
+            ownedJobs, embeddings, embeddings, candidates, jobs, availability, scoreStore),
         views,
         new SuggestionsPolicy(
             s.viewQuota(), s.window(), s.maxPageSize(), s.retrievalCap(), s.tieTolerance()),
@@ -224,5 +232,32 @@ class MatchingConfiguration {
   @Bean
   EmbeddingWorker embeddingWorker(ProcessEmbeddingQueueUseCase queue) {
     return new EmbeddingWorker(queue);
+  }
+
+  // ---- puntaje guardado (TD-036, ADR-0031) ----
+
+  @Bean
+  JdbcScoreStore jdbcScoreStore(JdbcClient jdbc) {
+    return new JdbcScoreStore(jdbc);
+  }
+
+  @Bean
+  ScoreCalculator scoreCalculator(ScoringModel scoring) {
+    return new ScoreCalculator(scoring, Clock.systemUTC());
+  }
+
+  @Bean
+  ScoringSources scoringSources(
+      CandidateSignalsReader candidates,
+      JobSignalsReader jobs,
+      JdbcEmbeddingRepository embeddings,
+      JdbcScoreStore scoreStore) {
+    return new ScoringSources(candidates, jobs, embeddings, embeddings, scoreStore);
+  }
+
+  @Bean
+  CalculateCompatibilityScoreUseCase calculateCompatibilityScoreUseCase(
+      ScoringSources sources, ScoreCalculator calculator, UseCaseMetricsPort metrics) {
+    return new CalculateCompatibilityScoreService(sources, calculator, metrics, Clock.systemUTC());
   }
 }

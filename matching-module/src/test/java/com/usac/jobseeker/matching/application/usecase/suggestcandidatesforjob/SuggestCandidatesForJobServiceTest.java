@@ -10,6 +10,7 @@ import com.usac.jobseeker.common.domain.error.SuggestionsDeniedException;
 import com.usac.jobseeker.common.domain.error.SuggestionsDeniedException.Reason;
 import com.usac.jobseeker.common.domain.model.AccountId;
 import com.usac.jobseeker.common.domain.model.RecruiterVerification;
+import com.usac.jobseeker.matching.application.usecase.calculatecompatibilityscore.InMemoryScoreStore;
 import com.usac.jobseeker.matching.application.usecase.embedentity.CandidateSignalsReader;
 import com.usac.jobseeker.matching.application.usecase.embedentity.EmbeddingStorePort;
 import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.OwnedJobPort.OwnedJob;
@@ -21,6 +22,7 @@ import com.usac.jobseeker.matching.domain.model.EmbeddingVector;
 import com.usac.jobseeker.matching.domain.model.EntityEmbedding;
 import com.usac.jobseeker.matching.domain.model.JobPostingId;
 import com.usac.jobseeker.matching.domain.model.JobSignals;
+import com.usac.jobseeker.matching.domain.model.ScoreReason;
 import com.usac.jobseeker.matching.domain.model.Weights;
 import java.lang.reflect.Proxy;
 import java.time.Clock;
@@ -63,6 +65,7 @@ class SuggestCandidatesForJobServiceTest {
   private final List<String> metrics = new ArrayList<>();
   private final List<List<CandidateProfileId>> recorded = new ArrayList<>();
   private final Set<CandidateProfileId> viewed = new HashSet<>();
+  private final InMemoryScoreStore scoreStore = new InMemoryScoreStore();
   private final List<AccountId> availabilityAsked = new ArrayList<>();
   private Optional<RecruiterVerification> verification =
       Optional.of(RecruiterVerification.VERIFIED);
@@ -154,7 +157,8 @@ class SuggestCandidatesForJobServiceTest {
                 candidates.forEach(c -> all.put(c, byAccount.get(c).visible()));
                 return all;
               }
-            }),
+            },
+            scoreStore),
         new ProfileViewLogPort() {
           public void lock(AccountId viewer) {
             calls.add("lock");
@@ -612,6 +616,63 @@ class SuggestCandidatesForJobServiceTest {
     ask(5);
 
     assertThat(availabilityAsked).containsExactly(complete.nearest().account());
+  }
+
+  // TD-036: lo que un reclutador vio es un par con motivo; su puntaje vigente se guarda, una sola
+  // vez.
+  @Test
+  void theShownCandidatesGetTheirCurrentScoreStoredWithTheSuggestedReason() {
+    var shown = candidate(0.9, Availability.UNSET);
+    var second = candidate(0.8, Availability.UNSET);
+
+    var result = ask(5);
+
+    assertThat(scoreStore.upsertCalls).isEqualTo(1);
+    assertThat(scoreStore.current.values())
+        .extracting(s -> s.profile())
+        .containsExactlyInAnyOrder(shown.nearest().candidate(), second.nearest().candidate());
+    assertThat(scoreStore.current.values())
+        .allSatisfy(
+            s -> {
+              assertThat(s.reason()).isEqualTo(ScoreReason.SUGGESTED);
+              assertThat(s.job()).isEqualTo(job);
+            });
+    var first = result.candidates().get(0);
+    assertThat(scoreStore.current.values())
+        .filteredOn(s -> s.profile().equals(first.profile()))
+        .singleElement()
+        .satisfies(s -> assertThat(s.score()).isEqualTo(first.score()));
+  }
+
+  @Test
+  void onlyWhatWasShownIsStoredNotEveryScoredCandidate() {
+    for (int i = 0; i < 8; i++) {
+      candidate(0.9 - i * 0.05, Availability.UNSET);
+    }
+
+    ask(2);
+
+    assertThat(scoreStore.current).hasSize(2);
+  }
+
+  @Test
+  void aDeniedRequestStoresNothing() {
+    candidate(0.9, Availability.UNSET);
+    verification = Optional.of(RecruiterVerification.UNVERIFIED);
+
+    assertThatThrownBy(() -> ask(5)).isInstanceOf(SuggestionsDeniedException.class);
+
+    assertThat(scoreStore.current).isEmpty();
+  }
+
+  @Test
+  void aPausedJobStoresNothing() {
+    owned = Optional.of(new OwnedJob(true, true));
+    candidate(0.9, Availability.UNSET);
+
+    ask(5);
+
+    assertThat(scoreStore.upsertCalls).isZero();
   }
 
   @Test

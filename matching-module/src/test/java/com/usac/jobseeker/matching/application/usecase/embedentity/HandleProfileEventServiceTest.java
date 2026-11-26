@@ -3,6 +3,7 @@ package com.usac.jobseeker.matching.application.usecase.embedentity;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.usac.jobseeker.common.domain.model.AccountId;
+import com.usac.jobseeker.matching.application.usecase.calculatecompatibilityscore.InMemoryScoreStore;
 import com.usac.jobseeker.matching.domain.model.CandidateProfileId;
 import java.time.Clock;
 import java.time.Duration;
@@ -24,6 +25,7 @@ class HandleProfileEventServiceTest {
   private final List<String> discarded = new ArrayList<>();
   private final List<String> metrics = new ArrayList<>();
   private final InMemoryEmbeddingStore store = new InMemoryEmbeddingStore();
+  private final InMemoryScoreStore scores = new InMemoryScoreStore();
 
   private final HandleProfileEventService service =
       new HandleProfileEventService(
@@ -53,6 +55,7 @@ class HandleProfileEventServiceTest {
             }
           },
           store,
+          scores,
           (useCase, outcome) -> metrics.add(useCase + ":" + outcome),
           Clock.fixed(NOW, ZoneOffset.UTC),
           WINDOW);
@@ -85,6 +88,34 @@ class HandleProfileEventServiceTest {
     assertThat(store.buried).contains(account);
     assertThat(discarded).containsExactly("discard");
     assertThat(requests).isEmpty();
+  }
+
+  // BR-DATA-05: no solo el vector: lo derivado del perfil en los puntajes y las copias también.
+  @Test
+  void anAnonymizationAlsoAnonymizesTheStoredScoresOfThatProfile() {
+    var profile = new CandidateProfileId(UUID.randomUUID());
+    store.registerProfile(account, profile);
+
+    handle(ProfileEventKind.ANONYMIZED);
+
+    assertThat(scores.anonymized).containsExactly(profile);
+  }
+
+  @Test
+  void anAnonymizationOfAnAccountWithNoKnownProfileTouchesNoScores() {
+    handle(ProfileEventKind.ANONYMIZED);
+
+    assertThat(scores.anonymized).isEmpty();
+  }
+
+  @Test
+  void anUpdateNeverTouchesTheStoredScoresDirectly() {
+    store.registerProfile(account, new CandidateProfileId(UUID.randomUUID()));
+
+    handle(ProfileEventKind.UPDATED);
+    handle(ProfileEventKind.DISCOVERABILITY_CHANGED);
+
+    assertThat(scores.anonymized).isEmpty();
   }
 
   @Test
