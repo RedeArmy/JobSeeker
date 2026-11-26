@@ -21,11 +21,13 @@ paso "docker compose config (con valores de relleno: solo se valida la estructur
 env \
   DB_DEV_NAME=x DB_DEV_USER=x DB_DEV_PASSWORD=x DB_DEV_PORT=5433 REDIS_PASSWORD=x REDIS_PORT=6380 \
   MAIL_PORT=1025 OLLAMA_PORT=11434 GRAFANA_ADMIN_PASSWORD=x \
-  docker compose --profile ai --profile app config -q || fallo "docker-compose.yml no es válido"
+  STORAGE_ACCESS_KEY=x STORAGE_SECRET_KEY=x STORAGE_PORT=8333 CLAMAV_PORT=3310 \
+  docker compose --profile ai --profile app --profile files config -q || fallo "docker-compose.yml no es válido"
 
 # Las imágenes de Compose se leen con valores de relleno, para no exigir un .env.
 export DB_DEV_NAME=x DB_DEV_USER=x DB_DEV_PASSWORD=x DB_DEV_PORT=5433 REDIS_PASSWORD=x REDIS_PORT=6380 \
-  MAIL_PORT=1025 OLLAMA_PORT=11434 GRAFANA_ADMIN_PASSWORD=x
+  MAIL_PORT=1025 OLLAMA_PORT=11434 GRAFANA_ADMIN_PASSWORD=x \
+  STORAGE_ACCESS_KEY=x STORAGE_SECRET_KEY=x STORAGE_PORT=8333 CLAMAV_PORT=3310
 prom="$(imagen 'prom/prometheus')"
 am="$(imagen 'prom/alertmanager')"
 [ -n "$prom" ] && [ -n "$am" ] || { fallo "no se encontraron las imágenes de Prometheus y Alertmanager en docker-compose.yml"; exit 1; }

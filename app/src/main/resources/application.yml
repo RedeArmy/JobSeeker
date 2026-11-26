@@ -81,6 +81,16 @@ jobseeker:
   # Límite de tasa (ADR-0011): token bucket en Redis. Valores iniciales a calibrar con tráfico real; el
   # nombre de cada política lo asigna `RateLimitRules`. `capacity` es la ráfaga; se reponen
   # `refill-tokens` cada `refill-period`.
+  # ADR-0021: almacén S3 y antivirus. Vacíos, la aplicación arranca y las subidas responden 503.
+  storage:
+    endpoint: ${STORAGE_ENDPOINT:}
+    region: ${STORAGE_REGION:us-east-1}
+    bucket: ${STORAGE_BUCKET:}
+    access-key: ${STORAGE_ACCESS_KEY:}
+    secret-key: ${STORAGE_SECRET_KEY:}
+  malware-scan:
+    host: ${CLAMAV_HOST:}
+    port: ${CLAMAV_PORT:3310}
   ratelimit:
     enabled: true
     policies:

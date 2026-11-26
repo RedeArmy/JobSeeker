@@ -75,6 +75,30 @@
             <groupId>com.bucket4j</groupId>
             <artifactId>bucket4j_jdk17-lettuce</artifactId>
         </dependency>
+        <!-- ADR-0021: almacén de archivos por el protocolo S3. Sin Netty ni Apache: el cliente HTTP
+             del JDK basta para subidas de pocos megabytes y no arrastra otra pila de red. -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>netty-nio-client</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>apache-client</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>apache5-client</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>url-connection-client</artifactId>
+        </dependency>
         <!-- ADR-0012: métricas y salud. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
