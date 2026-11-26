@@ -36,7 +36,8 @@ public class JdbcAnonymizationRepository implements AnonymizationStorePort {
     Optional<Anonymized> marked =
         jdbc.sql(
                 "update professional_profiles set full_name = :name, headline = null, bio = null,"
-                    + " profile_photo_url = null, anonymized_at = :now, version = version + 1,"
+                    + " profile_photo_key = null, profile_photo_type = null, anonymized_at = :now,"
+                    + " version = version + 1,"
                     + " updated_at = :now where account_id = :account and anonymized_at is null"
                     + " returning id, version")
             .param("name", placeholderName)
@@ -86,6 +87,20 @@ public class JdbcAnonymizationRepository implements AnonymizationStorePort {
         .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
         .query(String.class)
         .list();
+  }
+
+  @Override
+  public Optional<String> discardProfilePhoto(AccountId accountId) {
+    return jdbc.sql(
+            "with old as (select id, profile_photo_key from professional_profiles"
+                + " where account_id = :account and anonymized_at is null"
+                + " and profile_photo_key is not null for update)"
+                + " update professional_profiles p set profile_photo_key = null,"
+                + " profile_photo_type = null from old where p.id = old.id"
+                + " returning old.profile_photo_key")
+        .param("account", accountId.value())
+        .query(String.class)
+        .optional();
   }
 
   // Cada sentencia es completa y fija: no se concatena ningún nombre de tabla.
