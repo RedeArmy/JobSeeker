@@ -13,8 +13,9 @@
 # publican solo en 127.0.0.1: nada del stack es accesible desde la red. Los valores salen de `.env`
 # (ver .env.example); `scripts/dev-up.sh` lo genera la primera vez.
 #
-# Aún no incluidos: SeaweedFS y ClamAV (ADR-0021, almacenamiento de archivos), que entran con su
-# bloque; ClamAV irá en un perfil opcional por su memoria (hasta 1,85 GiB al recargar firmas). Clavaris, el proveedor de identidad, vive en ../Clavaris con su propio compose.
+# SeaweedFS y ClamAV (ADR-0021, almacenamiento de archivos) van en el perfil opcional `files`: ClamAV
+# ocupa hasta 1,85 GiB al recargar firmas. Sin ese perfil la aplicación arranca y las subidas
+# responden 503. Clavaris, el proveedor de identidad, vive en ../Clavaris con su propio compose.
 name: jobseeker
 
 services:
@@ -128,6 +129,52 @@ services:
       timeout: 3s
       retries: 30
 
+  seaweedfs:
+    # Almacén S3 de desarrollo (ADR-0021, enmienda 1: MinIO dejó de publicar imágenes). Con
+    # credenciales obligatorias, para que las URLs firmadas se validen como en producción. La
+    # identidad se genera desde .env al arrancar: no hay credenciales escritas en el repositorio.
+    profiles: ["files"]
+    image: chrislusf/seaweedfs:4.53@sha256:ccad23e18639c8b98cee17e7100b95830a06077b56d8e5b006d6dcf8ec5e94a0
+    # Opcionales para Compose: un .env anterior a este perfil no debe impedir levantar el resto del
+    # stack (Compose exige las variables de todos los servicios, aunque su perfil esté inactivo).
+    # Si se arranca el perfil sin credenciales, el contenedor se detiene con un mensaje claro.
+    environment:
+      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY:-}
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY:-}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        { [ -n "$$STORAGE_ACCESS_KEY" ] && [ -n "$$STORAGE_SECRET_KEY" ]; } ||
+        { echo "Define STORAGE_ACCESS_KEY y STORAGE_SECRET_KEY en .env (ver .env.example)" >&2; exit 1; };
+        printf '{"identities":[{"name":"dev","credentials":[{"accessKey":"%s","secretKey":"%s"}],"actions":["Admin","Read","Write","List"]}]}'
+        "$$STORAGE_ACCESS_KEY" "$$STORAGE_SECRET_KEY" > /tmp/s3.json
+        && exec weed server -s3 -s3.port=8333 -s3.config=/tmp/s3.json -dir=/data
+    ports:
+      - "127.0.0.1:${STORAGE_PORT:-8333}:8333"
+    volumes:
+      - seaweedfs-data:/data
+    healthcheck:
+      # 127.0.0.1 y no localhost: dentro del contenedor localhost resuelve a ::1 y weed solo escucha
+      # en IPv4. /healthz responde 200 cuando la pasarela S3 atiende, sin credenciales.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8333/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  clamav:
+    # Antivirus de las subidas (ADR-0021). La imagen trae las firmas y descarga la actualización
+    # diaria; responde ~30 s después de arrancar (13-spike-almacenamiento-s3-y-clamav.md §3).
+    profiles: ["files"]
+    image: clamav/clamav:1.5.5@sha256:64e30c0bf976198024deb3dc6d5cfe2485fb969c0f73549ba0fdb364b9469614
+    ports:
+      - "127.0.0.1:${CLAMAV_PORT:-3310}:3310"
+    healthcheck:
+      test: ["CMD-SHELL", "clamdcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
+
   ollama:
     # Embeddings locales (ADR-0004, ADR-0018); la generación de texto no está en la ruta crítica.
     # Los modelos se bajan con `scripts/dev-up.sh --ai`.
@@ -206,3 +253,4 @@ volumes:
   prometheus-data:
   grafana-data:
   ollama-data:
+  seaweedfs-data:

@@ -50,6 +50,21 @@ class RateLimitRulesTest {
     assertThat(policy("GET", uri)).isEmpty();
   }
 
+  // ADR-0021 §4: toda subida tiene su cubo, reconocida por el tipo de contenido y no por la ruta.
+  @Test
+  void anyMultipartRequestUsesTheUploadPolicyWhateverItsRoute() {
+    var cv = new MockHttpServletRequest("POST", "/api/v1/me/candidate-profile/cv");
+    cv.setContentType("multipart/form-data; boundary=x");
+    var future = new MockHttpServletRequest("PUT", "/app/cualquier/subida");
+    future.setContentType("MULTIPART/form-data");
+    var json = new MockHttpServletRequest("POST", "/api/v1/me/candidate-profile/cv");
+    json.setContentType("application/json");
+
+    assertThat(RateLimitRules.policyFor(cv)).contains("upload");
+    assertThat(RateLimitRules.policyFor(future)).contains("upload");
+    assertThat(RateLimitRules.policyFor(json)).contains("write");
+  }
+
   @Test
   void aRouteNobodyDeclaredIsLimitedAsReadOrWriteInsteadOfEscaping() {
     assertThat(policy("GET", "/ruta/que/nadie/declaro")).contains("read");

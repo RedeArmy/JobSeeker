@@ -42,6 +42,11 @@
             <groupId>org.springframework</groupId>
             <artifactId>spring-context</artifactId>
         </dependency>
+        <!-- Configuración tipada de los límites del CV (`CvFileProperties`), como en `job` y `matching`. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot</artifactId>
+        </dependency>
         <!-- Log estructurado de los casos de uso (ADR-0012): solo la API, el motor lo pone `app`. -->
         <dependency>
             <groupId>org.slf4j</groupId>

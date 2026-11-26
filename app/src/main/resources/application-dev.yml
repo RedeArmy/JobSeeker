@@ -5,6 +5,11 @@ spring:
     username: ${DB_DEV_USER}
     password: ${DB_DEV_PASSWORD}
 
+# En desarrollo el bucket se crea solo si falta (en producción lo crea operaciones, ADR-0021).
+jobseeker:
+  storage:
+    create-bucket-if-missing: true
+
 # Documentación de la API visible solo en desarrollo (ADR-0010).
 springdoc:
   api-docs:

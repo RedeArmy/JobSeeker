@@ -7,6 +7,12 @@
 spring:
   application:
     name: jobseeker
+  # Algo mayor que el máximo de un CV (5 MB, ADR-0021): así un archivo de 5 a 6 MB recibe el
+  # FILE_REJECTED del caso de uso, y lo que pasa de 6 MB se corta antes de leerlo entero.
+  servlet:
+    multipart:
+      max-file-size: 6MB
+      max-request-size: 7MB
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -81,6 +87,16 @@ jobseeker:
   # Límite de tasa (ADR-0011): token bucket en Redis. Valores iniciales a calibrar con tráfico real; el
   # nombre de cada política lo asigna `RateLimitRules`. `capacity` es la ráfaga; se reponen
   # `refill-tokens` cada `refill-period`.
+  # ADR-0021: almacén S3 y antivirus. Vacíos, la aplicación arranca y las subidas responden 503.
+  storage:
+    endpoint: ${STORAGE_ENDPOINT:}
+    region: ${STORAGE_REGION:us-east-1}
+    bucket: ${STORAGE_BUCKET:}
+    access-key: ${STORAGE_ACCESS_KEY:}
+    secret-key: ${STORAGE_SECRET_KEY:}
+  malware-scan:
+    host: ${CLAMAV_HOST:}
+    port: ${CLAMAV_PORT:3310}
   ratelimit:
     enabled: true
     policies:
@@ -95,6 +111,8 @@ jobseeker:
       # Candidatos sugeridos: la superficie más sensible al raspado de datos (amenaza T-N1); más estricto que la
       # lectura, además de la cuota de perfiles únicos de `matching`.
       suggestions: {capacity: 10, refill-tokens: 10, refill-period: 1m, key: ACCOUNT}
+      # Subidas de archivos (multipart): cada una cuesta un escaneo antivirus y almacenamiento (ADR-0021 §4).
+      upload: {capacity: 10, refill-tokens: 10, refill-period: 1h, key: ACCOUNT}
 
   # Bandeja de salida (ADR-0016): sondeo, reintentos con retroceso y tope de intentos.
   outbox:

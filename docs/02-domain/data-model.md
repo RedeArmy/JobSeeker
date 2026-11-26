@@ -407,6 +407,27 @@ CHECK `(is_candidate_enabled OR is_recruiter_enabled)` — toda cuenta debe tene
 
 **Anonimización (BR-DATA-05, ADR-0013):** `contact_email`/`contact_phone`/`raw_cv_text` → `NULL`; el vector del perfil lo borra `matching` al recibir `AccountAnonymized` (§4.7.1); `discoverable` → `false` (forzado, para que un perfil anonimizado nunca vuelva a aparecer en sugerencias); `salary_expectation_*`, `salary_currency` y `salary_period` → `NULL` y `availability_status` → `UNSET` (revisión 24-nov-2026: son los datos más sensibles de la fila y nada los lee tras anonimizar); se conservan solo `country_of_residence`, `desired_modality`, `preferred_work_schedule` y `relocation_willingness`, que son gruesos y no permiten reidentificar a nadie por sí solos. `candidate_work_authorizations`, `candidate_languages` y `candidate_skills` se eliminan físicamente (mismo criterio que las tablas hijas de `professional_profiles`). `anonymized_at` marca el estado terminal; `contact_email` pasa a admitir nulo **solo** con `anonymized_at`, y una restricción `CHECK` exige que un perfil anonimizado no tenga contacto, expectativa salarial ni disponibilidad declarada, ni sea descubrible, y que uno vivo sí tenga correo.
 
+### 4.4.1 `candidate_cv_files` (contexto `cv`)
+
+Versiones del CV cargado (ADR-0021, `tdd/cv-module.md` §10.7, M8). El archivo vive en el almacén S3; aquí solo su referencia. Una fila por versión que nunca se reescribe: la postulación guarda la versión con que se envió.
+
+| Columna | Tipo | Restricciones | Descripción |
+|---|---|---|---|
+| id | uuid | PK | Identificador de la versión |
+| candidate_profile_id | uuid | FK → candidate_profiles.id | Perfil dueño |
+| object_key | text | UNIQUE, NULL, CHECK `cv/{uuid}` | Clave aleatoria del almacén; nula tras el borrado físico |
+| display_name | text | NULL, CHECK longitud ≤ 100 | Nombre saneado con la extensión del tipo detectado; dato personal, nulo al anonimizar |
+| file_type | text | NOT NULL, CHECK IN ('PDF','DOCX') | Tipo detectado por el contenido |
+| size_bytes | integer | NOT NULL, CHECK > 0 | Tamaño |
+| sha256 | char(64) | NOT NULL | Huella; subir el mismo archivo que el vigente no crea otra versión |
+| is_current | boolean | NOT NULL | Una sola vigente por perfil (índice único parcial `uq_ccf_current`) |
+| uploaded_at | timestamptz | NOT NULL | Cuándo se subió |
+| deleted_at | timestamptz | NULL | Al anonimizar |
+
+**Restricciones de coherencia:** una versión borrada no conserva clave ni nombre y no es la vigente (`ck_ccf_deleted`); una viva los tiene (`ck_ccf_live`).
+
+**Anonimización (BR-DATA-05, ADR-0021 §6):** `object_key` y `display_name` a nulo, `is_current` a falso y `deleted_at` fijado, y en la misma transacción el evento `storage.file_deletion_requested` con las claves, cuyo consumidor borra los objetos del almacén. La fila se conserva porque una postulación puede referenciarla.
+
 ### 4.5 `recruiter_profiles` (contexto `cv`)
 
 | Columna | Tipo | Restricciones | Descripción |

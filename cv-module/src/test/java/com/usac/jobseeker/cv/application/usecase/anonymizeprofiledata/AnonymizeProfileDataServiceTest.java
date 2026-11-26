@@ -25,6 +25,7 @@ class AnonymizeProfileDataServiceTest {
   private final List<String> calls = new ArrayList<>();
   private Optional<AnonymizationStorePort.Anonymized> professional = Optional.empty();
   private Optional<AnonymizationStorePort.Anonymized> candidate = Optional.empty();
+  private List<String> cvKeys = List.of();
 
   private final AnonymizeProfileDataService service =
       new AnonymizeProfileDataService(
@@ -38,6 +39,11 @@ class AnonymizeProfileDataServiceTest {
             public Optional<Anonymized> anonymizeCandidate(AccountId id, Instant now) {
               calls.add("candidate:" + now);
               return candidate;
+            }
+
+            public List<String> discardCvFiles(UUID candidateProfileId, Instant now) {
+              calls.add("cv:" + now);
+              return cvKeys;
             }
           },
           events::add,
@@ -64,7 +70,8 @@ class AnonymizeProfileDataServiceTest {
     assertThat(events.get(0).payload())
         .isEqualTo("{\"accountId\":\"" + account + "\",\"version\":5}");
     assertThat(calls)
-        .containsExactly("professional:Candidato eliminado:" + NOW, "candidate:" + NOW);
+        .containsExactly(
+            "professional:Candidato eliminado:" + NOW, "candidate:" + NOW, "cv:" + NOW);
     assertThat(metrics).containsExactly("anonymize_profile_data:anonymized");
   }
 
@@ -88,5 +95,33 @@ class AnonymizeProfileDataServiceTest {
     assertThat(result).isEqualTo(AnonymizeProfileDataUseCase.Result.NOTHING_TO_ANONYMIZE);
     assertThat(events).isEmpty();
     assertThat(metrics).containsExactly("anonymize_profile_data:nothing");
+  }
+
+  // ADR-0021 §6: el borrado físico de los CV se pide en la misma transacción, por la bandeja.
+  @Test
+  void aCandidateWithCvVersionsAlsoRequestsTheirPhysicalDeletion() {
+    candidate = Optional.of(anonymized(4));
+    String first = "cv/" + UUID.randomUUID();
+    String second = "cv/" + UUID.randomUUID();
+    cvKeys = List.of(first, second);
+
+    service.execute(new AnonymizeProfileDataCommand(account));
+
+    assertThat(events)
+        .extracting(OutboxEvent::eventType)
+        .containsExactly("profile.anonymized", "storage.file_deletion_requested");
+    var deletion = events.get(1);
+    assertThat(deletion.aggregateId()).isEqualTo(candidate.get().profileId());
+    assertThat(deletion.payload()).isEqualTo("{\"keys\":[\"" + first + "\",\"" + second + "\"]}");
+    assertThat(deletion.payload()).doesNotContain(account.toString());
+  }
+
+  @Test
+  void aCandidateWithoutCvRequestsNoDeletion() {
+    candidate = Optional.of(anonymized(4));
+
+    service.execute(new AnonymizeProfileDataCommand(account));
+
+    assertThat(events).extracting(OutboxEvent::eventType).containsExactly("profile.anonymized");
   }
 }

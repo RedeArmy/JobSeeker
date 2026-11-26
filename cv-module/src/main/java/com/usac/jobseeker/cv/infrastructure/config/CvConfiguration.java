@@ -2,6 +2,8 @@ package com.usac.jobseeker.cv.infrastructure.config;
 
 import com.usac.jobseeker.common.application.observability.UseCaseMetricsPort;
 import com.usac.jobseeker.common.application.outbox.DomainEventPublisherPort;
+import com.usac.jobseeker.common.application.storage.MalwareScanPort;
+import com.usac.jobseeker.common.application.storage.ObjectStoragePort;
 import com.usac.jobseeker.cv.application.support.CandidateChange;
 import com.usac.jobseeker.cv.application.support.ProfileChange;
 import com.usac.jobseeker.cv.application.support.Stamp;
@@ -11,8 +13,12 @@ import com.usac.jobseeker.cv.application.usecase.changeavailability.ChangeAvaila
 import com.usac.jobseeker.cv.application.usecase.changeavailability.ChangeAvailabilityUseCase;
 import com.usac.jobseeker.cv.application.usecase.changediscoverability.ChangeDiscoverabilityService;
 import com.usac.jobseeker.cv.application.usecase.changediscoverability.ChangeDiscoverabilityUseCase;
+import com.usac.jobseeker.cv.application.usecase.downloadmycv.DownloadMyCvService;
+import com.usac.jobseeker.cv.application.usecase.downloadmycv.DownloadMyCvUseCase;
 import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.GetMyCandidateProfileService;
 import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.GetMyCandidateProfileUseCase;
+import com.usac.jobseeker.cv.application.usecase.getmycv.GetMyCvService;
+import com.usac.jobseeker.cv.application.usecase.getmycv.GetMyCvUseCase;
 import com.usac.jobseeker.cv.application.usecase.getmyprofessionalprofile.GetMyProfessionalProfileService;
 import com.usac.jobseeker.cv.application.usecase.getmyprofessionalprofile.GetMyProfessionalProfileUseCase;
 import com.usac.jobseeker.cv.application.usecase.getprofilesnapshot.GetProfileSnapshotService;
@@ -28,6 +34,9 @@ import com.usac.jobseeker.cv.application.usecase.manageexperiences.ManageExperie
 import com.usac.jobseeker.cv.application.usecase.manageexperiences.ManageExperiencesUseCase;
 import com.usac.jobseeker.cv.application.usecase.manageprojects.ManageProjectsService;
 import com.usac.jobseeker.cv.application.usecase.manageprojects.ManageProjectsUseCase;
+import com.usac.jobseeker.cv.application.usecase.reconcileorphancvfiles.OrphanReconciliationPolicy;
+import com.usac.jobseeker.cv.application.usecase.reconcileorphancvfiles.ReconcileOrphanCvFilesService;
+import com.usac.jobseeker.cv.application.usecase.reconcileorphancvfiles.ReconcileOrphanCvFilesUseCase;
 import com.usac.jobseeker.cv.application.usecase.replacecandidatelanguages.ReplaceCandidateLanguagesService;
 import com.usac.jobseeker.cv.application.usecase.replacecandidatelanguages.ReplaceCandidateLanguagesUseCase;
 import com.usac.jobseeker.cv.application.usecase.replacecandidateskills.ReplaceCandidateSkillsService;
@@ -39,11 +48,17 @@ import com.usac.jobseeker.cv.application.usecase.savecandidateprofile.SaveCandid
 import com.usac.jobseeker.cv.application.usecase.saveprofessionalprofile.CandidateCapabilityPort;
 import com.usac.jobseeker.cv.application.usecase.saveprofessionalprofile.SaveProfessionalProfileService;
 import com.usac.jobseeker.cv.application.usecase.saveprofessionalprofile.SaveProfessionalProfileUseCase;
+import com.usac.jobseeker.cv.application.usecase.uploadcv.CvFilePolicy;
+import com.usac.jobseeker.cv.application.usecase.uploadcv.CvFileSources;
+import com.usac.jobseeker.cv.application.usecase.uploadcv.UploadCvService;
+import com.usac.jobseeker.cv.application.usecase.uploadcv.UploadCvUseCase;
+import com.usac.jobseeker.cv.infrastructure.adapter.in.scheduled.OrphanCvReconciliationJob;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcAnonymizationRepository;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcAvailabilityExclusionRepository;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcCandidateCollectionsRepository;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcCandidateProfileRepository;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcCertificationRepository;
+import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcCvFileRepository;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcEducationRepository;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcExperienceRepository;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcProfessionalProfileRepository;
@@ -51,12 +66,14 @@ import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcProfileC
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcProjectRepository;
 import java.time.Clock;
 import java.util.UUID;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /** Cablea los casos de uso de `cv` como beans: `application` no lleva estereotipos (ADR-0015). */
 @Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties(CvFileProperties.class)
 class CvConfiguration {
 
   @Bean
@@ -267,5 +284,79 @@ class CvConfiguration {
       DomainEventPublisherPort events,
       UseCaseMetricsPort metrics) {
     return new AnonymizeProfileDataService(store, events, metrics, Stamp.system());
+  }
+
+  // ---- CV (sub-paso 7 del diseño de cv, ADR-0021) ----
+
+  @Bean
+  JdbcCvFileRepository jdbcCvFileRepository(JdbcClient jdbc) {
+    return new JdbcCvFileRepository(jdbc);
+  }
+
+  @Bean
+  CvFilePolicy cvFilePolicy(CvFileProperties properties) {
+    return new CvFilePolicy(properties.cvMaxSize().toBytes(), properties.cvMaxVersions());
+  }
+
+  @Bean
+  UploadCvUseCase uploadCvUseCase(
+      CandidateChange change,
+      JdbcCandidateProfileRepository profiles,
+      JdbcCvFileRepository files,
+      ObjectStoragePort storage,
+      MalwareScanPort scanner,
+      CvFilePolicy policy,
+      UseCaseMetricsPort metrics) {
+    return new UploadCvService(
+        change,
+        new CvFileSources(profiles, files, storage, scanner),
+        policy,
+        metrics,
+        Stamp.system());
+  }
+
+  @Bean
+  GetMyCvUseCase getMyCvUseCase(
+      CandidateChange change,
+      JdbcCandidateProfileRepository profiles,
+      JdbcCvFileRepository files,
+      CvFilePolicy policy,
+      UseCaseMetricsPort metrics) {
+    return new GetMyCvService(change, profiles, files, policy, metrics);
+  }
+
+  @Bean
+  DownloadMyCvUseCase downloadMyCvUseCase(
+      CandidateChange change,
+      JdbcCandidateProfileRepository profiles,
+      JdbcCvFileRepository files,
+      ObjectStoragePort storage,
+      UseCaseMetricsPort metrics) {
+    return new DownloadMyCvService(change, profiles, files, storage, metrics);
+  }
+
+  // ---- reconciliación de CV huérfanos (TD-041) ----
+
+  @Bean
+  ReconcileOrphanCvFilesUseCase reconcileOrphanCvFilesUseCase(
+      ObjectStoragePort storage,
+      JdbcCvFileRepository files,
+      CvFileProperties properties,
+      UseCaseMetricsPort metrics) {
+    return new ReconcileOrphanCvFilesService(
+        storage,
+        files,
+        new OrphanReconciliationPolicy(
+            properties.orphanGrace(),
+            properties.orphanPageSize(),
+            properties.orphanScanLimit(),
+            properties.orphanDeleteLimit()),
+        metrics,
+        Clock.systemUTC());
+  }
+
+  @Bean
+  OrphanCvReconciliationJob orphanCvReconciliationJob(ReconcileOrphanCvFilesUseCase reconcile) {
+    return new OrphanCvReconciliationJob(reconcile);
   }
 }

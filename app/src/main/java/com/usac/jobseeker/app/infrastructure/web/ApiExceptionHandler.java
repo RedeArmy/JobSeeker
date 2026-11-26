@@ -2,6 +2,7 @@ package com.usac.jobseeker.app.infrastructure.web;
 
 import com.usac.jobseeker.app.infrastructure.security.ErrorEnvelope;
 import com.usac.jobseeker.common.domain.error.AlreadyExistsException;
+import com.usac.jobseeker.common.domain.error.FileRejectedException;
 import com.usac.jobseeker.common.domain.error.ForbiddenCapabilityException;
 import com.usac.jobseeker.common.domain.error.InvalidStateException;
 import com.usac.jobseeker.common.domain.error.InvalidTransitionException;
@@ -9,6 +10,7 @@ import com.usac.jobseeker.common.domain.error.NotFoundException;
 import com.usac.jobseeker.common.domain.error.PublishingDeniedException;
 import com.usac.jobseeker.common.domain.error.StaleStateException;
 import com.usac.jobseeker.common.domain.error.SuggestionsDeniedException;
+import com.usac.jobseeker.common.domain.error.UpstreamUnavailableException;
 import com.usac.jobseeker.common.domain.error.ValidationFailedException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
@@ -23,6 +25,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 /**
@@ -202,6 +205,59 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     HttpStatus status = HttpStatus.NOT_FOUND;
     return ResponseEntity.status(status)
         .body(ErrorEnvelope.body(request, code(status), message(status)));
+  }
+
+  /**
+   * Un archivo subido no se acepta (ADR-0021): 422 con el motivo como detalle, con la misma forma
+   * que una validación, para que la interfaz diga qué corregir. Nunca devuelve el nombre del
+   * archivo.
+   */
+  @ExceptionHandler(FileRejectedException.class)
+  ResponseEntity<Object> fileRejected(FileRejectedException exception, HttpServletRequest request) {
+    return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
+        .body(
+            ErrorEnvelope.body(
+                request,
+                "FILE_REJECTED",
+                "El archivo no se aceptó.",
+                List.of(Map.of("field", "file", "code", exception.reason().name()))));
+  }
+
+  /**
+   * Un archivo mayor que el límite de `multipart` se corta antes de leerlo: es el mismo rechazo por
+   * tamaño que el del caso de uso, con el mismo contrato, no un 413 genérico.
+   */
+  @Override
+  protected ResponseEntity<Object> handleMaxUploadSizeExceededException(
+      MaxUploadSizeExceededException exception,
+      HttpHeaders headers,
+      HttpStatusCode status,
+      WebRequest request) {
+    return fileRejected(
+        new FileRejectedException(FileRejectedException.Reason.TOO_LARGE),
+        ((ServletWebRequest) request).getRequest());
+  }
+
+  /**
+   * Un servicio del que depende la operación no responde (almacén, antivirus): 503 y el resto del
+   * sistema sigue (`02-hld-system-design.md` §9). Se registra qué servicio falló, nunca la
+   * petición.
+   */
+  @ExceptionHandler(UpstreamUnavailableException.class)
+  ResponseEntity<Object> upstreamUnavailable(
+      UpstreamUnavailableException exception, HttpServletRequest request) {
+    if (LOG.isWarnEnabled()) {
+      LOG.warn(
+          "event=upstream_unavailable dependency={} Un servicio externo no responde",
+          exception.dependency(),
+          exception.getCause());
+    }
+    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+        .body(
+            ErrorEnvelope.body(
+                request,
+                "UPSTREAM_UNAVAILABLE",
+                "Un servicio necesario no está disponible. Inténtalo más tarde."));
   }
 
   /** Lo que nadie previó: 500 sin detalles; la causa queda en el registro con el `traceId`. */

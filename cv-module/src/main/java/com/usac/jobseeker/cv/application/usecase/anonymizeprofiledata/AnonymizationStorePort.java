@@ -2,6 +2,7 @@ package com.usac.jobseeker.cv.application.usecase.anonymizeprofiledata;
 
 import com.usac.jobseeker.common.domain.model.AccountId;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -29,4 +30,11 @@ public interface AnonymizationStorePort {
    * Vacío si no hay perfil o ya estaba.
    */
   Optional<Anonymized> anonymizeCandidate(AccountId accountId, Instant now);
+
+  /**
+   * Marca como borradas las versiones del CV del perfil: sin clave del almacén, sin nombre y sin
+   * vigente (BR-DATA-05). Devuelve las claves que tenían, para pedir su borrado físico (ADR-0021
+   * §6); la fila se conserva porque una postulación puede referenciarla.
+   */
+  List<String> discardCvFiles(UUID candidateProfileId, Instant now);
 }

@@ -8,9 +8,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.usac.jobseeker.common.domain.error.AlreadyExistsException;
 import com.usac.jobseeker.common.domain.error.FieldViolation;
+import com.usac.jobseeker.common.domain.error.FileRejectedException;
 import com.usac.jobseeker.common.domain.error.ForbiddenCapabilityException;
 import com.usac.jobseeker.common.domain.error.NotFoundException;
 import com.usac.jobseeker.common.domain.error.StaleStateException;
+import com.usac.jobseeker.common.domain.error.UpstreamUnavailableException;
 import com.usac.jobseeker.common.domain.error.ValidationFailedException;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -71,6 +73,22 @@ class ApiExceptionHandlerTest {
     String stale() {
       throw new StaleStateException();
     }
+
+    @GetMapping("/rejected-file")
+    String rejectedFile() {
+      throw new FileRejectedException(FileRejectedException.Reason.MALWARE_DETECTED);
+    }
+
+    @GetMapping("/too-big")
+    String tooBig() throws org.springframework.web.multipart.MaxUploadSizeExceededException {
+      throw new org.springframework.web.multipart.MaxUploadSizeExceededException(6 * 1024 * 1024);
+    }
+
+    @GetMapping("/storage-down")
+    String storageDown() {
+      throw new UpstreamUnavailableException(
+          "storage", new java.io.IOException("conexión rechazada a host-interno:8333"));
+    }
   }
 
   private final MockMvc mvc =
@@ -91,6 +109,39 @@ class ApiExceptionHandlerTest {
             .getContentAsString();
 
     assertThat(body).doesNotContain("secreta", "IllegalStateException");
+  }
+
+  // ADR-0021: el motivo viaja como detalle para que la interfaz diga qué corregir.
+  @Test
+  void aRejectedFileIsA422WithItsReason() throws Exception {
+    mvc.perform(get("/rejected-file"))
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(jsonPath("$.error.code").value("FILE_REJECTED"))
+        .andExpect(jsonPath("$.error.details[0].field").value("file"))
+        .andExpect(jsonPath("$.error.details[0].code").value("MALWARE_DETECTED"));
+  }
+
+  // Lo que pasa del límite de multipart recibe el mismo contrato que el rechazo por tamaño del caso
+  // de uso, no un 413 genérico.
+  @Test
+  void anUploadOverTheMultipartLimitIsAFileRejectedTooLarge() throws Exception {
+    mvc.perform(get("/too-big"))
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(jsonPath("$.error.code").value("FILE_REJECTED"))
+        .andExpect(jsonPath("$.error.details[0].code").value("TOO_LARGE"));
+  }
+
+  @Test
+  void anUnavailableDependencyIsA503WithoutItsInternalDetail() throws Exception {
+    String body =
+        mvc.perform(get("/storage-down"))
+            .andExpect(status().isServiceUnavailable())
+            .andExpect(jsonPath("$.error.code").value("UPSTREAM_UNAVAILABLE"))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    assertThat(body).doesNotContain("host-interno", "8333", "storage");
   }
 
   @Test

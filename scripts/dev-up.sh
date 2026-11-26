@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Levanta el stack de desarrollo local (docker-compose.yml) y espera a que esté sano.
 #
-# Uso: bash scripts/dev-up.sh [--ai] [--app]
-#   --ai   añade Ollama y baja el modelo de embeddings (imagen y modelo pesados)
-#   --app  añade la aplicación en un contenedor (se construye desde app/Dockerfile)
+# Uso: bash scripts/dev-up.sh [--ai] [--files] [--app]
+#   --ai     añade Ollama y baja el modelo de embeddings (imagen y modelo pesados)
+#   --files  añade el almacén S3 (SeaweedFS) y el antivirus (ClamAV, hasta 1,85 GiB de memoria)
+#   --app    añade la aplicación en un contenedor (se construye desde app/Dockerfile)
 #
 # La primera vez genera `.env` con contraseñas aleatorias y puertos libres: ese archivo no se versiona
 # (.gitignore) y solo contiene valores de desarrollo local. Los nombres que usa salen de .env.example.
@@ -14,8 +15,9 @@ perfiles=()
 for arg in "$@"; do
   case "$arg" in
     --ai) perfiles+=(--profile ai) ;;
+    --files) perfiles+=(--profile files) ;;
     --app) perfiles+=(--profile app) ;;
-    -h | --help) sed -n '2,10p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,11p' "$0"; exit 0 ;;
     *) echo "opción desconocida: $arg (usa --help)" >&2; exit 2 ;;
   esac
 done
@@ -58,6 +60,15 @@ TOKEN_ENCRYPTION_KEYS=k1:$(openssl rand -base64 32)
 OLLAMA_HOST=localhost
 OLLAMA_PORT=11434
 OLLAMA_EMBEDDING_MODEL=qwen3-embedding:0.6b
+
+# Almacén de archivos y antivirus (ADR-0021), con el perfil `files` (--files).
+STORAGE_ENDPOINT=http://localhost:8333
+STORAGE_BUCKET=jobseeker-dev
+STORAGE_ACCESS_KEY=$(secreto)
+STORAGE_SECRET_KEY=$(secreto)
+STORAGE_PORT=8333
+CLAMAV_HOST=localhost
+CLAMAV_PORT=3310
 
 MAIL_HOST=localhost
 MAIL_PORT=1025
