@@ -12,6 +12,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Iterator;
 import javax.imageio.ImageIO;
+import javax.imageio.ImageReadParam;
 import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
 
@@ -68,15 +69,28 @@ public final class ImageIoPhotoProcessor implements PhotoProcessorPort {
       ImageReader reader = readers.next();
       try {
         reader.setInput(input, true, true);
-        long pixels = (long) reader.getWidth(0) * reader.getHeight(0);
+        int width = reader.getWidth(0);
+        int height = reader.getHeight(0);
+        long pixels = (long) width * height;
         if (pixels <= 0 || pixels > maxPixels) {
           throw unreadable();
         }
-        return reader.read(0);
+        // Se decodifica ya submuestreada: una foto de 40 MP a resolución completa ocupa ~160 MB
+        // de montículo, y la guardada no pasa de `maxSide`. Se deja el doble de resolución para
+        // que la reducción final, bicúbica, conserve la calidad.
+        ImageReadParam param = reader.getDefaultReadParam();
+        int step = subsampling(width, height);
+        param.setSourceSubsampling(step, step, 0, 0);
+        return reader.read(0, param);
       } finally {
         reader.dispose();
       }
     }
+  }
+
+  /** Cuántos píxeles de origen se saltan por cada uno leído: 1 si ya es pequeña. */
+  int subsampling(int width, int height) {
+    return Math.max(1, Math.max(width, height) / (maxSide * 2));
   }
 
   // JPEG no admite transparencia: se dibuja sobre blanco. PNG la conserva.
