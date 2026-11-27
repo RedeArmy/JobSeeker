@@ -41,4 +41,17 @@ public class JdbcAuditLog implements AuditPort {
         .param("details", JSON.writeValueAsString(entry.details()))
         .update();
   }
+
+  /**
+   * Borra como mucho {@code limit} acciones anteriores a {@code cutoff} y devuelve cuántas borró
+   * (TD-010). Usa el índice de `at`.
+   */
+  public int purgeBefore(java.time.Instant cutoff, int limit) {
+    return jdbc.sql(
+            "delete from audit_log where id in (select id from audit_log where at < :cutoff"
+                + " order by at limit :limit)")
+        .param("cutoff", java.time.OffsetDateTime.ofInstant(cutoff, java.time.ZoneOffset.UTC))
+        .param("limit", limit)
+        .update();
+  }
 }
