@@ -185,6 +185,38 @@ class FlagsAndReadsTest {
     assertThat(signals.execute(new GetJobSignalsQuery(UUID.randomUUID()))).isEmpty();
   }
 
+  // La lectura por lotes aplica las mismas reglas que la individual y da lo mismo, vacante por
+  // vacante (coding-standards §8.1).
+  @Test
+  void theBatchReadGivesTheSameSnapshotsAsTheIndividualOne() {
+    JobPostingView published = JobStates.published(f);
+    JobPostingView closed = JobStates.closed(f);
+    JobPostingView draft = f.draft();
+    UUID missing = UUID.randomUUID();
+    var ids =
+        List.of(
+            published.posting().id().value(),
+            closed.posting().id().value(),
+            draft.posting().id().value(),
+            missing);
+
+    var batch =
+        signals.executeAll(
+            com.usac.jobseeker.job.application.usecase.getjobsignals.GetJobSignalsBatchQuery.of(
+                ids));
+
+    assertThat(batch).containsOnlyKeys(ids.get(0), ids.get(1));
+    for (UUID id : batch.keySet()) {
+      assertThat(batch.get(id))
+          .isEqualTo(signals.execute(new GetJobSignalsQuery(id)).orElseThrow());
+    }
+    assertThat(
+            signals.executeAll(
+                com.usac.jobseeker.job.application.usecase.getjobsignals.GetJobSignalsBatchQuery.of(
+                    List.of())))
+        .isEmpty();
+  }
+
   @Test
   void aClosedPostingStillHasSignalsSoExistingScoresStayExplainable() {
     JobPostingView closed = JobStates.closed(f);

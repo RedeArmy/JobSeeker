@@ -80,13 +80,16 @@ public class RecomputeScoresForEntityService implements RecomputeScoresForEntity
       return 0;
     }
     Map<JobPostingId, Double> cosines = sources.similarity().cosinesForProfile(profile.get(), jobs);
+    // Todas las vacantes en una lectura, no una por par: un perfil con 200 pares costaba 400
+    // consultas por cada edición (coding-standards §8.1).
+    Map<JobPostingId, JobSignals> jobSignals = sources.jobs().readAll(jobs);
     Instant now = clock.instant();
     List<StoredScore> fresh = new ArrayList<>();
     for (JobPostingId job : jobs) {
-      Optional<JobSignals> jobSignals = sources.jobs().read(job);
+      JobSignals signalsOfJob = jobSignals.get(job);
       Double cosine = cosines.get(job);
-      if (jobSignals.isPresent() && cosine != null) {
-        fresh.add(recomputed(signals.get(), profile.get(), job, jobSignals.get(), cosine, now));
+      if (signalsOfJob != null && cosine != null) {
+        fresh.add(recomputed(signals.get(), profile.get(), job, signalsOfJob, cosine, now));
       }
     }
     return save(fresh, jobs.size());

@@ -12,7 +12,6 @@ import com.usac.jobseeker.job.application.usecase.createjobposting.CreateJobPost
 import com.usac.jobseeker.job.application.usecase.getjobposting.GetJobPostingService;
 import com.usac.jobseeker.job.application.usecase.getjobposting.GetJobPostingUseCase;
 import com.usac.jobseeker.job.application.usecase.getjobsignals.GetJobSignalsService;
-import com.usac.jobseeker.job.application.usecase.getjobsignals.GetJobSignalsUseCase;
 import com.usac.jobseeker.job.application.usecase.getownedjobstate.GetOwnedJobStateService;
 import com.usac.jobseeker.job.application.usecase.getownedjobstate.GetOwnedJobStateUseCase;
 import com.usac.jobseeker.job.application.usecase.managejobrequirements.ManageJobRequirementsService;
@@ -120,8 +119,10 @@ class JobConfiguration {
     return new GetOwnedJobStateService(postings, metrics);
   }
 
+  // Un solo bean para la lectura individual y la de lotes: dos instancias darían a Spring dos
+  // candidatos para cada interfaz (coding-standards §8.1).
   @Bean
-  GetJobSignalsUseCase getJobSignalsUseCase(
+  GetJobSignalsService getJobSignalsUseCase(
       JdbcJobPostingRepository postings,
       JdbcJobRequirementsRepository requirements,
       UseCaseMetricsPort metrics) {
