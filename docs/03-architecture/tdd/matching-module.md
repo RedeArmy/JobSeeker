@@ -70,6 +70,7 @@ Carpetas de `matching-module/src/main/java/com/usac/jobseeker/matching/applicati
 | `recomputescoresforentity` | Tras `embedentity` | Elige los pares con motivo (postulados activos, vistos recientes) y encola su cálculo | `ReasonedPairsPort`, `WorkQueuePort` |
 | `explainscore` | El usuario abre el desglose | Plantillas deterministas sobre el desglose y «qué pasaría si» (REQ-C-01) sobre el mismo agregador | los de `calculatecompatibilityscore` |
 | `suggestcandidatesforjob` | El reclutador abre los sugeridos | Pipeline de tres etapas del ADR-0017 con filtros de descubribilidad, cuenta activa y exclusión, y desempate `OPEN_TO_WORK` | `CandidateRetrievalPort`, los de `calculatecompatibilityscore` |
+| `purgeexpiredprofileviews` | Lote diario (03:30) | Borra por tandas el registro de perfiles vistos anterior al plazo de retención: 90 días por defecto, configurable y nunca menor que la ventana de la cuota (TD-035) | `ProfileViewRetentionPort` |
 | `migratealgorithmversion` | Operación | Reprocesa por lotes, empezando por los postulados activos, mostrando la versión por fila | `ScoreStorePort`, `WorkQueuePort` |
 | `getapplicantscores` | **Planificado para `ats`.** El pipeline pide los puntajes de sus postulantes | Por lotes, para una vacante y sus perfiles: puntaje vigente con desglose y el de la postulación (`tdd/ats-tracker-modules.md` §5) | `ScoreStorePort` |
 | `snapshotapplicationprofile` | Al postular, dentro de la transacción de `ats` (TD-040) | Guarda la copia inmutable del perfil canónico y la foto del score de ese momento (ADR-0017, decisión 9) | `ApplicationSnapshotPort` |
@@ -203,6 +204,16 @@ Se construyeron los sub-pasos 2, 4, 5 y 7 del orden de entrega (ver `12-lectura-
 - **Aliases (parte de TD-038):** una habilidad cubre un requisito si su nombre normalizado coincide o ambos pertenecen al mismo grupo de alias (36 grupos inequívocos en `SkillAliases`: «JS» y «JavaScript», «k8s» y «Kubernetes»). Lo que solo se parece no se une. Es provisional hasta la taxonomía del ADR-0019.
 - **Versión del algoritmo:** el cambio altera el puntaje de habilidades, así que `CompatibilityAggregator.CODE_VERSION` pasa a 2 y la migración por lotes recalcula los puntajes guardados con la 1 (BR-MATCH-04).
 - **Calibración (TD-037, sigue abierta):** `scripts/eval/matching_eval.py` gana `emit-config`, que emite los parámetros de Platt o se niega si no se cumple el protocolo, y `retrieval-recall` para el control C1. Falta lo único que no se puede construir: pares etiquetados reales.
+
+### 10.6 Revisión de concurrencia y retención (27-nov-2026, TD-043 y TD-035)
+
+- **Lápida de anonimización con candado (TD-043):** guardar el vector o la descubribilidad de un perfil lee la fila de su cuenta `FOR SHARE` dentro de la misma sentencia. Si la anonimización está en curso, la escritura espera a que confirme y lee la versión ya con la lápida; antes leía la foto del inicio de la sentencia y podía reponer un vector recién vaciado. Una prueba intercala ambas operaciones y falla con la guarda anterior.
+- **Retención del registro de vistos (TD-035):** `purgeexpiredprofileviews` borra por tandas de 5 000, hasta 200 tandas por pasada, sin transacción propia: cada tanda confirma sola. Usa el índice nuevo `idx_pvl_viewed_at`, creado `CONCURRENTLY` porque la tabla ya existía. El plazo es `jobseeker.matching.suggestions.view-log-retention` y la política rechaza uno que no supere la ventana de la cuota.
+- **Por qué 90 días** (decidido el 27-nov-2026 a solicitud del responsable del proyecto):
+  - El mínimo técnico es la ventana de la cuota (24 h).
+  - El historial sirve para reconstruir el raspado de candidatos por un reclutador falso (T-N1, riesgo R1, probabilidad y daño altos), que suele descubrirse semanas después, por una denuncia o por la revisión manual de reclutadores (ADR-0029). Un trimestre cubre ese retraso con margen.
+  - Más tiempo no se justifica: cada fila asocia a un reclutador con los candidatos que vio, así que es dato personal de ambos aunque no lleve PII directa (BR-DATA-01).
+  - Si una investigación abierta necesita conservar filas más allá del plazo, se exportan antes de que venzan; el plazo no se alarga para todos.
 
 ## 11. Decisiones abiertas
 

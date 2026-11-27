@@ -30,6 +30,9 @@ import com.usac.jobseeker.matching.application.usecase.explainscore.WhatIfScoreS
 import com.usac.jobseeker.matching.application.usecase.explainscore.WhatIfScoreUseCase;
 import com.usac.jobseeker.matching.application.usecase.migratealgorithmversion.MigrateAlgorithmVersionService;
 import com.usac.jobseeker.matching.application.usecase.migratealgorithmversion.MigrateAlgorithmVersionUseCase;
+import com.usac.jobseeker.matching.application.usecase.purgeexpiredprofileviews.ProfileViewRetentionPolicy;
+import com.usac.jobseeker.matching.application.usecase.purgeexpiredprofileviews.PurgeExpiredProfileViewsService;
+import com.usac.jobseeker.matching.application.usecase.purgeexpiredprofileviews.PurgeExpiredProfileViewsUseCase;
 import com.usac.jobseeker.matching.application.usecase.recomputescoresforentity.RecomputeScoresForEntityService;
 import com.usac.jobseeker.matching.application.usecase.recomputescoresforentity.RecomputeScoresForEntityUseCase;
 import com.usac.jobseeker.matching.application.usecase.snapshotapplicationprofile.SnapshotApplicationProfileService;
@@ -48,6 +51,7 @@ import com.usac.jobseeker.matching.domain.model.Weights;
 import com.usac.jobseeker.matching.infrastructure.adapter.in.event.JobEventsConsumer;
 import com.usac.jobseeker.matching.infrastructure.adapter.in.event.ProfileEventsConsumer;
 import com.usac.jobseeker.matching.infrastructure.adapter.in.job.EmbeddingWorker;
+import com.usac.jobseeker.matching.infrastructure.adapter.in.job.ProfileViewRetentionJob;
 import com.usac.jobseeker.matching.infrastructure.adapter.in.job.ScoreMaintenanceWorker;
 import com.usac.jobseeker.matching.infrastructure.adapter.out.ai.OllamaEmbeddingClient;
 import com.usac.jobseeker.matching.infrastructure.adapter.out.metrics.EmbeddingQueueMetrics;
@@ -299,6 +303,23 @@ class MatchingConfiguration {
         scoring.snapshotRetention(),
         metrics,
         Clock.systemUTC());
+  }
+
+  // TD-035: la ventana de la cuota entra en la política para que el plazo nunca pueda ser menor.
+  @Bean
+  PurgeExpiredProfileViewsUseCase purgeExpiredProfileViewsUseCase(
+      JdbcProfileViewLog views, UseCaseMetricsPort metrics, MatchingProperties properties) {
+    MatchingProperties.Suggestions s = properties.suggestions();
+    return new PurgeExpiredProfileViewsService(
+        views,
+        new ProfileViewRetentionPolicy(s.viewLogRetention(), s.window(), 5_000, 200),
+        metrics,
+        Clock.systemUTC());
+  }
+
+  @Bean
+  ProfileViewRetentionJob profileViewRetentionJob(PurgeExpiredProfileViewsUseCase purge) {
+    return new ProfileViewRetentionJob(purge);
   }
 
   @Bean

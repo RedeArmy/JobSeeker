@@ -126,4 +126,28 @@ class JdbcProfileViewLogTest {
       pool.shutdownNow();
     }
   }
+
+  // TD-035: la purga borra solo lo anterior al plazo y por tandas; lo reciente, que la cuota
+  // cuenta,
+  // queda intacto.
+  @Test
+  void thePurgeDeletesOnlyWhatIsOlderThanTheCutoffInBatches() {
+    var kept = candidate();
+    log.append(
+        viewer,
+        job,
+        List.of(candidate(), candidate(), candidate()),
+        now.minusSeconds(100 * 86_400L));
+    log.append(viewer, job, List.of(kept), now.minusSeconds(3600));
+    Instant cutoff = now.minusSeconds(90 * 86_400L);
+
+    int first = log.purgeViewedBefore(cutoff, 2);
+    int second = log.purgeViewedBefore(cutoff, 2);
+    int third = log.purgeViewedBefore(cutoff, 2);
+
+    assertThat(List.of(first, second, third)).containsExactly(2, 1, 0);
+    assertThat(log.viewedSince(viewer, now.minusSeconds(24 * 3600))).containsExactly(kept);
+    assertThat(jdbc.sql("select count(*) from profile_view_log").query(Integer.class).single())
+        .isOne();
+  }
 }

@@ -1,6 +1,7 @@
 package com.usac.jobseeker.matching.infrastructure.adapter.out.persistence;
 
 import com.usac.jobseeker.common.domain.model.AccountId;
+import com.usac.jobseeker.matching.application.usecase.purgeexpiredprofileviews.ProfileViewRetentionPort;
 import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.ProfileViewLogPort;
 import com.usac.jobseeker.matching.domain.model.CandidateProfileId;
 import com.usac.jobseeker.matching.domain.model.JobPostingId;
@@ -24,7 +25,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  *       pedidos del mismo reclutador se ponen en fila y el segundo ve lo que registró el primero.
  * </ul>
  */
-public class JdbcProfileViewLog implements ProfileViewLogPort {
+public class JdbcProfileViewLog implements ProfileViewLogPort, ProfileViewRetentionPort {
 
   private static final String CONTEXT = "SUGGESTION";
 
@@ -72,6 +73,18 @@ public class JdbcProfileViewLog implements ProfileViewLogPort {
         .param("job", job.value())
         .param("context", CONTEXT)
         .param("at", OffsetDateTime.ofInstant(at, ZoneOffset.UTC))
+        .update();
+  }
+
+  // Por tandas y por el índice de `viewed_at` (TD-035): cada sentencia borra como mucho `limit`
+  // filas.
+  @Override
+  public int purgeViewedBefore(Instant cutoff, int limit) {
+    return jdbc.sql(
+            "delete from profile_view_log where id in (select id from profile_view_log"
+                + " where viewed_at < :cutoff order by viewed_at limit :limit)")
+        .param("cutoff", OffsetDateTime.ofInstant(cutoff, ZoneOffset.UTC))
+        .param("limit", limit)
         .update();
   }
 }
