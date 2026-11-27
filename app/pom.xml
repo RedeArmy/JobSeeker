@@ -132,8 +132,8 @@
             <groupId>org.springframework.session</groupId>
             <artifactId>spring-session-data-redis</artifactId>
         </dependency>
-        <!-- Datos: Flyway es la única fuente de verdad del esquema (data-model.md §2, ADR-0027). JPA
-             entra con el primer módulo que persista entidades. -->
+        <!-- Datos: Flyway es la única fuente de verdad del esquema (data-model.md §2, ADR-0027). La
+             persistencia es JDBC explícito con JdbcClient, sin JPA (ADR-0032). -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-jdbc</artifactId>
