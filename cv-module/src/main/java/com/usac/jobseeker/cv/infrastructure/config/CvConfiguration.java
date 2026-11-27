@@ -13,6 +13,8 @@ import com.usac.jobseeker.cv.application.usecase.changeavailability.ChangeAvaila
 import com.usac.jobseeker.cv.application.usecase.changeavailability.ChangeAvailabilityUseCase;
 import com.usac.jobseeker.cv.application.usecase.changediscoverability.ChangeDiscoverabilityService;
 import com.usac.jobseeker.cv.application.usecase.changediscoverability.ChangeDiscoverabilityUseCase;
+import com.usac.jobseeker.cv.application.usecase.checkapplicationreadiness.CheckApplicationReadinessService;
+import com.usac.jobseeker.cv.application.usecase.checkapplicationreadiness.CheckApplicationReadinessUseCase;
 import com.usac.jobseeker.cv.application.usecase.downloadmycv.DownloadMyCvService;
 import com.usac.jobseeker.cv.application.usecase.downloadmycv.DownloadMyCvUseCase;
 import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.GetMyCandidateProfileService;
@@ -316,6 +318,16 @@ class CvConfiguration {
       CvFilePolicy policy,
       UseCaseMetricsPort metrics) {
     return new UploadCvService(change, sources, policy, metrics, Stamp.system());
+  }
+
+  // Interna para `ats` (BR-CAND-01, `tdd/ats-tracker-modules.md` §5).
+  @Bean
+  CheckApplicationReadinessUseCase checkApplicationReadinessUseCase(
+      JdbcProfessionalProfileRepository professionals,
+      JdbcCandidateProfileRepository candidates,
+      JdbcCvFileRepository files,
+      UseCaseMetricsPort metrics) {
+    return new CheckApplicationReadinessService(professionals, candidates, files, metrics);
   }
 
   @Bean

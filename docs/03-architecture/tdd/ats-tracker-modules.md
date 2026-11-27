@@ -126,7 +126,7 @@ Casos de uso **internos** nuevos que `ats` y `tracker` consumen. Se nombran aqu�
 |---|---|---|---|
 | `job` | `getapplicationgate` | Para (cuenta, vacante): `OPEN`, `NOT_FOUND` (no existe o no es visible para candidatos), `NOT_ACCEPTING` (cerrada o con `acceptingApplications = false`, BR-JOB-10) u `OWN_JOB` (BR-ACCT-05) | `getjobposting` devuelve al candidato un contrato sin dueño ni pausa; `getownedjobstate` solo responde al dueño |
 | `job` | `getownedjobstate` (existe) | Si una vacante es del reclutador | Se reutiliza para autorizar el pipeline |
-| `cv` | `checkapplicationreadiness` | Qué le falta a la cuenta para postular según BR-CAND-01 (nombre, contacto, CV) y el identificador del CV vigente | El perfil de candidato no sabe hoy si hay CV; la regla debe vivir con el dato |
+| `cv` | `checkapplicationreadiness` (existe) | Qué le falta a la cuenta para postular según BR-CAND-01 (nombre, contacto, CV), el perfil de candidato y el identificador del CV vigente | El perfil de candidato no sabe si hay CV; la regla vive con el dato |
 | `cv` | `getapplicantprofiles` | Por lotes: nombre, titular y contacto de los postulantes. Solo lo llama `ats` **después** de autorizar al reclutador | `getprofilesnapshot` excluye nombre y contacto a propósito (minimización); el reclutador de una postulación sí debe verlos (REQ-C-07) |
 | `cv` | `presigncvdownload` | La URL firmada de una versión concreta del CV (ADR-0021 §3), sin autorizar: autoriza quien la pide | La autorización depende de la postulación, que `cv` no conoce (ARCH-06) |
 | `matching` | `snapshotapplicationprofile` (existe) | Copia del perfil y foto del puntaje al postular y al cambiar de etapa | Cierra TD-040 |
@@ -231,7 +231,7 @@ Las pantallas HTMX (`/app/applications/**` del candidato y `/app/jobs/{id}/pipel
 
 | Sub-paso | Entrega | Depende de |
 |---|---|---|
-| 0 | Subida y descarga del CV en `cv` (`checkapplicationreadiness` incluido) | ADR-0021 (aprobado) y sus verificaciones V1 a V3 |
+| 0 | Subida y descarga del CV en `cv` (`checkapplicationreadiness` incluido). **Hecho:** la subida y la descarga llegaron con el bloque de archivos (ADR-0021); `checkapplicationreadiness` se construyó el 27-nov-2026 | ADR-0021 (aprobado) y sus verificaciones V1 a V3 |
 | 1 | Migración de `applications` (A1, A3, A4) y `application_status_history` (A2); dominio con la máquina de estados y su prueba exhaustiva | 0 |
 | 2 | `getapplicationgate` en `job`; `submitapplication` con idempotencia, copia en `matching` (TD-040) y su evento; API | 1 |
 | 3 | `withdrawapplication`; `listcandidateapplications`; `tracker` con `listmyapplications` y `getmyapplication` | 2 |

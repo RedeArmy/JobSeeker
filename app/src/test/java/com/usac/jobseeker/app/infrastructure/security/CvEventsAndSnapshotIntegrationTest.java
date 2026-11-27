@@ -82,6 +82,11 @@ class CvEventsAndSnapshotIntegrationTest {
   private com.usac.jobseeker.cv.application.usecase.getprofilesnapshot.GetProfileSnapshotUseCase
       snapshots;
 
+  @Autowired
+  private com.usac.jobseeker.cv.application.usecase.checkapplicationreadiness
+          .CheckApplicationReadinessUseCase
+      readiness;
+
   @Autowired private com.usac.jobseeker.app.infrastructure.outbox.OutboxStore store;
   @Autowired private org.springframework.transaction.PlatformTransactionManager transactions;
 
@@ -376,5 +381,43 @@ class CvEventsAndSnapshotIntegrationTest {
                     .GetProfileSnapshotQuery(
                     new com.usac.jobseeker.common.domain.model.AccountId(id))))
         .isEmpty();
+  }
+
+  // BR-CAND-01 contra las tablas reales: el CV vigente cuenta, uno borrado no, y una cuenta
+  // anonimizada no puede postular aunque sus filas sigan ahí.
+  @Test
+  void readinessFollowsTheRealProfilesAndCvVersions() throws Exception {
+    UUID id = candidateWithEverything();
+    var query =
+        new com.usac.jobseeker.cv.application.usecase.checkapplicationreadiness
+            .CheckApplicationReadinessQuery(
+            new com.usac.jobseeker.common.domain.model.AccountId(id));
+    var cv =
+        com.usac.jobseeker.cv.application.usecase.checkapplicationreadiness.MissingRequirement.CV;
+
+    assertThat(readiness.execute(query).missing()).containsExactly(cv);
+
+    UUID profile =
+        jdbc.queryForObject(
+            "select id from candidate_profiles where account_id = ?", UUID.class, id);
+    UUID old = UUID.randomUUID();
+    UUID current = UUID.randomUUID();
+    String insert =
+        "insert into candidate_cv_files (id, candidate_profile_id, object_key, display_name,"
+            + " file_type, size_bytes, sha256, is_current, uploaded_at)"
+            + " values (?, ?, ?, 'cv.pdf', 'PDF', 10, repeat('a', 64), ?, now())";
+    jdbc.update(insert, old, profile, "cv/" + UUID.randomUUID(), false);
+    jdbc.update(insert, current, profile, "cv/" + UUID.randomUUID(), true);
+
+    var ready = readiness.execute(query);
+    assertThat(ready.ready()).isTrue();
+    assertThat(ready.candidateProfileId()).contains(profile);
+    assertThat(ready.currentCvFileId()).contains(current);
+
+    anonymize.execute(
+        new com.usac.jobseeker.cv.application.usecase.anonymizeprofiledata
+            .AnonymizeProfileDataCommand(new com.usac.jobseeker.common.domain.model.AccountId(id)));
+
+    assertThat(readiness.execute(query).missing()).hasSize(3);
   }
 }
