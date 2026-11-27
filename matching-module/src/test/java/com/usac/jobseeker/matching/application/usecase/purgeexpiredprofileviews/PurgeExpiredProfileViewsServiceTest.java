@@ -64,14 +64,15 @@ class PurgeExpiredProfileViewsServiceTest {
   @Test
   void theRetentionCannotBeShorterThanTheQuotaWindow() {
     Duration hours = Duration.ofHours(12);
+    Duration quarter = Duration.ofDays(90);
 
     assertThatThrownBy(() -> new ProfileViewRetentionPolicy(hours, DAY, 10, 1))
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(() -> new ProfileViewRetentionPolicy(DAY, DAY, 10, 1))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> new ProfileViewRetentionPolicy(Duration.ofDays(90), DAY, 0, 1))
+    assertThatThrownBy(() -> new ProfileViewRetentionPolicy(quarter, DAY, 0, 1))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> new ProfileViewRetentionPolicy(Duration.ofDays(90), DAY, 1, 0))
+    assertThatThrownBy(() -> new ProfileViewRetentionPolicy(quarter, DAY, 1, 0))
         .isInstanceOf(IllegalArgumentException.class);
   }
 }
