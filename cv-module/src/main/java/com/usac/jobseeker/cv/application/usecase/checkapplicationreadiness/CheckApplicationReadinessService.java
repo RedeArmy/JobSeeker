@@ -5,6 +5,7 @@ import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.Candidate
 import com.usac.jobseeker.cv.application.usecase.getmyprofessionalprofile.ProfessionalProfileReadPort;
 import com.usac.jobseeker.cv.application.usecase.uploadcv.CvFileStorePort;
 import com.usac.jobseeker.cv.domain.model.CandidateProfile;
+import com.usac.jobseeker.cv.domain.model.CvFile;
 import java.util.EnumSet;
 import java.util.Objects;
 import java.util.Optional;
@@ -50,8 +51,7 @@ public class CheckApplicationReadinessService implements CheckApplicationReadine
     if (candidate.isEmpty()) {
       missing.add(MissingRequirement.CONTACT);
     }
-    Optional<UUID> cv =
-        candidate.flatMap(profile -> files.current(profile.id())).map(file -> file.id());
+    Optional<UUID> cv = candidate.flatMap(profile -> files.current(profile.id())).map(CvFile::id);
     if (cv.isEmpty()) {
       missing.add(MissingRequirement.CV);
     }

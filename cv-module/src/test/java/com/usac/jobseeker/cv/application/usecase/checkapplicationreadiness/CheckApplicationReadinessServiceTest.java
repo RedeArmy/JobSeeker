@@ -114,16 +114,18 @@ class CheckApplicationReadinessServiceTest {
 
   @Test
   void aReadyResultWithoutProfileOrCvCannotExist() {
-    assertThatThrownBy(() -> new ApplicationReadiness(Set.of(), Optional.empty(), Optional.empty()))
+    Set<MissingRequirement> nothingMissing = Set.of();
+    Optional<UUID> none = Optional.empty();
+
+    assertThatThrownBy(() -> new ApplicationReadiness(nothingMissing, none, none))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
   @Test
   void theMissingSetCannotBeChangedByTheCaller() {
-    ApplicationReadiness readiness = check(me);
+    Set<MissingRequirement> missing = check(me).missing();
 
-    assertThatThrownBy(() -> readiness.missing().clear())
-        .isInstanceOf(UnsupportedOperationException.class);
+    assertThatThrownBy(missing::clear).isInstanceOf(UnsupportedOperationException.class);
   }
 
   private void aProfessionalProfile() {
