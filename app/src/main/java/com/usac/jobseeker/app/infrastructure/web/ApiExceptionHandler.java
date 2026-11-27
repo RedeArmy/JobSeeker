@@ -44,6 +44,10 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
   private static final Logger LOG = LoggerFactory.getLogger(ApiExceptionHandler.class);
 
+  // Las claves de cada elemento de `details`: un campo y un código, en todas las respuestas.
+  private static final String DETAIL_FIELD = "field";
+  private static final String DETAIL_CODE = "code";
+
   /** Errores de MVC y `ResponseStatusException`: conservan su estado, con el sobre estándar. */
   @Override
   protected ResponseEntity<Object> handleExceptionInternal(
@@ -67,7 +71,7 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
       ValidationFailedException exception, HttpServletRequest request) {
     List<Map<String, String>> details =
         exception.violations().stream()
-            .map(v -> Map.of("field", v.field(), "code", v.code()))
+            .map(v -> Map.of(DETAIL_FIELD, v.field(), DETAIL_CODE, v.code()))
             .toList();
     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
         .body(
@@ -178,7 +182,6 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     };
   }
 
-  /** Lo que se quiso crear ya existe: 409 con su propio código, distinto de una versión vieja. */
   /**
    * Una regla de la postulación lo impide (tdd/ats-tracker-modules.md §8): postular a una vacante
    * propia es 403 (BR-ACCT-05) y volver a postular a una que no se retiró es 409 (BR-TRACK-01 y
@@ -210,7 +213,7 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
       ApplicationRequirementsMissingException exception, HttpServletRequest request) {
     List<Map<String, String>> details =
         exception.missing().stream()
-            .map(requirement -> Map.of("field", requirement, "code", "MISSING"))
+            .map(requirement -> Map.of(DETAIL_FIELD, requirement, DETAIL_CODE, "MISSING"))
             .toList();
     return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
         .body(
@@ -233,6 +236,7 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                 "Esa clave de idempotencia ya se usó con otra petición."));
   }
 
+  /** Lo que se quiso crear ya existe: 409 con su propio código, distinto de una versión vieja. */
   @ExceptionHandler(AlreadyExistsException.class)
   ResponseEntity<Object> alreadyExists(HttpServletRequest request) {
     return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -277,7 +281,7 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                 request,
                 "FILE_REJECTED",
                 "El archivo no se aceptó.",
-                List.of(Map.of("field", "file", "code", exception.reason().name()))));
+                List.of(Map.of(DETAIL_FIELD, "file", DETAIL_CODE, exception.reason().name()))));
   }
 
   /**

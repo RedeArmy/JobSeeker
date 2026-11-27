@@ -70,7 +70,9 @@ class IdempotencyKeysIntegrationTest {
     keys.claim(account, "k-1", HASH);
     keys.complete(account, "k-1", "x");
 
-    assertThatThrownBy(() -> keys.claim(account, "k-1", "b".repeat(64)))
+    String otherRequest = "b".repeat(64);
+
+    assertThatThrownBy(() -> keys.claim(account, "k-1", otherRequest))
         .isInstanceOf(IdempotencyKeyReusedException.class);
   }
 

@@ -238,7 +238,8 @@ class SubmitApplicationServiceTest {
         .isInstanceOf(ValidationFailedException.class);
     assertThatThrownBy(() -> new SubmitApplicationCommand(candidate, job, ""))
         .isInstanceOf(ValidationFailedException.class);
-    assertThatThrownBy(() -> new SubmitApplicationCommand(candidate, job, "k".repeat(256)))
+    String tooLong = "k".repeat(256);
+    assertThatThrownBy(() -> new SubmitApplicationCommand(candidate, job, tooLong))
         .isInstanceOf(ValidationFailedException.class);
     assertThat(new SubmitApplicationCommand(candidate, job, "k".repeat(255)).idempotencyKey())
         .hasSize(255);

@@ -14,11 +14,16 @@ public final class ApplicationRequirementsMissingException extends RuntimeExcept
   private final transient List<String> missingRequirements;
 
   public ApplicationRequirementsMissingException(List<String> missing) {
-    super("Faltan datos para postular: " + String.join(", ", missing));
+    super(describe(missing));
+    this.missingRequirements = List.copyOf(missing);
+  }
+
+  // Se valida al construir el mensaje, antes de super(): una excepción sin requisitos no existe.
+  private static String describe(List<String> missing) {
     if (missing.isEmpty()) {
       throw new IllegalArgumentException("Debe faltar al menos un requisito");
     }
-    this.missingRequirements = List.copyOf(missing);
+    return "Faltan datos para postular: " + String.join(", ", missing);
   }
 
   public List<String> missing() {
