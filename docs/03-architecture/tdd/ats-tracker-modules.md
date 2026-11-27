@@ -4,7 +4,7 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | 🟡 En revisión |
-| **Versión** | 0.1 (diseño; nada construido) |
+| **Versión** | 0.2 (diseño; nada construido). Decisiones D1 a D6 cerradas por el responsable el 27-nov-2026 |
 | **Fecha** | 26-nov-2026 |
 | **Documentos relacionados** | ADR-0016 (bandeja de salida), ADR-0017 (F6, copia del perfil al postular), ADR-0021 (archivos), ADR-0027 (dueño de tablas), ADR-0031 (puntaje guardado), `domain-model.md` §3 a §6, `data-model.md` §4.8, §4.16 y §4.17, `03-lld.md` §4.1 y §7, `tdd/job-module.md`, `tdd/cv-module.md` §7, `tdd/matching-module.md` §4, BR-TRACK-01 y 02, BR-CAND-01, BR-ACCT-05, BR-JOB-09 y 10, BR-VIS-01 a 03, BR-DATA-04 y 05, REQ-C-03, REQ-C-07, REQ-R-01 y 03, TD-010, TD-017, TD-040 |
 
@@ -53,7 +53,7 @@ Dos ejes, como propone el LLD §4.1 (punto 4): un `status` grueso que dice si la
 |---|---|---|
 | `ACTIVE` | En proceso | No |
 | `HIRED` | Contratado | Sí |
-| `REJECTED` | Descartado por el reclutador | Sí |
+| `REJECTED` | Descartado por el reclutador | Para el candidato sí; el reclutador puede reabrirla (D3) |
 | `WITHDRAWN` | Retirado por el candidato (REQ-C-03) | Sí |
 
 En la Ola 1 las etapas son un **catálogo fijo**: `NEW → REVIEW → INTERVIEW → OFFER` (la plantilla por defecto de REQ-R-01). En la Ola 2 pasan a ser configurables por vacante (D2).
@@ -65,11 +65,19 @@ En la Ola 1 las etapas son un **catálogo fijo**: `NEW → REVIEW → INTERVIEW 
 | `ACTIVE` | `REJECTED` | reclutador dueño | Con un motivo de un catálogo cerrado (REQ-R-03), nunca texto libre visible al candidato |
 | `ACTIVE` | `HIRED` | reclutador dueño | Desde cualquier etapa |
 | `ACTIVE` | `WITHDRAWN` | candidato dueño | REQ-C-03 |
-| `HIRED`, `REJECTED`, `WITHDRAWN` | — | nadie | Terminales en la Ola 1 (D3) |
+| `REJECTED` | `ACTIVE` (la etapa que tenía) | reclutador dueño | **Reabrir** (D3, BR-TRACK-04): por ejemplo, el elegido no aceptó la oferta y se vuelve a quien ya pasó las pruebas, o a quien se descartó por no responder. Solo mientras la vacante no esté archivada ni eliminada |
+| `HIRED`, `WITHDRAWN` | — | nadie | Terminales (D3) |
 
 Como en `job`, la tabla de transiciones es **la única fuente** de qué puede pasar y se prueba exhaustivamente, cada par con cada iniciador. Toda transición es *compare-and-set* sobre la versión.
 
-**Repostular.** BR-TRACK-01 prohíbe dos postulaciones **activas** a la misma vacante. Tras retirarse se puede volver a postular mientras la vacante acepte postulaciones (REQ-C-03); tras un descarte o una contratación, no, porque la anterior no se retiró. Lo impone un índice único parcial (§7).
+**Etapa pública y estado interno (D1, decidido por el responsable el 27-nov-2026; BR-TRACK-03).** La etapa tiene dos niveles:
+
+- **Etapa pública**: las columnas del tablero kanban (`NEW`, `REVIEW`, `INTERVIEW`, `OFFER`). Es un catálogo **fijo, común a todos los reclutadores**, y es lo que el candidato ve en su tracker junto con el estado, con etiquetas en español (Recibida, En revisión, Entrevista, Oferta). Un final se muestra como Contratado, No continúa o Retirada.
+- **Estado interno**: un estado propio del reclutador dentro de una columna (por ejemplo «Pendiente de aprobar sueldo» dentro de `OFFER`). Pertenece siempre a **exactamente una** columna, solo lo ve el reclutador y nunca sale en las respuestas ni en los eventos dirigidos al candidato. Moverlo dentro de la misma columna no es un cambio visible para el candidato (BR-TRACK-02 se refiere a la columna y al estado).
+
+En la Ola 1 solo existe la etapa pública, con el catálogo fijo (D2, decidido). Los estados internos llegarían con las etapas configurables (REQ-R-01, `managepipelinestages`, Ola 2), previsiblemente como una tabla propia del reclutador y un `internal_stage_id` opcional en la postulación (expandir y contraer); su diseño se cierra con el análisis de esa ola (D2). Lo configurable son los estados internos; las columnas públicas siguen fijas, así el candidato ve siempre el mismo tablero sea cual sea el reclutador.
+
+**Reabrir y repostular (D3, decidido por el responsable el 27-nov-2026; BR-TRACK-04 y BR-TRACK-05).** Un descarte es definitivo **para el candidato**, pero no para el reclutador. El reclutador dueño puede reabrir una postulación descartada, por el motivo que fuera (también la de quien dejó de responder), y vuelve a `ACTIVE` en la etapa que tenía, con su historial intacto: si había pasado las pruebas, sigue en `INTERVIEW` u `OFFER`. El candidato lo ve en su tracker como un cambio más (BR-TRACK-02). El candidato descartado **no puede volver a postular** a esa vacante, porque su proceso terminó; a esa vacante solo vuelve si el reclutador reabre su postulación. Sí puede postular, como cualquiera, a otras vacantes del mismo reclutador. Tras **retirarse** sí puede volver a postular, mientras la vacante acepte postulaciones (REQ-C-03), porque fue él quien lo dejó. Una contratación no se reabre. Lo impone un índice único parcial (§7).
 
 ## 4. Casos de uso
 
@@ -83,6 +91,7 @@ Carpetas de `ats-module/src/main/java/com/usac/jobseeker/ats/application/usecase
 | `withdrawapplication` | El candidato retira una postulación propia y activa | candidato, dueño | `ApplicationStatusChanged` |
 | `changeapplicationstage` | El reclutador mueve una postulación activa de etapa; llama a `snapshotapplicationprofile` con `STAGE_CHANGED` (TD-040) | reclutador, dueño de la vacante | `ApplicationStatusChanged` |
 | `decideapplication` | El reclutador descarta (con motivo) o contrata | reclutador, dueño de la vacante | `ApplicationStatusChanged` |
+| `reopenapplication` | El reclutador reabre una postulación descartada en la etapa que tenía (D3); queda en el historial con quién y cuándo | reclutador, dueño de la vacante | `ApplicationStatusChanged` |
 | `listjobapplications` | El pipeline de una vacante propia: postulaciones con puntaje, ordenadas por puntaje (o fecha) y filtrables por estado, etapa y puntaje mínimo, paginadas | reclutador, dueño de la vacante | — |
 | `getapplication` | El detalle para el reclutador: datos y contacto del candidato (al haber postulado deja de estar enmascarado, REQ-C-07), desglose del puntaje e historial | reclutador, dueño de la vacante | — |
 | `getapplicationcv` | Autoriza y pide la URL firmada del CV **con que se postuló** (ADR-0021 §3) | reclutador, dueño de la vacante | — |
@@ -105,7 +114,7 @@ Carpetas de `tracker-module/src/main/java/com/usac/jobseeker/tracker/application
 |---|---|---|
 | `ats` | `submitapplication` (amplía) | Evalúa la elegibilidad con `validatejobeligibility` de `job` (respeta la invitación) y guarda las respuestas confirmadas (BR-APPQ-05 a 07) |
 | `ats` | `requestfollowup`, `answerfollowup` | Solicitudes de información adicional (BR-FUP-01 a 05) |
-| `ats` | `managepipelinestages` | Etapas configurables por vacante (REQ-R-01) |
+| `ats` | `managepipelinestages` | Estados internos del reclutador (REQ-R-01), cada uno dentro de una columna pública fija; solo visibles para él (D1, BR-TRACK-03) |
 | `ats` | `addapplicationnote` | Notas internas (REQ-R-02) |
 | `tracker` | `getapplicationform` | El formulario con las preguntas prellenadas desde el perfil, para confirmar (BR-APPQ-05/06) |
 
@@ -156,8 +165,11 @@ create table applications (
     updated_at timestamptz not null,
     constraint ck_app_rejection check ((status = 'REJECTED') = (rejection_reason is not null))
 );
--- BR-TRACK-01: una sola activa por candidato y vacante; repostular tras retirarse (REQ-C-03).
-create unique index uq_app_active on applications (candidate_profile_id, job_posting_id) where status = 'ACTIVE';
+-- BR-TRACK-01 y BR-TRACK-05: una sola postulación por candidato y vacante, salvo las retiradas
+-- (REQ-C-03 deja repostular tras retirarse). Una descartada sigue contando: el candidato no puede
+-- crear otra, y reabrirla reutiliza la misma fila (D3).
+create unique index uq_app_one_per_job on applications (candidate_profile_id, job_posting_id)
+    where status <> 'WITHDRAWN';
 create index idx_app_job on applications (job_posting_id, status);
 create index idx_app_candidate on applications (candidate_account_id, applied_at desc);
 
@@ -224,19 +236,19 @@ Las pantallas HTMX (`/app/applications/**` del candidato y `/app/jobs/{id}/pipel
 | 2 | `getapplicationgate` en `job`; `submitapplication` con idempotencia, copia en `matching` (TD-040) y su evento; API | 1 |
 | 3 | `withdrawapplication`; `listcandidateapplications`; `tracker` con `listmyapplications` y `getmyapplication` | 2 |
 | 4 | `getapplicantscores` en `matching` y `getapplicantprofiles` en `cv`; `listjobapplications` y `getapplication` | 2 |
-| 5 | `changeapplicationstage` y `decideapplication`; `presigncvdownload` y `getapplicationcv` | 4, 0 |
+| 5 | `changeapplicationstage`, `decideapplication` y `reopenapplication`; `presigncvdownload` y `getapplicationcv` | 4, 0 |
 | 6 | Pantallas HTMX del candidato y del pipeline | 3, 5 |
 
 ## 11. Decisiones abiertas
 
 | ID | Pregunta | Recomendación |
 |---|---|---|
-| **D1** | ¿El candidato ve la etapa interna (`INTERVIEW`, `OFFER`) o solo el `status`? | Ve las dos: las etapas por defecto son seguras de mostrar y BR-TRACK-02 pide transparencia. Con las etapas configurables de la Ola 2, cada etapa llevará una etiqueta visible al candidato |
-| **D2** | ¿Etapas fijas en la Ola 1 o configurables desde el principio? | Fijas. REQ-R-01 es de la Ola 2 y la migración a configurables es expandir y contraer: tabla de etapas, `stage_id` y copia de los valores |
-| **D3** | ¿Un descarte o una contratación pueden reabrirse? ¿Puede repostular quien fue descartado? | No en la Ola 1: son terminales, y quien fue descartado no repostula a la misma vacante. Si el reclutador se equivocó, la Ola 2 puede añadir una reapertura auditada |
-| **D4** | ¿Cuándo hace falta una proyección del puntaje en `ats` para ordenar el pipeline en SQL? | Cuando una vacante supere el tope de §6 (regla 6) o la medición del pipeline pase de 1 s. Hasta entonces, ordenar en memoria evita duplicar el puntaje |
-| **D5** | El catálogo de motivos de descarte (REQ-R-03 es de la Ola 2; se adelanta un catálogo mínimo porque un descarte sin motivo no se podría auditar después) | Un catálogo corto y cerrado (`NOT_A_FIT`, `POSITION_FILLED`, `CANDIDATE_UNRESPONSIVE`, `OTHER`), interno: el candidato ve «no continúa en el proceso», sin el motivo |
-| **D6** | ¿El candidato recibe un aviso cuando cambia su estado? | Sí, pero llega con las notificaciones (ADR-0022, sin escribir). Hasta entonces BR-TRACK-02 se cumple al consultar el tracker |
+| **D1** | ¿El candidato ve la etapa interna (`INTERVIEW`, `OFFER`) o solo el `status`? | **Decidida el 27-nov-2026 por el responsable:** ve el estado y la etapa pública (las columnas del tablero kanban). Los estados internos que defina el reclutador dentro de una columna son solo suyos (§3.1, BR-TRACK-03) |
+| **D2** | ¿Etapas fijas en la Ola 1 o configurables desde el principio? | **Decidida el 27-nov-2026 por el responsable:** fijas en la Ola 1 (`NEW → REVIEW → INTERVIEW → OFFER`, las columnas públicas de D1). La configuración de la Ola 2 (estados internos del reclutador, REQ-R-01) se decidirá con un análisis más profundo al empezar esa ola; lo escrito en §3.1 y §4.3 sobre ella es la dirección prevista, no un diseño cerrado |
+| **D3** | ¿Un descarte o una contratación pueden reabrirse? ¿Puede repostular quien fue descartado? | **Decidida el 27-nov-2026 por el responsable:** el reclutador puede reabrir un descarte (por ejemplo, el elegido no aceptó y se vuelve a otro que ya pasó las pruebas, o a quien se descartó por no responder); vuelve a la etapa que tenía. El candidato descartado no puede repostular a esa vacante, solo vuelve si el reclutador lo reabre; sí puede postular a otras vacantes del mismo reclutador. Una contratación no se reabre (§3.1, BR-TRACK-04 y BR-TRACK-05) |
+| **D4** | ¿Cuándo hace falta una proyección del puntaje en `ats` para ordenar el pipeline en SQL? | **Decidida el 27-nov-2026 por el responsable:** el pipeline ordena en memoria con el tope de §6 (regla 6), sin duplicar el puntaje en `ats`. La proyección solo se construye cuando una vacante supere ese tope o el pipeline medido pase de 1 s; ese disparador se registrará como deuda técnica al construir el pipeline (sub-paso 4) |
+| **D5** | El catálogo de motivos de descarte (REQ-R-03 es de la Ola 2; se adelanta un catálogo mínimo porque un descarte sin motivo no se podría auditar después) | **Decidida el 27-nov-2026 por el responsable:** catálogo corto y cerrado (`NOT_A_FIT`, `POSITION_FILLED`, `CANDIDATE_UNRESPONSIVE`, `OTHER`), interno: el candidato ve «No continúa», sin el motivo (BR-TRACK-03). Al reabrir (D3) el motivo se quita de la postulación, pero queda en `application_status_history`, así que la auditoría no lo pierde. El catálogo completo de REQ-R-03 se revisa en la Ola 2 |
+| **D6** | ¿El candidato recibe un aviso cuando cambia su estado? | **Decidida el 27-nov-2026 por el responsable:** sí, pero llega con las notificaciones (ADR-0022, sin escribir). En la Ola 1, BR-TRACK-02 se cumple al consultar el tracker. Los eventos `ApplicationStatusChanged` ya salen por la bandeja, así que las notificaciones los consumirán sin cambiar `ats`. Un cambio de estado interno (D1) no genera aviso |
 
 ## 12. No cubierto todavía
 

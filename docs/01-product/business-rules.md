@@ -193,8 +193,11 @@ Después de recibida una postulación, si la información recolectada no fue suf
 
 | ID | Regla | Justificación |
 |---|---|---|
-| BR-TRACK-01 | Un candidato no puede postular dos veces a la misma vacante activa | Evita duplicados en el pipeline del reclutador |
+| BR-TRACK-01 | Un candidato no puede postular dos veces a la misma vacante activa (ver BR-TRACK-05 para después de un descarte) | Evita duplicados en el pipeline del reclutador |
 | BR-TRACK-02 | Todo cambio de estado de una postulación es visible para el candidato en su tracker | Transparencia del proceso |
+| BR-TRACK-03 | El candidato ve el estado de cada postulación y su **etapa pública**: la columna del tablero kanban en la que está (Recibida, En revisión, Entrevista, Oferta) o su final (Contratado, No continúa, Retirada). Los **estados internos** que un reclutador defina dentro de una columna (por ejemplo «Pendiente de aprobar sueldo») solo los ve el reclutador: el candidato ve en su lugar la columna a la que pertenecen. Tampoco ve el motivo interno de un descarte. Decidido por el responsable el 27-nov-2026 (decisión D1 del TDD de `ats`) | Transparencia sobre el avance real sin exponer el razonamiento interno del reclutador |
+| BR-TRACK-04 | Solo el reclutador dueño de la vacante puede **reabrir** una postulación descartada, sea cual sea el motivo del descarte (también si el candidato dejó de responder). Vuelve a estar en proceso en la etapa que tenía, con su historial, y el cambio es visible para el candidato (BR-TRACK-02). Solo mientras la vacante no esté archivada ni eliminada. Una contratación no se reabre. Decidido por el responsable el 27-nov-2026 (D3 del TDD de `ats`) | Si el elegido no acepta, el reclutador recupera a quien ya pasó las pruebas sin empezar de cero |
+| BR-TRACK-05 | Un candidato descartado **no puede volver a postular** a esa vacante: su proceso terminó, y solo vuelve si el reclutador lo reabre (BR-TRACK-04). Sí puede postular a otras vacantes, también del mismo reclutador. Quien se **retiró** sí puede volver a postular mientras la vacante acepte postulaciones (REQ-C-03). Decidido por el responsable el 27-nov-2026 | Evita que un descarte se esquive repostulando, sin cerrar al candidato las demás oportunidades |
 
 ## 8. Reglas de privacidad y datos
 
