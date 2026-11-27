@@ -2,8 +2,11 @@ package com.usac.jobseeker.app.infrastructure.web;
 
 import com.usac.jobseeker.app.infrastructure.security.ErrorEnvelope;
 import com.usac.jobseeker.common.domain.error.AlreadyExistsException;
+import com.usac.jobseeker.common.domain.error.ApplicationDeniedException;
+import com.usac.jobseeker.common.domain.error.ApplicationRequirementsMissingException;
 import com.usac.jobseeker.common.domain.error.FileRejectedException;
 import com.usac.jobseeker.common.domain.error.ForbiddenCapabilityException;
+import com.usac.jobseeker.common.domain.error.IdempotencyKeyReusedException;
 import com.usac.jobseeker.common.domain.error.InvalidStateException;
 import com.usac.jobseeker.common.domain.error.InvalidTransitionException;
 import com.usac.jobseeker.common.domain.error.NotFoundException;
@@ -176,6 +179,60 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
   }
 
   /** Lo que se quiso crear ya existe: 409 con su propio código, distinto de una versión vieja. */
+  /**
+   * Una regla de la postulación lo impide (tdd/ats-tracker-modules.md §8): postular a una vacante
+   * propia es 403 (BR-ACCT-05) y volver a postular a una que no se retiró es 409 (BR-TRACK-01 y
+   * 05).
+   */
+  @ExceptionHandler(ApplicationDeniedException.class)
+  ResponseEntity<Object> applicationDenied(
+      ApplicationDeniedException denied, HttpServletRequest request) {
+    return switch (denied.reason()) {
+      case SELF_APPLICATION ->
+          ResponseEntity.status(HttpStatus.FORBIDDEN)
+              .body(
+                  ErrorEnvelope.body(
+                      request, "SELF_APPLICATION", "No puedes postular a una vacante propia."));
+      case ALREADY_APPLIED ->
+          ResponseEntity.status(HttpStatus.CONFLICT)
+              .body(
+                  ErrorEnvelope.body(
+                      request, "ALREADY_APPLIED", "Ya tienes una postulación a esta vacante."));
+    };
+  }
+
+  /**
+   * Al candidato le falta algo para postular (BR-CAND-01): 422 con cada requisito como detalle, con
+   * la misma forma que una validación, para que la interfaz lo lleve a completarlo.
+   */
+  @ExceptionHandler(ApplicationRequirementsMissingException.class)
+  ResponseEntity<Object> requirementsMissing(
+      ApplicationRequirementsMissingException exception, HttpServletRequest request) {
+    List<Map<String, String>> details =
+        exception.missing().stream()
+            .map(requirement -> Map.of("field", requirement, "code", "MISSING"))
+            .toList();
+    return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
+        .body(
+            ErrorEnvelope.body(
+                request,
+                "APPLICATION_REQUIREMENTS_MISSING",
+                "Completa tu perfil antes de postular.",
+                details));
+  }
+
+  /** La misma `Idempotency-Key` con otra petición: un error del cliente, que debe usar otra. */
+  @ExceptionHandler(IdempotencyKeyReusedException.class)
+  ResponseEntity<Object> idempotencyKeyReused(
+      IdempotencyKeyReusedException exception, HttpServletRequest request) {
+    return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
+        .body(
+            ErrorEnvelope.body(
+                request,
+                "IDEMPOTENCY_KEY_REUSED",
+                "Esa clave de idempotencia ya se usó con otra petición."));
+  }
+
   @ExceptionHandler(AlreadyExistsException.class)
   ResponseEntity<Object> alreadyExists(HttpServletRequest request) {
     return ResponseEntity.status(HttpStatus.CONFLICT)
