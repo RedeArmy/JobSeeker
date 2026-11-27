@@ -341,4 +341,65 @@ class OutboxDeliveryGuaranteesIntegrationTest {
           .containsExactly(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L);
     }
   }
+
+  // Testigo de propiedad: quien perdió el arrendamiento no puede liberar, reintentar ni cerrar la
+  // fila que ya despacha otro; si pudiera, un tercero tomaría el mismo agregado a la vez.
+  @Test
+  void anOwnerWhoseLeaseExpiredCannotTouchTheRowOfTheNewOwner() {
+    UUID id = publish(UUID.randomUUID(), 1);
+    var tx = new TransactionTemplate(transactions);
+    tx.executeWithoutResult(s -> store.claim(10, Duration.ofMinutes(5), 5));
+    jdbc.update("update outbox_events set locked_until = now() - interval '1 second'");
+    tx.executeWithoutResult(s -> store.claim(10, Duration.ofMinutes(5), 5));
+
+    assertThat(store.markRetry(id, 1, Duration.ofSeconds(1))).isFalse();
+    assertThat(store.markFailed(id, 1)).isFalse();
+    assertThat(store.release(id, 1)).isFalse();
+    assertThat(store.markProcessed(id, 1)).isFalse();
+    assertThat(
+            jdbc.queryForObject(
+                "select locked_until > now() from outbox_events where id = ?", Boolean.class, id))
+        .as("el arrendamiento del nuevo dueño sigue en pie")
+        .isTrue();
+
+    assertThat(store.markProcessed(id, 2)).isTrue();
+    assertThat(status(id)).isEqualTo("PROCESSED");
+  }
+
+  // Un lote lento no deja que sus últimas filas venzan en vuelo: pasado el margen las devuelve sin
+  // despacharlas y sin gastarles el intento.
+  @Test
+  void aBatchPastItsSafeWindowReleasesTheRowsItDidNotDispatch() {
+    UUID first = publish(UUID.randomUUID(), 1);
+    UUID second = publish(UUID.randomUUID(), 1);
+    List<UUID> delivered = new java.util.ArrayList<>();
+    long[] now = {0};
+    var poller =
+        new OutboxPoller(
+            store,
+            List.of(
+                consumer(
+                    event -> {
+                      delivered.add(event.id());
+                      // El primer despacho consume todo el margen del lote.
+                      now[0] = OutboxPoller.safeWindow(properties.lease()).toNanos();
+                    })),
+            properties,
+            new TransactionTemplate(transactions),
+            new SimpleMeterRegistry(),
+            () -> now[0]);
+
+    poller.pollOnce();
+
+    assertThat(delivered).hasSize(1);
+    UUID released = delivered.contains(first) ? second : first;
+    assertThat(status(released)).isEqualTo("PENDING");
+    assertThat(attempts(released)).as("el intento se devuelve").isZero();
+    assertThat(
+            jdbc.queryForObject(
+                "select locked_until is null from outbox_events where id = ?",
+                Boolean.class,
+                released))
+        .isTrue();
+  }
 }

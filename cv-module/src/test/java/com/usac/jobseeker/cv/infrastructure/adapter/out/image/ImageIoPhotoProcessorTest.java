@@ -87,6 +87,20 @@ class ImageIoPhotoProcessorTest {
             e -> assertThat(e.reason()).isEqualTo(FileRejectedException.Reason.UNSUPPORTED_TYPE));
   }
 
+  // Una foto grande se lee ya reducida: nunca se decodifica entera en memoria.
+  @Test
+  void aLargePhotoIsDecodedSubsampledAndStillReducedToTheMaximumSide() throws IOException {
+    byte[] jpeg = encode(new BufferedImage(4000, 3000, BufferedImage.TYPE_INT_RGB), "jpeg");
+
+    BufferedImage result = decode(processor.process(jpeg, FileType.JPEG).content());
+
+    assertThat(processor.subsampling(4000, 3000)).isEqualTo(3);
+    assertThat(processor.subsampling(1024, 800)).isEqualTo(1);
+    assertThat(processor.subsampling(300, 200)).isEqualTo(1);
+    assertThat(result.getWidth()).isEqualTo(512);
+    assertThat(result.getHeight()).isEqualTo(384);
+  }
+
   @Test
   void theLimitsMustBePositive() {
     assertThatThrownBy(() -> new ImageIoPhotoProcessor(0, 1))

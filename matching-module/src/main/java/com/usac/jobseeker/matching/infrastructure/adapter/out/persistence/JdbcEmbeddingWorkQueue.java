@@ -20,6 +20,13 @@ public class JdbcEmbeddingWorkQueue implements EmbeddingWorkQueuePort {
   private static final String TYPE = "type";
   private static final String KEY = "key";
   private static final String ID = "id";
+  private static final String ATTEMPTS = "attempts";
+
+  // Testigo de propiedad (*fencing token*): solo escribe quien tiene el arrendamiento vigente. Si
+  // venció y otro trabajador reclamó el trabajo, `attempts` ya subió y la escritura del anterior no
+  // toca nada; sin esto, su `retryAt` liberaría el trabajo en curso y un tercero lo tomaría a la
+  // vez.
+  private static final String OWNED = " where id = :id and attempts = :attempts";
 
   private final JdbcClient jdbc;
 
@@ -83,7 +90,7 @@ public class JdbcEmbeddingWorkQueue implements EmbeddingWorkQueuePort {
                     EmbeddingEntity.valueOf(rows.getString("entity_type")),
                     rows.getObject("entity_key", UUID.class),
                     rows.getLong("generation"),
-                    rows.getInt("attempts"),
+                    rows.getInt(ATTEMPTS),
                     rows.getObject("pending_since", OffsetDateTime.class).toInstant()))
         .list();
   }
@@ -91,8 +98,9 @@ public class JdbcEmbeddingWorkQueue implements EmbeddingWorkQueuePort {
   @Override
   public void complete(Job job) {
     int deleted =
-        jdbc.sql("delete from matching_work_queue where id = :id and generation = :generation")
+        jdbc.sql("delete from matching_work_queue" + OWNED + " and generation = :generation")
             .param(ID, job.id())
+            .param(ATTEMPTS, job.attempts())
             .param("generation", job.generation())
             .update();
     if (deleted == 0) {
@@ -100,28 +108,37 @@ public class JdbcEmbeddingWorkQueue implements EmbeddingWorkQueuePort {
       // La petición nueva es la que queda sin atender: la frescura se mide desde ahora.
       jdbc.sql(
               "update matching_work_queue set locked_until = null, attempts = 0,"
-                  + " pending_since = now() where id = :id")
+                  + " pending_since = now()"
+                  + OWNED)
           .param(ID, job.id())
+          .param(ATTEMPTS, job.attempts())
           .update();
     }
   }
 
   @Override
   public void retryAt(Job job, Instant notBefore) {
-    jdbc.sql(
-            "update matching_work_queue set locked_until = null, not_before = :notBefore"
-                + " where id = :id")
+    jdbc.sql("update matching_work_queue set locked_until = null, not_before = :notBefore" + OWNED)
         .param(ID, job.id())
+        .param(ATTEMPTS, job.attempts())
         .param("notBefore", at(notBefore))
         .update();
   }
 
   @Override
   public void fail(Job job) {
-    jdbc.sql(
-            "update matching_work_queue set status = 'FAILED', locked_until = null"
-                + " where id = :id")
+    jdbc.sql("update matching_work_queue set status = 'FAILED', locked_until = null" + OWNED)
         .param(ID, job.id())
+        .param(ATTEMPTS, job.attempts())
+        .update();
+  }
+
+  // El intento no se gastó: se devuelve, para que un lote lento no agote los de quien no tocó.
+  @Override
+  public void release(Job job) {
+    jdbc.sql("update matching_work_queue set locked_until = null, attempts = attempts - 1" + OWNED)
+        .param(ID, job.id())
+        .param(ATTEMPTS, job.attempts())
         .update();
   }
 

@@ -15,6 +15,8 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -48,6 +50,18 @@ public class JdbcJobPostingRepository implements JobPostingStorePort {
         .param(ID, id.value())
         .query((rows, n) -> postingOf(rows))
         .optional();
+  }
+
+  @Override
+  public List<JobPosting> findAllByIds(Collection<JobPostingId> ids) {
+    if (ids.isEmpty()) {
+      return List.of();
+    }
+    return jdbc.sql(
+            "select " + COLUMNS + " from job_postings where id = any(:ids) and status <> 'DELETED'")
+        .param("ids", ids.stream().map(JobPostingId::value).toArray(UUID[]::new))
+        .query((rows, n) -> postingOf(rows))
+        .list();
   }
 
   // El candado de transacción por reclutador pone en fila las publicaciones de una misma cuenta:

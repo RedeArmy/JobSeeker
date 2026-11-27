@@ -8,9 +8,12 @@ import com.usac.jobseeker.job.domain.model.JobPostingId;
 import com.usac.jobseeker.job.domain.model.JobRequirement;
 import com.usac.jobseeker.job.domain.model.JobStatus;
 import com.usac.jobseeker.job.domain.model.SalaryRange;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -21,7 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 6) y una eliminada ya no existe (BR-JOB-09); el resto se entrega con su estado para que
  * `matching` decida qué hacer con cada uno.
  */
-public class GetJobSignalsService implements GetJobSignalsUseCase {
+public class GetJobSignalsService implements GetJobSignalsUseCase, GetJobSignalsBatchUseCase {
 
   private static final String USE_CASE = "get_job_signals";
 
@@ -48,6 +51,30 @@ public class GetJobSignalsService implements GetJobSignalsUseCase {
             .map(posting -> project(posting, requirements.findByPosting(posting.id())));
     metrics.count(USE_CASE, snapshot.isPresent() ? "found" : "unavailable");
     return snapshot;
+  }
+
+  // La misma regla que la individual (sin borradores), aplicada a todas a la vez.
+  @Override
+  @Transactional(readOnly = true)
+  public Map<UUID, JobSnapshot> executeAll(GetJobSignalsBatchQuery query) {
+    if (query.jobPostingIds().isEmpty()) {
+      return Map.of();
+    }
+    List<JobPosting> live =
+        postings
+            .findAllByIds(query.jobPostingIds().stream().map(JobPostingId::new).toList())
+            .stream()
+            .filter(posting -> posting.status() != JobStatus.DRAFT)
+            .toList();
+    Map<JobPostingId, List<JobRequirement>> items =
+        requirements.findByPostings(live.stream().map(JobPosting::id).toList());
+    Map<UUID, JobSnapshot> found = new HashMap<>();
+    for (JobPosting posting : live) {
+      found.put(
+          posting.id().value(), project(posting, items.getOrDefault(posting.id(), List.of())));
+    }
+    metrics.count(USE_CASE, "batch");
+    return found;
   }
 
   private static JobSnapshot project(JobPosting posting, List<JobRequirement> items) {

@@ -4,8 +4,8 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | 🟡 En revisión |
-| **Versión** | 1.18 — se paga TD-041 |
-| **Fecha** | 24 de noviembre de 2026 |
+| **Versión** | 1.19 — revisión completa del código: concurrencia, rendimiento y recuento del registro |
+| **Fecha** | 27 de noviembre de 2026 |
 | **Dueño del documento** | Responsable del proyecto |
 | **Revisión del registro** | Al cerrar cada sprint y antes de cada hito de la hoja de ruta |
 | **Documentos relacionados** | `docs/05-engineering/definition-of-done.md`, `docs/05-engineering/test-strategy.md`, `docs/05-engineering/coding-standards.md`, `docs/01-product/roadmap-and-release-plan.md` |
@@ -46,18 +46,18 @@ Este registro **no** reemplaza a los ADR (que fijan decisiones) ni a las notas d
 
 ## 4. Tablero
 
-Corte: 24-nov-2026.
+Corte: 27-nov-2026.
 
 | Severidad | Abiertas o planificadas |
 |---|---|
 | S1 Crítica | 0 |
-| S2 Alta | 4 |
-| S3 Media | 12 |
-| S4 Baja | 5 |
-| **Total** | **21** |
+| S2 Alta | 5 |
+| S3 Media | 13 |
+| S4 Baja | 8 |
+| **Total** | **26** |
 
-- **Abiertas:** 16 · **Planificadas:** 5 · **Resueltas:** 29 · **Aceptadas:** 6.
-- **S2 abiertas con disparador próximo** (decidir el siguiente sprint): TD-005 y TD-016 (primer despliegue), más TD-020 (antes de usuarios reales).
+- **Abiertas:** 21 · **Planificadas:** 5 · **Resueltas:** 39 · **Aceptadas:** 6.
+- **S2 abiertas con disparador próximo** (decidir el siguiente sprint): TD-005, TD-016 y TD-042 (primer despliegue), más TD-020 (antes de usuarios reales).
 - **Métricas a seguir en cada revisión:** deuda abierta por severidad, edad de las S2 en días, número de cierres por sprint, aceptadas vencidas.
 
 ## 5. Registro de deuda abierta
@@ -84,6 +84,12 @@ Corte: 24-nov-2026.
 | TD-037 | El puntaje se publica sin calibrar: `α`, pesos y Platt son valores iniciales | Calidad | S2 | M | Leída | Planificada | Pares etiquetados reales (protocolo de 300 pares); las herramientas ya existen |
 | TD-038 | Taxonomía de habilidades y experiencia relevante (los aliases ya están) | Dominio | S3 | M | Leída | Planificada | ADR-0019 implementado en `cv` |
 | TD-040 | `ats` debe llamar a `snapshotapplicationprofile` al postular y al cambiar de etapa | Dominio | S3 | S | Leída | Planificada | Postulación y pipeline mínimos (`ats`) |
+| TD-042 | Sin cabeceras de *proxy* de confianza: detrás del proxy inverso todos comparten IP y esquema | Seguridad / Operación | S2 | S | Leída | Abierta | Primer despliegue detrás de un proxy (ADR-0026) |
+| TD-043 | Ventana de carrera entre anonimizar un perfil y guardar su vector | Privacidad | S3 | S | Leída | Abierta | Antes de usuarios reales |
+| TD-044 | Las subidas retienen una conexión de la base durante el antivirus y el almacén | Rendimiento | S3 | M | Leída | Abierta | Al fijar el pool (TD-005) o antes de usuarios reales |
+| TD-045 | La migración de versión del algoritmo busca pares con `<>`, sin índice que la sirva | Rendimiento | S4 | XS | Leída | Abierta | Más de ~100 000 pares guardados |
+| TD-046 | La espera del cerrojo de vitalidad bloquea hilos de petición hasta 10 s | Concurrencia | S4 | XS | Leída | Abierta | Oportunista; antes si se ven hilos agotados |
+| TD-047 | Reemplazar los requisitos de una vacante inserta fila por fila | Rendimiento | S4 | XS | Leída | Abierta | Oportunista |
 
 ### Fichas
 
@@ -102,7 +108,7 @@ Corte: 24-nov-2026.
 
 **Arquitectura** · **S3 Media** · esfuerzo **M** · confianza **Leída** · **Abierta**
 
-- **Evidencia:** Las migraciones existen; ningún código las escribe, y `idempotency_keys` no tiene purga.
+- **Evidencia:** `audit_log` ya tiene escritor (`JdbcAuditLog`, usado por la revisión de reclutadores desde el PR #41) pero ninguna retención. `idempotency_keys` sigue sin escritor ni purga. Revisado el 27-nov-2026.
 - **Interés (qué cuesta no pagarla):** Esquema sin uso que hay que migrar y mantener; sin purga crecerá sin límite cuando se use.
 - **Disparador:** Primer endpoint con `Idempotency-Key` o primera acción auditable.
 - **Remediación propuesta:** Implementar el escritor y la retención con su caso de uso, o posponer la migración hasta que se necesite.
@@ -245,7 +251,7 @@ Corte: 24-nov-2026.
 
 **Código** · **S4 Baja** · esfuerzo **XS** · confianza **Leída** · **Abierta**
 
-- **Evidencia:** `OutboxScheduler.purge` lee el reloj del sistema directamente.
+- **Evidencia:** `OutboxScheduler.purge` lee el reloj del sistema directamente. (Desde el 27-nov-2026, `markRetry` ya usa el reloj de la base, como el reclamo; la purga sigue igual.)
 - **Interés (qué cuesta no pagarla):** No se puede probar el corte de retención sin esperar.
 - **Disparador:** Oportunista.
 - **Remediación propuesta:** Inyectar un `Clock`.
@@ -307,6 +313,72 @@ Corte: 24-nov-2026.
 - **Criterio de cierre:** Una postulación de punta a punta deja su copia del perfil y la foto del puntaje, probado en un e2e de `ats`.
 - **Referencias:** `docs/03-architecture/tdd/matching-module.md` §4 y §10.4
 
+#### TD-042 — Sin cabeceras de *proxy* de confianza: detrás del proxy inverso todos comparten IP y esquema
+
+**Seguridad / Operación** · **S2 Alta** · esfuerzo **S** · confianza **Leída** · **Abierta**
+
+- **Evidencia:** Ni `server.forward-headers-strategy` ni `internal-proxies` están configurados, y `RateLimitFilter.keyOf` usa `request.getRemoteAddr()` (a propósito: sin un proxy de confianza, `X-Forwarded-For` lo escribe cualquiera). La topología propuesta (ADR-0026) pone un proxy inverso con TLS delante.
+- **Interés (qué cuesta no pagarla):** Detrás del proxy, `getRemoteAddr()` es la IP del proxy. Todas las políticas por IP (inicio de sesión, *webhook*, peticiones anónimas) comparten un solo cubo: un abuso agota el límite de todos. Además, la aplicación cree que la petición llegó por `http`, así que las URL de redirección OIDC y las cookies `Secure` se construyen mal.
+- **Disparador:** Primer despliegue detrás de un proxy (ADR-0026).
+- **Remediación propuesta:** `server.forward-headers-strategy: native` con `server.tomcat.remoteip.internal-proxies` limitado a la IP del proxy, para que solo se confíe en la cabecera que escribe él. Prueba de integración: una cabecera `X-Forwarded-For` de un origen que no es el proxy se ignora.
+- **Criterio de cierre:** Configuración por entorno, prueba de que el límite por IP usa la IP del cliente solo cuando la cabecera viene del proxy, y redirección OIDC con `https` en staging.
+- **Referencias:** ADR-0011, ADR-0020, ADR-0026; `RateLimitFilter`
+
+#### TD-043 — Ventana de carrera entre anonimizar un perfil y guardar su vector
+
+**Privacidad** · **S3 Media** · esfuerzo **S** · confianza **Leída** · **Abierta**
+
+- **Evidencia:** `JdbcEmbeddingRepository.saveProfileEmbedding` comprueba «no anonimizado» dentro de la misma sentencia, pero con `ON CONFLICT DO UPDATE` en `READ COMMITTED` la subconsulta se evalúa con la foto del inicio de la sentencia. Si el trabajador empezó a escribir justo antes de que la anonimización confirmara y esperó el candado de la fila, al seguir reescribe el vector que la anonimización acababa de vaciar.
+- **Interés (qué cuesta no pagarla):** Muy improbable: hace falta que el cálculo de un perfil termine en los mismos milisegundos en que se anonimiza la cuenta. Si ocurre, queda un vector derivado de un perfil borrado (BR-DATA-05), aunque ya no es recuperable por la búsqueda, que filtra las cuentas anonimizadas.
+- **Disparador:** Antes de usuarios reales.
+- **Remediación propuesta:** Un candado de transacción por cuenta (`pg_advisory_xact_lock`) que tomen tanto la anonimización como el guardado del vector, o repetir la condición en el `WHERE` del `DO UPDATE` y vaciar otra vez el vector al terminar la anonimización.
+- **Criterio de cierre:** Prueba concurrente que intercala ambas operaciones y nunca deja un vector en una cuenta anonimizada.
+- **Referencias:** ADR-0013, ADR-0017; `JdbcEmbeddingRepository`
+
+#### TD-044 — Las subidas retienen una conexión de la base durante el antivirus y el almacén
+
+**Rendimiento** · **S3 Media** · esfuerzo **M** · confianza **Leída** · **Abierta**
+
+- **Evidencia:** `UploadCvService` y `UploadProfilePhotoService` son `@Transactional` de principio a fin: la conexión se toma en la primera lectura y se retiene durante el escaneo de ClamAV, la re-codificación de la foto y el `put` al almacén (alrededor de 1 s con 5 MB, y hasta los tiempos de espera si un servicio va lento). El TDD de `cv` (§10.7) lo aceptó por el límite de 10 subidas por hora y cuenta, que es por cuenta, no global.
+- **Interés (qué cuesta no pagarla):** Con el pool por defecto de 10 conexiones, 10 subidas simultáneas de cuentas distintas lo agotan y frenan todas las demás peticiones hasta que terminan.
+- **Disparador:** Al fijar el pool (TD-005) o antes de usuarios reales.
+- **Remediación propuesta:** Partir el caso de uso: validar, escanear, procesar y subir sin transacción, y abrir una transacción corta solo para bloquear el perfil y registrar la versión o la foto (el objeto ya subido se descarta si falla, como hoy).
+- **Criterio de cierre:** Prueba que comprueba que no hay transacción abierta durante el escaneo, y prueba de carga con subidas concurrentes que no agota el pool.
+- **Referencias:** ADR-0021; `docs/03-architecture/tdd/cv-module.md` §10.7 y §10.8
+
+#### TD-045 — La migración de versión del algoritmo busca pares con `<>`, sin índice que la sirva
+
+**Rendimiento** · **S4 Baja** · esfuerzo **XS** · confianza **Leída** · **Abierta**
+
+- **Evidencia:** `JdbcScoreStore.staleVersion` filtra `algorithm_version <> :version`. El índice `idx_csc_version (algorithm_version, computed_at)` no sirve a una desigualdad, así que cada pasada del mantenimiento recorre la tabla entera.
+- **Interés (qué cuesta no pagarla):** Despreciable con miles de pares; con cientos de miles, cada pasada cuesta un recorrido completo, aunque no quede nada por migrar.
+- **Disparador:** Más de ~100 000 pares guardados.
+- **Remediación propuesta:** Índice parcial sobre los pares sin anonimizar ordenado por `computed_at` y una consulta por rango, o guardar un número de versión creciente y filtrar con `<`.
+- **Criterio de cierre:** `EXPLAIN` sin recorrido secuencial con la tabla poblada.
+- **Referencias:** ADR-0031; `JdbcScoreStore`
+
+#### TD-046 — La espera del cerrojo de vitalidad bloquea hilos de petición hasta 10 s
+
+**Concurrencia** · **S4 Baja** · esfuerzo **XS** · confianza **Leída** · **Abierta**
+
+- **Evidencia:** `LivenessStore.acquireLock` sondea Redis cada 50 ms hasta `lockWait` (10 s por defecto) en el hilo de la petición. Si no lo obtiene, `LivenessCoordinator` deja pasar la petición igualmente (`lock_agotado`), así que esperar solo sirve para ver el estado ya renovado.
+- **Interés (qué cuesta no pagarla):** Mientras una sesión renueva su token, cada petición paralela de esa sesión (HTMX dispara varias) ocupa un hilo de Tomcat hasta que Clavaris responde, hasta 10 s si va lento.
+- **Disparador:** Oportunista; antes si se ven hilos agotados.
+- **Remediación propuesta:** Bajar `lock-wait` a unos cientos de milisegundos: quien no obtiene el cerrojo sigue con el estado que ya tenía, que está dentro del margen.
+- **Criterio de cierre:** Prueba con renovación lenta en la que las peticiones paralelas de la sesión terminan sin esperarla.
+- **Referencias:** ADR-0020, regla 12; `LivenessStore`
+
+#### TD-047 — Reemplazar los requisitos de una vacante inserta fila por fila
+
+**Rendimiento** · **S4 Baja** · esfuerzo **XS** · confianza **Leída** · **Abierta**
+
+- **Evidencia:** `JdbcJobRequirementsRepository.replace` hace un `INSERT` por requisito, el patrón que `cv` ya pagó con una sentencia `unnest` (TD-R11).
+- **Interés (qué cuesta no pagarla):** Unas decenas de viajes a la base por edición de requisitos; poco, pero dentro de la transacción de la edición.
+- **Disparador:** Oportunista.
+- **Remediación propuesta:** Una sola sentencia con `unnest` sobre arreglos paralelos, como en `cv`.
+- **Criterio de cierre:** Reemplazo de un conjunto con una sentencia, medido en una prueba de conteo.
+- **Referencias:** TD-R11
+
 ## 6. Deuda resuelta
 
 | ID | Título | Tipo | Sev | Fecha | PR o decisión | Cómo se resolvió |
@@ -343,6 +415,12 @@ Corte: 24-nov-2026.
 | TD-R30 | Puntuar 200 recuperados leía sus perfiles uno a uno (antes TD-039) | Rendimiento | S3 | 2026-11-25 | #45 | Lectura por lotes en `auth` (`ResolveActorsUseCase`), `cv` (`GetProfileSnapshotsUseCase`, `GetVisibleAvailabilitiesUseCase`) y `matching`; la individual es el caso de una cuenta. Medido con 200 candidatos: **p50 1.246 ms a 118 ms**, de ≈ 2.400 consultas a ≈ 20 fijas; probado que el número de sentencias no crece con los perfiles y que ningún adaptador de producción olvida el método por lotes (`BatchReadsAreOverriddenTest`). |
 | TD-R31 | El puntaje no se persistía, cacheaba ni recalculaba, y el candidato no veía el suyo (antes TD-036) | Dominio | S3 | 2026-11-25 | #46 | Tablas del puntaje vigente, fotos y copia del perfil canónico; casos de uso `calculatecompatibilityscore`, `recomputescoresforentity`, `explainscore` (con «qué pasaría si»), `snapshotapplicationprofile` y `migratealgorithmversion`; endpoints del candidato con su visibilidad y «actualizando…»; anonimización que conserva el par y el puntaje. Sin caché en Redis (ADR-0031, aprobado). Lo que depende de `ats` queda en TD-040. |
 | TD-R32 | Habilidades por texto normalizado sin alias (parte de TD-038) | Dominio | S3 | 2026-11-25 | #47 | 36 grupos de alias inequívocos («JS» = «JavaScript», «k8s» = «Kubernetes»); una prueba garantiza que ningún nombre está en dos grupos y otra que lo que solo se parece («Spring» y «Spring Boot») no se une. El código del algoritmo pasa a 2 para que la migración recalcule los puntajes guardados. La taxonomía y la experiencia relevante siguen en TD-038. |
+| TD-R34 | Las marcas de la bandeja no comprobaban el arrendamiento y un lote lento lo dejaba vencer en vuelo | Concurrencia | S2 | 2026-11-27 | Rama `chore/senior-code-review` | Marcas con el intento como testigo de propiedad (solo escribe quien tiene el arrendamiento vigente) y, pasado el 80 % del arrendamiento, las filas sin despachar se devuelven con su intento. Probado contra Postgres. |
+| TD-R35 | La cola de embeddings tenía el mismo fallo: lote de 10 llamadas de hasta 60 s con arrendamiento de 5 min | Concurrencia | S2 | 2026-11-27 | Rama `chore/senior-code-review` | Mismo testigo de propiedad en `complete`, `retryAt` y `fail`; `release` devuelve el intento; el trabajador no empieza un trabajo fuera del margen. |
+| TD-R36 | Guardar puntajes podía bloquearse mutuamente y un cálculo antiguo pisaba uno reciente | Concurrencia | S3 | 2026-11-27 | Rama `chore/senior-code-review` | Filas ordenadas por par antes del *upsert*; las columnas del puntaje se quedan con el cálculo más reciente y el motivo se sigue combinando. Prueba con escrituras cruzadas concurrentes. |
+| TD-R37 | Recalcular un perfil leía cada vacante por separado (hasta 400 consultas por edición) | Rendimiento | S3 | 2026-11-27 | Rama `chore/senior-code-review` | `GetJobSignalsBatchUseCase` en `job` y `readAll` en `matching`, con métodos por defecto sustituidos en los adaptadores reales (cubiertos por `BatchReadsAreOverriddenTest`). Dos consultas en total. |
+| TD-R38 | El registro de perfiles vistos insertaba fila por fila con el candado del reclutador tomado | Rendimiento | S4 | 2026-11-27 | Rama `chore/senior-code-review` | Una sentencia `unnest` para todos los mostrados. |
+| TD-R39 | La foto se decodificaba a resolución completa: hasta ~160 MB de montículo por subida | Operación | S2 | 2026-11-27 | Rama `chore/senior-code-review` | Decodificación submuestreada con `ImageReadParam` hasta el doble del lado final; probado con una imagen de 4000 × 3000. |
 | TD-R33 | Un objeto del almacén podía quedar huérfano si el alta del CV fallaba al confirmar (antes TD-041) | Datos | S4 | 2026-11-26 | #51 | `reconcileorphancvfiles`, cada 6 h: lista los objetos `cv/` por páginas y borra los que no tienen versión viva, también los que dejó un borrado por anonimización que agotó sus reintentos. No juzga objetos de menos de 24 h, nunca borra una clave de formato ajeno y se frena sin borrar nada si una pasada halla más de 500. Probado contra PostgreSQL y SeaweedFS reales. |
 
 ## 7. Deuda aceptada
@@ -353,7 +431,7 @@ Corte: 24-nov-2026.
 | TD-A02 | Excepciones de squawk `constraint-missing-not-valid` en `auth` (`V20261122100000`) y `cv` (`V20261124110000`) | ADR-0027 | Las tablas no existen en ningún entorno desplegado: no hay filas que escanear ni escrituras que bloquear. | Primer despliegue (ADR-0026) | Desde entonces, `NOT VALID` y `VALIDATE` en migraciones separadas. |
 | TD-A03 | Habilidades como texto libre | ADR-0019 | Hasta el enlazado a la taxonomía no hay identificador que guardar. | Sub-paso de enlazado | Ver TD-026. |
 | TD-A04 | Un `404` al excluir una cuenta revela si ese UUID existe | `docs/03-architecture/tdd/cv-module.md` §10.4 | Los identificadores son UUID aleatorios de 122 bits, no enumerables; «nunca existió» y «ya no vuelve» responden igual. | 2027-02-01 | Revisar si algún identificador deja de ser aleatorio. |
-| TD-A06 | El reclamo de la bandeja está serializado por un bloqueo de aviso global y una fila en vuelo se reentrega al vencer el arrendamiento | ADR-0016 (enmienda 24-nov-2026) | El bloqueo dura milisegundos y hace correcto el orden por agregado; la reentrega tras un fallo del marcado es redundancia, no pérdida, porque los consumidores son idempotentes. | 2027-02-01 | Si el volumen hace del bloqueo un cuello de botella, particionar su clave por rango de agregado. |
+| TD-A06 | El reclamo de la bandeja está serializado por un bloqueo de aviso global y una fila en vuelo se reentrega al vencer el arrendamiento | ADR-0016 (enmienda 24-nov-2026) | El bloqueo dura milisegundos y hace correcto el orden por agregado; la reentrega tras un fallo del marcado es redundancia, no pérdida, porque los consumidores son idempotentes. Desde TD-R34 una fila solo se reentrega si un único despacho supera el 20 % del arrendamiento que se deja de margen, y el dueño anterior ya no puede escribir sobre ella. | 2027-02-01 | Si el volumen hace del bloqueo un cuello de botella, particionar su clave por rango de agregado. |
 | TD-A05 | Tope de 500 exclusiones como límite blando | `docs/03-architecture/tdd/cv-module.md` §10.4 | Contar e insertar no es atómico; bajo concurrencia podría pasarse por pocas filas sin consecuencia. | Sin vencimiento | Hacerlo estricto solo si el tope pasa a ser un límite de negocio. |
 
 ## 8. Historial de este documento
@@ -378,6 +456,7 @@ Corte: 24-nov-2026.
 | 1.15 | 2026-11-25 | Se paga la parte de aliases de TD-038 (PR #47, TD-R32): 36 grupos de alias inequívocos y el código del algoritmo pasa a 2. TD-037 sigue abierta con las herramientas listas (`emit-config`, `retrieval-recall`), a la espera de pares etiquetados reales; TD-038 sigue abierta por la taxonomía y la experiencia relevante. Quedan 20 abiertas o planificadas, 32 resueltas y 6 aceptadas. |
 | 1.16 | 2026-11-26 | TD-016 actualiza su evidencia: el ADR-0021 (almacenamiento de archivos y escaneo de malware) queda aprobado y quedan por escribir los ADR-0022 a 0025. Sin cambios en los recuentos. |
 | 1.17 | 2026-11-26 | Subida, consulta y descarga del CV (ADR-0021, sub-paso 7 de `cv`) y borrado físico de sus archivos al anonimizar. Entra TD-041 (objetos huérfanos si un alta falla al confirmar). Quedan 21 abiertas o planificadas, 32 resueltas y 6 aceptadas. |
+| 1.19 | 2026-11-27 | Revisión completa del código como SDE III. Se pagan seis deudas encontradas en ella (TD-R34 a TD-R39): marcas sin testigo de propiedad y lotes que vencían en vuelo en la bandeja y en la cola de embeddings, *upsert* de puntajes propenso a bloqueos mutuos y a escrituras perdidas, lectura de vacantes una a una al recalcular, registro de vistos fila por fila y decodificación de fotos a resolución completa. Entran TD-042 a TD-047. Se corrigen el tablero, que contaba 21 abiertas o planificadas cuando había 20 (12 S3 en vez de 11) y 29 resueltas en vez de 33, la fecha de la cabecera y la evidencia de TD-010, TD-025 y TD-A06. Quedan 26 abiertas o planificadas, 39 resueltas y 6 aceptadas. |
 | 1.18 | 2026-11-26 | Se paga TD-041 (PR #51, TD-R33): reconciliación periódica de CV huérfanos con espera de 24 h y freno ante borrados masivos. Quedan 20 abiertas o planificadas, 33 resueltas y 6 aceptadas. |
 
 ## 9. Plantilla de ficha

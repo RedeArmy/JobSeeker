@@ -363,4 +363,36 @@ class JdbcEmbeddingWorkQueueTest {
         .param("key", UUID.randomUUID())
         .update();
   }
+
+  // Testigo de propiedad: el trabajador que perdió el arrendamiento no puede liberar ni cerrar el
+  // trabajo que ya ejecuta otro.
+  @Test
+  void aWorkerWhoseLeaseExpiredCannotTouchTheJobOfTheNewOwner() {
+    queue.request(EmbeddingEntity.PROFILE, account.value(), Instant.now().minusSeconds(1));
+    var stale = queue.claim(10, LEASE, 5).get(0);
+    expireLease(account);
+    var owner = queue.claim(10, LEASE, 5).get(0);
+
+    queue.retryAt(stale, Instant.now().minusSeconds(1));
+    queue.fail(stale);
+    queue.complete(stale);
+
+    assertThat(rows()).isOne();
+    assertThat(status(account)).isEqualTo("PENDING");
+    assertThat(queue.claim(10, LEASE, 5)).as("sigue arrendado al nuevo dueño").isEmpty();
+    queue.complete(owner);
+    assertThat(rows()).isZero();
+  }
+
+  // Un trabajo devuelto sin ejecutar recupera su intento y queda disponible enseguida.
+  @Test
+  void aReleasedJobGetsItsAttemptBackAndCanBeClaimedAgain() {
+    queue.request(EmbeddingEntity.PROFILE, account.value(), Instant.now().minusSeconds(1));
+    var job = queue.claim(10, LEASE, 5).get(0);
+
+    queue.release(job);
+
+    var again = queue.claim(10, LEASE, 5);
+    assertThat(again).singleElement().satisfies(j -> assertThat(j.attempts()).isEqualTo(1));
+  }
 }

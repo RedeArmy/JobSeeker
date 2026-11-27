@@ -3,8 +3,10 @@ package com.usac.jobseeker.app.infrastructure.outbox;
 import com.usac.jobseeker.common.application.outbox.OutboxEvent;
 import com.usac.jobseeker.common.application.outbox.OutboxEventConsumer;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.LongSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -21,12 +23,14 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class OutboxPoller {
 
   private static final Logger LOG = LoggerFactory.getLogger(OutboxPoller.class);
+  private static final String LEASE_LOST = "lease_lost";
 
   private final OutboxStore store;
   private final List<OutboxEventConsumer> consumers;
   private final OutboxProperties properties;
   private final TransactionTemplate transaction;
   private final MeterRegistry meters;
+  private final LongSupplier nanoClock;
 
   public OutboxPoller(
       OutboxStore store,
@@ -34,11 +38,23 @@ public class OutboxPoller {
       OutboxProperties properties,
       TransactionTemplate transaction,
       MeterRegistry meters) {
+    this(store, consumers, properties, transaction, meters, System::nanoTime);
+  }
+
+  /** El reloj monotónico es inyectable para probar el vencimiento del arrendamiento sin esperar. */
+  OutboxPoller(
+      OutboxStore store,
+      List<OutboxEventConsumer> consumers,
+      OutboxProperties properties,
+      TransactionTemplate transaction,
+      MeterRegistry meters,
+      LongSupplier nanoClock) {
     this.store = store;
     this.consumers = List.copyOf(consumers);
     this.properties = properties;
     this.transaction = transaction;
     this.meters = meters;
+    this.nanoClock = nanoClock;
   }
 
   /**
@@ -48,11 +64,25 @@ public class OutboxPoller {
    */
   public int pollOnce() {
     // `execute` solo devuelve nulo si el callback lo devuelve, y aquí nunca lo hace.
+    long claimedAt = nanoClock.getAsLong();
     List<OutboxStore.Claimed> batch =
         transaction.execute(
             status ->
                 store.claim(properties.batchSize(), properties.lease(), properties.maxAttempts()));
-    batch.forEach(this::dispatch);
+    // Todo el lote se arrienda a la vez pero se despacha en serie: si los primeros tardan, los
+    // últimos llegarían con el arrendamiento vencido y otra pasada podría tomarlos al mismo tiempo,
+    // rompiendo el orden por agregado (ADR-0016, decisión 4). Pasado el margen, se devuelven sin
+    // despachar.
+    long deadline = claimedAt + safeWindow(properties.lease()).toNanos();
+    for (OutboxStore.Claimed claimed : batch) {
+      if (nanoClock.getAsLong() - deadline >= 0) {
+        if (store.release(claimed.event().id(), claimed.attempts())) {
+          count("released");
+        }
+      } else {
+        dispatch(claimed);
+      }
+    }
     return batch.size();
   }
 
@@ -76,6 +106,11 @@ public class OutboxPoller {
     return total;
   }
 
+  /** Se deja un 20 % del arrendamiento como margen para el despacho más lento de un evento. */
+  static Duration safeWindow(Duration lease) {
+    return lease.multipliedBy(4).dividedBy(5);
+  }
+
   // Cualquier fallo de un consumidor se reintenta con retroceso; no debe tumbar el lote entero.
   @SuppressWarnings("PMD.AvoidCatchingGenericException")
   private void dispatch(OutboxStore.Claimed claimed) {
@@ -86,23 +121,24 @@ public class OutboxPoller {
           consumer.consume(event);
         }
       }
-      store.markProcessed(event.id());
-      count("processed");
+      count(store.markProcessed(event.id(), claimed.attempts()) ? "processed" : LEASE_LOST);
     } catch (RuntimeException e) {
       // El intento ya se contó al reclamar.
       int attempt = claimed.attempts();
       if (attempt >= properties.maxAttempts()) {
-        store.markFailed(event.id());
-        count("failed");
+        count(store.markFailed(event.id(), attempt) ? "failed" : LEASE_LOST);
         LOG.error(
             "event=outbox_failed eventType={} attempts={} Evento de la bandeja agotó sus intentos",
             event.eventType(),
             attempt,
             e);
       } else {
-        store.markRetry(
-            event.id(), properties.backoff(attempt, ThreadLocalRandom.current().nextDouble()));
-        count("retried");
+        boolean owned =
+            store.markRetry(
+                event.id(),
+                attempt,
+                properties.backoff(attempt, ThreadLocalRandom.current().nextDouble()));
+        count(owned ? "retried" : LEASE_LOST);
         LOG.warn(
             "event=outbox_retry eventType={} attempt={} Evento de la bandeja se reintentará",
             event.eventType(),

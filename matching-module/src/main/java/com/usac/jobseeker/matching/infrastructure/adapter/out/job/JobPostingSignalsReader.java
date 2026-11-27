@@ -1,11 +1,16 @@
 package com.usac.jobseeker.matching.infrastructure.adapter.out.job;
 
+import com.usac.jobseeker.job.application.usecase.getjobsignals.GetJobSignalsBatchQuery;
+import com.usac.jobseeker.job.application.usecase.getjobsignals.GetJobSignalsBatchUseCase;
 import com.usac.jobseeker.job.application.usecase.getjobsignals.GetJobSignalsQuery;
 import com.usac.jobseeker.job.application.usecase.getjobsignals.GetJobSignalsUseCase;
 import com.usac.jobseeker.job.application.usecase.getjobsignals.JobSnapshot;
 import com.usac.jobseeker.matching.application.usecase.embedentity.JobSignalsReader;
 import com.usac.jobseeker.matching.domain.model.JobPostingId;
 import com.usac.jobseeker.matching.domain.model.JobSignals;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
 
@@ -25,14 +30,28 @@ public class JobPostingSignalsReader implements JobSignalsReader {
   private static final String REVIEWING = "REVIEWING";
 
   private final GetJobSignalsUseCase signals;
+  private final GetJobSignalsBatchUseCase batch;
 
-  public JobPostingSignalsReader(GetJobSignalsUseCase signals) {
+  public JobPostingSignalsReader(GetJobSignalsUseCase signals, GetJobSignalsBatchUseCase batch) {
     this.signals = signals;
+    this.batch = batch;
   }
 
   @Override
   public Optional<JobSignals> read(JobPostingId id) {
     return signals.execute(new GetJobSignalsQuery(id.value())).map(this::translate);
+  }
+
+  @Override
+  public Map<JobPostingId, JobSignals> readAll(Collection<JobPostingId> ids) {
+    if (ids.isEmpty()) {
+      return Map.of();
+    }
+    Map<JobPostingId, JobSignals> found = new HashMap<>();
+    batch
+        .executeAll(GetJobSignalsBatchQuery.of(ids.stream().map(JobPostingId::value).toList()))
+        .forEach((id, snapshot) -> found.put(new JobPostingId(id), translate(snapshot)));
+    return found;
   }
 
   // Ante un estado desconocido la vacante no se considera publicada: ante la duda no se puntúa.

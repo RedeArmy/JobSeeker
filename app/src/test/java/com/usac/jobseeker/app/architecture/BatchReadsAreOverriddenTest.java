@@ -12,8 +12,11 @@ import com.usac.jobseeker.cv.application.usecase.getmyprofessionalprofile.Profes
 import com.usac.jobseeker.cv.application.usecase.getmyprofessionalprofile.ProfileCollectionsReadPort;
 import com.usac.jobseeker.cv.application.usecase.getvisibleavailability.AvailabilityExclusionLookupPort;
 import com.usac.jobseeker.cv.application.usecase.saveprofessionalprofile.CandidateCapabilityPort;
+import com.usac.jobseeker.job.application.support.JobPostingStorePort;
+import com.usac.jobseeker.job.application.support.JobRequirementsStorePort;
 import com.usac.jobseeker.matching.application.usecase.embedentity.CandidateSignalsReader;
 import com.usac.jobseeker.matching.application.usecase.embedentity.EmbeddingWorkQueuePort;
+import com.usac.jobseeker.matching.application.usecase.embedentity.JobSignalsReader;
 import com.usac.jobseeker.matching.application.usecase.suggestcandidatesforjob.AvailabilityPort;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -43,7 +46,10 @@ class BatchReadsAreOverriddenTest {
           AvailabilityExclusionLookupPort.class,
           CandidateSignalsReader.class,
           AvailabilityPort.class,
-          EmbeddingWorkQueuePort.class);
+          EmbeddingWorkQueuePort.class,
+          JobSignalsReader.class,
+          JobPostingStorePort.class,
+          JobRequirementsStorePort.class);
 
   private static Set<String> defaultMethods(Class<?> port) {
     return Arrays.stream(port.getDeclaredMethods())

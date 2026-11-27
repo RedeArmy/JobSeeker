@@ -19,6 +19,8 @@ public class OutboxStore implements DomainEventPublisherPort {
   /** Una fila reclamada, con los intentos que ya lleva. */
   public record Claimed(OutboxEvent event, int attempts) {}
 
+  private static final String ATTEMPT = "attempt";
+
   private final JdbcClient jdbc;
 
   public OutboxStore(JdbcClient jdbc) {
@@ -114,32 +116,61 @@ public class OutboxStore implements DomainEventPublisherPort {
         .update();
   }
 
+  // Las cuatro marcas llevan el intento como testigo de propiedad (*fencing token*): solo escribe
+  // quien tiene el arrendamiento vigente. Si venció y otra pasada reclamó la fila, `attempts` ya
+  // subió y la marca del dueño anterior no toca nada; sin esto, su `markRetry` borraría el
+  // arrendamiento del nuevo dueño y un tercero podría despachar el mismo agregado a la vez.
+  private static final String OWNED =
+      " where id = :id and attempts = :attempt and status = 'PENDING'";
+
   /**
    * El intento ya se contó al reclamar: así un evento que mata el proceso no se reintenta sin fin.
+   *
+   * @return falso si el arrendamiento ya no era de quien marca
    */
-  public void markProcessed(UUID id) {
-    jdbc.sql(
-            "update outbox_events set status = 'PROCESSED', processed_at = now(),"
-                + " locked_until = null where id = :id")
-        .param("id", id)
-        .update();
+  public boolean markProcessed(UUID id, int attempt) {
+    return jdbc.sql(
+                "update outbox_events set status = 'PROCESSED', processed_at = now(),"
+                    + " locked_until = null"
+                    + OWNED)
+            .param("id", id)
+            .param(ATTEMPT, attempt)
+            .update()
+        == 1;
   }
 
   /** Programa el reintento: la fila vuelve a estar disponible tras el retroceso. */
-  public void markRetry(UUID id, Duration delay) {
-    jdbc.sql(
-            "update outbox_events set available_at = :availableAt, locked_until = null"
-                + " where id = :id")
-        .param("id", id)
-        .param("availableAt", OffsetDateTime.ofInstant(Instant.now().plus(delay), ZoneOffset.UTC))
-        .update();
+  public boolean markRetry(UUID id, int attempt, Duration delay) {
+    return jdbc.sql(
+                "update outbox_events set available_at = clock_timestamp()"
+                    + " + make_interval(secs => :delaySeconds), locked_until = null"
+                    + OWNED)
+            .param("id", id)
+            .param(ATTEMPT, attempt)
+            .param("delaySeconds", delay.toMillis() / 1000.0)
+            .update()
+        == 1;
   }
 
   /** Agotados los intentos: se deja para revisión, no se reintenta más. */
-  public void markFailed(UUID id) {
-    jdbc.sql("update outbox_events set status = 'FAILED', locked_until = null where id = :id")
-        .param("id", id)
-        .update();
+  public boolean markFailed(UUID id, int attempt) {
+    return jdbc.sql("update outbox_events set status = 'FAILED', locked_until = null" + OWNED)
+            .param("id", id)
+            .param(ATTEMPT, attempt)
+            .update()
+        == 1;
+  }
+
+  /**
+   * Devuelve una fila reclamada que no se llegó a despachar: deja de estar arrendada y recupera el
+   * intento, que no se gastó. Así un lote lento no consume intentos de los eventos que no tocó.
+   */
+  public boolean release(UUID id, int attempt) {
+    return jdbc.sql("update outbox_events set locked_until = null, attempts = attempts - 1" + OWNED)
+            .param("id", id)
+            .param(ATTEMPT, attempt)
+            .update()
+        == 1;
   }
 
   public long countByStatus(String status) {

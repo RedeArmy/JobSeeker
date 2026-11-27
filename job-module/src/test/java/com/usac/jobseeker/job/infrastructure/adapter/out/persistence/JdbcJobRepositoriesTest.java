@@ -428,4 +428,33 @@ class JdbcJobRepositoriesTest {
     assertThatThrownBy(() -> postings.insert(posting))
         .isInstanceOf(DataIntegrityViolationException.class);
   }
+
+  // ---- lecturas por lotes (coding-standards §8.1) ----
+
+  // Las mismas reglas que la lectura individual: una eliminada no aparece y el orden de cada lista
+  // de requisitos se conserva.
+  @Test
+  void manyPostingsAndTheirRequirementsAreReadInOneQueryEach() {
+    JobPosting first = draft();
+    JobPosting second = draft();
+    JobPosting deleted = draft();
+    postings.insert(first);
+    postings.insert(second);
+    postings.insert(deleted);
+    requirements.replace(first.id(), sample());
+    jdbc.sql("update job_postings set status = 'DELETED', deleted_at = now() where id = :id")
+        .param("id", deleted.id().value())
+        .update();
+    JobPostingId missing = new JobPostingId(UUID.randomUUID());
+    var ids = List.of(first.id(), second.id(), deleted.id(), missing);
+
+    var found = postings.findAllByIds(ids);
+    var items = requirements.findByPostings(ids);
+
+    assertThat(found).extracting(JobPosting::id).containsExactlyInAnyOrder(first.id(), second.id());
+    assertThat(items).containsOnlyKeys(first.id());
+    assertThat(items.get(first.id())).containsExactlyElementsOf(sample());
+    assertThat(postings.findAllByIds(List.of())).isEmpty();
+    assertThat(requirements.findByPostings(List.of())).isEmpty();
+  }
 }

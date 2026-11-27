@@ -8,6 +8,7 @@ import com.usac.jobseeker.matching.domain.model.JobPostingId;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -24,6 +25,12 @@ class JobPostingSignalsReaderTest {
           query -> {
             asked.add(query);
             return answer;
+          },
+          query -> {
+            Map<UUID, JobSnapshot> found = new java.util.HashMap<>();
+            answer.ifPresent(
+                snapshot -> query.jobPostingIds().forEach(i -> found.put(i, snapshot)));
+            return found;
           });
 
   private JobSnapshot snapshot(String status, String stage) {

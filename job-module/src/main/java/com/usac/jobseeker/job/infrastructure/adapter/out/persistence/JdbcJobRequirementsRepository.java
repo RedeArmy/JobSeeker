@@ -8,7 +8,11 @@ import com.usac.jobseeker.job.domain.model.LanguageProficiency;
 import com.usac.jobseeker.job.domain.model.RequirementType;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
@@ -37,6 +41,28 @@ public class JdbcJobRequirementsRepository implements JobRequirementsStorePort {
         .param(POSTING, id.value())
         .query((rows, n) -> requirementOf(rows))
         .list();
+  }
+
+  @Override
+  public Map<JobPostingId, List<JobRequirement>> findByPostings(Collection<JobPostingId> ids) {
+    Map<JobPostingId, List<JobRequirement>> found = new HashMap<>();
+    if (ids.isEmpty()) {
+      return found;
+    }
+    jdbc.sql(
+            "select job_posting_id, requirement_type, is_mandatory, skill_name, min_level,"
+                + " education_level, min_years, language, min_proficiency from job_requirements"
+                + " where job_posting_id = any(:ids) order by job_posting_id, position")
+        .param("ids", ids.stream().map(JobPostingId::value).toArray(UUID[]::new))
+        .query(
+            (ResultSet rows) -> {
+              found
+                  .computeIfAbsent(
+                      new JobPostingId(rows.getObject("job_posting_id", UUID.class)),
+                      key -> new ArrayList<>())
+                  .add(requirementOf(rows));
+            });
+    return found;
   }
 
   @Override
