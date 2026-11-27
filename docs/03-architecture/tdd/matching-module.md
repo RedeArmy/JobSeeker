@@ -197,7 +197,7 @@ Se construyeron los sub-pasos 2, 4, 5 y 7 del orden de entrega (ver `12-lectura-
 - **Tablas** `compatibility_scores_current`, `compatibility_score_snapshots` y `application_profile_snapshots` (migración `V20261126100000`), solo para pares con motivo.
 - **API** `GET /api/v1/matching/jobs/{id}/score` (`202 PENDING_EMBEDDING` si falta un vector) y `POST /api/v1/matching/jobs/{id}/score/what-if`.
 - **Desvío del ADR-0017 (ADR-0031, aprobado):** no hay caché en Redis por huella; el recálculo corre dentro del trabajador de la cola; el puntaje del candidato se calcula al pedirlo (p50 42 ms).
-- **Pendiente de `ats` (TD-040):** quien postule o cambie de etapa debe llamar a `snapshotapplicationprofile`; hasta que `ats` exista nadie la invoca.
+- **`ats` ya la invoca al postular (27-nov-2026, TD-040):** dentro de la transacción de la postulación. Falta el cambio de etapa (sub-paso 5 de `ats`). Su comando lleva ahora la vacante como `UUID` y un motivo propio del caso de uso (`APPLIED`, `STAGE_CHANGED`), porque los tipos del dominio de `matching` no pueden cruzar a otro módulo (ARCH-04).
 
 ### 10.5 Aliases de habilidades y herramientas de calibración (25-nov-2026, TD-038 y TD-037)
 

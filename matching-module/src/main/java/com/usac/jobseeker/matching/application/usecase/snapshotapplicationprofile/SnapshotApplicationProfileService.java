@@ -9,6 +9,7 @@ import com.usac.jobseeker.matching.application.usecase.calculatecompatibilitysco
 import com.usac.jobseeker.matching.application.usecase.calculatecompatibilityscore.ScoringSources;
 import com.usac.jobseeker.matching.domain.model.ApplicationProfileSnapshot;
 import com.usac.jobseeker.matching.domain.model.CandidateSignals;
+import com.usac.jobseeker.matching.domain.model.JobPostingId;
 import com.usac.jobseeker.matching.domain.model.ScoreReason;
 import com.usac.jobseeker.matching.domain.model.ScoreSnapshot;
 import com.usac.jobseeker.matching.domain.model.SnapshotReason;
@@ -59,8 +60,10 @@ public class SnapshotApplicationProfileService implements SnapshotApplicationPro
       metrics.count(USE_CASE, "no_profile");
       throw new InvalidStateException();
     }
+    JobPostingId job = new JobPostingId(command.jobPostingId());
+    SnapshotReason reason = reasonOf(command.reason());
     boolean profile = false;
-    if (command.reason() == SnapshotReason.APPLIED) {
+    if (reason == SnapshotReason.APPLIED) {
       var composed = CanonicalProfileComposer.compose(signals.get(), maxCharacters);
       sources
           .store()
@@ -68,7 +71,7 @@ public class SnapshotApplicationProfileService implements SnapshotApplicationPro
               new ApplicationProfileSnapshot(
                   UUID.randomUUID(),
                   signals.get().profileId(),
-                  command.job(),
+                  job,
                   command.applicationId(),
                   composed.text().value(),
                   composed.text().contentHash(),
@@ -78,8 +81,7 @@ public class SnapshotApplicationProfileService implements SnapshotApplicationPro
     }
     CalculatedScore calculated =
         calculate.execute(
-            new CalculateCompatibilityScoreCommand(
-                command.candidate(), command.job(), ScoreReason.APPLIED));
+            new CalculateCompatibilityScoreCommand(command.candidate(), job, ScoreReason.APPLIED));
     boolean score = calculated.status() == CalculatedScore.Status.CALCULATED;
     if (score) {
       sources
@@ -88,12 +90,19 @@ public class SnapshotApplicationProfileService implements SnapshotApplicationPro
               new ScoreSnapshot(
                   UUID.randomUUID(),
                   signals.get().profileId(),
-                  command.job(),
-                  command.reason(),
+                  job,
+                  reason,
                   calculated.score().score(),
                   clock.instant()));
     }
     metrics.count(USE_CASE, score ? "snapshotted" : "pending");
     return new SnapshotResult(profile, score);
+  }
+
+  private static SnapshotReason reasonOf(SnapshotApplicationProfileCommand.Reason reason) {
+    return switch (reason) {
+      case APPLIED -> SnapshotReason.APPLIED;
+      case STAGE_CHANGED -> SnapshotReason.STAGE_CHANGED;
+    };
   }
 }

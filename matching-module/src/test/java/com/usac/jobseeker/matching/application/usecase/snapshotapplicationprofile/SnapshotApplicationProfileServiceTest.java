@@ -35,7 +35,11 @@ class SnapshotApplicationProfileServiceTest {
   private SnapshotApplicationProfileUseCase.SnapshotResult snapshot(
       AccountId account, JobPostingId job, UUID application, SnapshotReason reason) {
     return service.execute(
-        new SnapshotApplicationProfileCommand(account, job, application, reason));
+        new SnapshotApplicationProfileCommand(
+            account,
+            job.value(),
+            application,
+            SnapshotApplicationProfileCommand.Reason.valueOf(reason.name())));
   }
 
   @Test
