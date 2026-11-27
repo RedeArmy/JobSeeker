@@ -91,6 +91,12 @@ public class JdbcScoreStore implements ScoreStorePort {
 
   private static final String NOT_ANONYMIZED = " and anonymized_at is null";
 
+  // El final común de las tres anonimizaciones: marca la fila y solo toca las que aún no lo
+  // estaban,
+  // así repetirla no cambia nada (BR-DATA-05).
+  private static final String PROFILE_NOT_YET_ANONYMIZED =
+      " anonymized_at = :at where candidate_profile_id = :profile" + NOT_ANONYMIZED;
+
   // TD-045: `<>` no puede usar el índice `(algorithm_version, computed_at)`; dos rangos sí, y tras
   // la migración casi no hay filas en ninguno, así que la pasada de mantenimiento no recorre la
   // tabla entera. Visible al paquete para probar el plan con EXPLAIN.
@@ -254,22 +260,19 @@ public class JdbcScoreStore implements ScoreStorePort {
     OffsetDateTime when = OffsetDateTime.ofInstant(at, ZoneOffset.UTC);
     jdbc.sql(
             "update compatibility_scores_current set breakdown = cast('{}' as jsonb),"
-                + " anonymized_at = :at where candidate_profile_id = :profile"
-                + NOT_ANONYMIZED)
+                + PROFILE_NOT_YET_ANONYMIZED)
         .param(AT, when)
         .param(PROFILE, profile.value())
         .update();
     jdbc.sql(
             "update compatibility_score_snapshots set breakdown = cast('{}' as jsonb),"
-                + " anonymized_at = :at where candidate_profile_id = :profile"
-                + NOT_ANONYMIZED)
+                + PROFILE_NOT_YET_ANONYMIZED)
         .param(AT, when)
         .param(PROFILE, profile.value())
         .update();
     jdbc.sql(
             "update application_profile_snapshots set canonical_text = null, canonical_hash = null,"
-                + " anonymized_at = :at where candidate_profile_id = :profile"
-                + NOT_ANONYMIZED)
+                + PROFILE_NOT_YET_ANONYMIZED)
         .param(AT, when)
         .param(PROFILE, profile.value())
         .update();
