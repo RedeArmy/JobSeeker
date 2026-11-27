@@ -64,11 +64,13 @@ class CvFileServicesTest {
           (useCase, outcome) -> metrics.add(useCase + ":" + outcome),
           Clock.fixed(NOW, ZoneOffset.UTC),
           UUID::randomUUID);
+  private final com.usac.jobseeker.cv.application.support.RecordingTransactions transactions =
+      new com.usac.jobseeker.cv.application.support.RecordingTransactions();
   private final CvFilePolicy policy = new CvFilePolicy(1024, 3);
   private final UploadCvService upload =
       new UploadCvService(
           change,
-          new CvFileSources(profiles, files, storage, scanner),
+          new CvFileSources(profiles, files, storage, scanner, transactions),
           policy,
           (useCase, outcome) -> metrics.add(useCase + ":" + outcome),
           new Stamp(Clock.fixed(NOW, ZoneOffset.UTC), UUID::randomUUID));
@@ -88,6 +90,23 @@ class CvFileServicesTest {
           (useCase, outcome) -> metrics.add(useCase + ":" + outcome));
 
   // ---- subir ----
+
+  // TD-044: el antivirus y el almacén trabajan sin transacción; solo el alta va en una corta.
+  @Test
+  void onlyTheRegistrationRunsInsideTheShortTransaction() {
+    aProfile();
+    List<String> boundaries = new ArrayList<>();
+    java.util.function.Consumer<String> observer =
+        step -> boundaries.add(step + (transactions.open() ? ":tx" : ":sin-tx"));
+    files.observer = observer;
+    scanner.observer = observer;
+    storage.observer = observer;
+
+    upload.execute(new UploadCvCommand(me, "cv.pdf", PDF));
+
+    assertThat(boundaries).containsExactly("scan:sin-tx", "put:sin-tx", "lock:tx");
+    assertThat(transactions.started()).isOne();
+  }
 
   @Test
   void aValidPdfIsScannedStoredAndBecomesTheCurrentVersion() {
@@ -343,8 +362,11 @@ class CvFileServicesTest {
           .findFirst();
     }
 
+    java.util.function.Consumer<String> observer = step -> {};
+
     @Override
     public void lockProfile(CandidateProfileId profile) {
+      observer.accept("lock");
       locked = true;
     }
 
@@ -385,8 +407,11 @@ class CvFileServicesTest {
     final List<StoredObjectKey> deleted = new ArrayList<>();
     int presigned;
 
+    java.util.function.Consumer<String> observer = step -> {};
+
     @Override
     public StoredObjectKey put(FilePurpose purpose, byte[] content, FileType type) {
+      observer.accept("put");
       var key = StoredObjectKey.random(purpose);
       stored.add(key);
       return key;
@@ -426,8 +451,11 @@ class CvFileServicesTest {
     boolean down;
     int scanned;
 
+    java.util.function.Consumer<String> observer = step -> {};
+
     @Override
     public ScanVerdict scan(byte[] content) {
+      observer.accept("scan");
       if (down) {
         throw new UpstreamUnavailableException("malware_scan", new IOException("caído"));
       }
