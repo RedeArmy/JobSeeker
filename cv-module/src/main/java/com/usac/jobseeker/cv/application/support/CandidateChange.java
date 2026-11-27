@@ -3,11 +3,9 @@ package com.usac.jobseeker.cv.application.support;
 import com.usac.jobseeker.common.application.observability.UseCaseMetricsPort;
 import com.usac.jobseeker.common.application.outbox.DomainEventPublisherPort;
 import com.usac.jobseeker.common.application.outbox.OutboxEvent;
-import com.usac.jobseeker.common.domain.error.FieldViolation;
 import com.usac.jobseeker.common.domain.error.ForbiddenCapabilityException;
 import com.usac.jobseeker.common.domain.error.NotFoundException;
 import com.usac.jobseeker.common.domain.error.StaleStateException;
-import com.usac.jobseeker.common.domain.error.ValidationFailedException;
 import com.usac.jobseeker.common.domain.model.AccountId;
 import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.CandidateCollectionsReadPort;
 import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.CandidateProfileView;
@@ -19,7 +17,6 @@ import com.usac.jobseeker.cv.domain.model.CandidateProfile;
 import com.usac.jobseeker.cv.domain.model.CandidateProfileId;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.BiFunction;
@@ -82,19 +79,12 @@ public class CandidateChange {
 
   /** Una versión negativa no existe: 0 es «sin crear» y las guardadas empiezan en 1. */
   public static void requireValidVersion(long version) {
-    if (version < 0) {
-      throw new ValidationFailedException(List.of(new FieldViolation("version", "INVALID")));
-    }
+    ChangeRules.requireValidVersion(version);
   }
 
   /** Construye el conjunto validándolo; si no cumple las reglas se cuenta como `invalid`. */
   public <T> T validated(String useCase, Supplier<T> build) {
-    try {
-      return build.get();
-    } catch (ValidationFailedException invalid) {
-      metrics.count(useCase, "invalid");
-      throw invalid;
-    }
+    return ChangeRules.validated(metrics, useCase, build);
   }
 
   /**
@@ -146,8 +136,7 @@ public class CandidateChange {
   }
 
   private <E extends RuntimeException> E failed(String useCase, String outcome, E error) {
-    metrics.count(useCase, outcome);
-    return error;
+    return ChangeRules.failed(metrics, useCase, outcome, error);
   }
 
   private void publish(CandidateProfile profile, String change) {

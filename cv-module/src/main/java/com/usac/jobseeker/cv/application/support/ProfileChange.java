@@ -71,9 +71,7 @@ public class ProfileChange {
 
   /** Una versión negativa no existe: 0 es «sin crear» y las guardadas empiezan en 1. */
   public static void requireValidVersion(long version) {
-    if (version < 0) {
-      throw new ValidationFailedException(List.of(new FieldViolation("version", "INVALID")));
-    }
+    ChangeRules.requireValidVersion(version);
   }
 
   /** Un identificador nuevo para un elemento. */
@@ -86,12 +84,7 @@ public class ProfileChange {
    * propaga el error, antes de tocar la base de datos.
    */
   public <T> T validated(String useCase, Supplier<T> build) {
-    try {
-      return build.get();
-    } catch (ValidationFailedException invalid) {
-      metrics.count(useCase, "invalid");
-      throw invalid;
-    }
+    return ChangeRules.validated(metrics, useCase, build);
   }
 
   /** Falla con `TOO_MANY` si la colección ya está llena. */
@@ -151,8 +144,7 @@ public class ProfileChange {
   }
 
   private <E extends RuntimeException> E failed(String useCase, String outcome, E error) {
-    metrics.count(useCase, outcome);
-    return error;
+    return ChangeRules.failed(metrics, useCase, outcome, error);
   }
 
   private void publish(ProfessionalProfile profile, String change) {
