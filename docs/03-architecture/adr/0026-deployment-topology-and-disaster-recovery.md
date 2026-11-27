@@ -33,7 +33,7 @@ Además, el `docker-compose.yml` y las reglas del proyecto asumían un servicio 
 
 | Componente | Dónde | Notas |
 |---|---|---|
-| Proxy inverso + TLS | Caddy (contenedor, mismo host) | Certificados automáticos, HSTS, límites de tamaño de cuerpo |
+| Proxy inverso + TLS | Caddy (contenedor, mismo host) | Certificados automáticos, HSTS, límites de tamaño de cuerpo. La aplicación solo cree sus `X-Forwarded-For`/`-Proto` si `TRUSTED_PROXIES` contiene su IP en la red de Compose (TD-042); sin ella, el límite por IP sería común a todos y el esquema, `http` |
 | `jobseeker-app` | Contenedor JVM, mismo host | Un proceso; diseñado sin estado local (*stateless*) para poder duplicar (ver §6) |
 | Redis 8 | Contenedor, mismo host | Arranca con `--notify-keyspace-events Egx` (la aplicación ya no configura el servidor, ADR-0020 regla 9). Sin persistencia obligatoria; `maxmemory` + `volatile-lru`: **todas** las claves (sesiones, caché y buckets) tienen TTL y por tanto son expulsables, así que bajo presión de memoria se cerrarían sesiones; se dimensiona con margen y se alerta por memoria (ADR-0012). Sesión (ADR-0020), caché y buckets (ADR-0011) |
 | Ollama | Contenedor, mismo host, con límites de CPU/RAM (cgroups) | **Solo embeddings** en la ruta crítica; sin generación de texto por defecto |

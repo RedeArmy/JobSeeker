@@ -80,9 +80,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
   }
 
   /**
-   * La cuenta autenticada o, sin ella, la IP. Se usa la dirección del socket y no
-   * `X-Forwarded-For`: esa cabecera la escribe cualquiera salvo que haya un proxy de confianza
-   * delante, y confiar en ella permitiría evadir el límite cambiándola en cada petición.
+   * La cuenta autenticada o, sin ella, la IP. Nunca se lee `X-Forwarded-For` aquí: esa cabecera la
+   * escribe cualquiera, y confiar en ella permitiría evadir el límite cambiándola en cada petición.
+   * Detrás del proxy inverso, Tomcat ya pone en `getRemoteAddr()` la IP del cliente, pero solo si
+   * la conexión viene de un proxy de confianza (`TRUSTED_PROXIES`, TD-042).
    */
   private static String keyOf(HttpServletRequest request, Policy policy) {
     if (policy.key() == KeyKind.ACCOUNT) {
