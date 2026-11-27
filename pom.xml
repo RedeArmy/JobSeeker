@@ -68,15 +68,17 @@
              el análisis. -->
         <sonar.sources>src/main/java,src/main/resources</sonar.sources>
         <!-- La regla S1135 busca su marcador sin distinguir mayúsculas y, en comentarios en español, lo
-             confunde con el cuantificador de totalidad, que se escribe igual. Se desactiva para Java y
-             XML y la reemplaza scripts/check-work-markers.sh, que sí exige dueño y razón
+             confunde con el cuantificador de totalidad, que se escribe igual. Se desactiva para Java,
+             XML y HTML (las plantillas, desde que se analizan) y la reemplaza scripts/check-work-markers.sh, que sí exige dueño y razón
              (coding-standards.md §5). Ojo: este mismo comentario no puede usar esa palabra, porque
              el análisis de XML también la marcaba. -->
-        <sonar.issue.ignore.multicriteria>pendienteJava,pendienteXml</sonar.issue.ignore.multicriteria>
+        <sonar.issue.ignore.multicriteria>pendienteJava,pendienteXml,pendienteHtml</sonar.issue.ignore.multicriteria>
         <sonar.issue.ignore.multicriteria.pendienteJava.ruleKey>java:S1135</sonar.issue.ignore.multicriteria.pendienteJava.ruleKey>
         <sonar.issue.ignore.multicriteria.pendienteJava.resourceKey>**/*.java</sonar.issue.ignore.multicriteria.pendienteJava.resourceKey>
         <sonar.issue.ignore.multicriteria.pendienteXml.ruleKey>xml:S1135</sonar.issue.ignore.multicriteria.pendienteXml.ruleKey>
         <sonar.issue.ignore.multicriteria.pendienteXml.resourceKey>**/*.xml</sonar.issue.ignore.multicriteria.pendienteXml.resourceKey>
+        <sonar.issue.ignore.multicriteria.pendienteHtml.ruleKey>Web:S1135</sonar.issue.ignore.multicriteria.pendienteHtml.ruleKey>
+        <sonar.issue.ignore.multicriteria.pendienteHtml.resourceKey>**/*.html</sonar.issue.ignore.multicriteria.pendienteHtml.resourceKey>
         <!-- Detección de duplicados: además de HTMX, se excluye la pareja contrato de `cv` y su copia
              anticorrupción en `matching`. Repetir los campos es deliberado: ARCH-04 prohíbe que un tipo
              de `cv` entre al dominio de `matching`, y compartirlo rompería el contexto acotado. -->
