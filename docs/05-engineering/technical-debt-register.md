@@ -4,7 +4,7 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | 🟡 En revisión |
-| **Versión** | 1.25 — el análisis de Sonar del CI tiene caché propia (TD-R55) |
+| **Versión** | 1.26 — postular paga TD-010 y la mitad de TD-040 (sub-pasos 1 y 2 de `ats`) |
 | **Fecha** | 27 de noviembre de 2026 |
 | **Dueño del documento** | Responsable del proyecto |
 | **Revisión del registro** | Al cerrar cada sprint y antes de cada hito de la hoja de ruta |
@@ -56,7 +56,7 @@ Corte: 27-nov-2026.
 | S4 Baja | 3 |
 | **Total** | **13** |
 
-- **Abiertas:** 8 · **Planificadas:** 5 · **Resueltas:** 55 · **Aceptadas:** 7.
+- **Abiertas:** 7 · **Planificadas:** 5 · **Resueltas:** 56 · **Aceptadas:** 7.
 - **S2 abiertas con disparador próximo** (decidir el siguiente sprint): TD-005 y TD-016 (primer despliegue), más TD-020 (antes de usuarios reales).
 - **Métricas a seguir en cada revisión:** deuda abierta por severidad, edad de las S2 en días, número de cierres por sprint, aceptadas vencidas.
 
@@ -65,7 +65,6 @@ Corte: 27-nov-2026.
 | ID | Título | Tipo | Sev | Esf | Confianza | Estado | Disparador |
 |---|---|---|---|---|---|---|---|
 | TD-005 | Dimensionamiento de producción sin definir | Operación | S2 | S | Hipótesis | Abierta | Antes del primer despliegue (ADR-0026) |
-| TD-010 | `idempotency_keys` sin escritor ni purga (la parte de `audit_log` se pagó, TD-R45) | Arquitectura | S4 | S | Leída | Abierta | Primer endpoint con `Idempotency-Key` |
 | TD-016 | Documentación y entrega sin cerrar | Documentación | S2 | L | Medida | Abierta | Antes del primer despliegue |
 | TD-017 | Suite de pruebas con demasiados contextos (25 → 18; objetivo ≤ 12) | Pruebas | S3 | M | Medida | Abierta | Cumplido (`verify` de CI > 5 min); siguiente paso al sumar `ats` |
 | TD-020 | Lote de anonimización sin dueño; descubribilidad al apagar la capacidad | Cumplimiento | S2 | L | Leída | Abierta | Antes de tener usuarios reales |
@@ -91,16 +90,6 @@ Corte: 27-nov-2026.
 - **Criterio de cierre:** Valores en `application-prod.yml` con su razón y una prueba de carga básica sin saturar el pool a la concurrencia objetivo.
 - **Referencias:** `docs/03-architecture/adr/0026-deployment-topology-and-disaster-recovery.md`
 
-#### TD-010 — `idempotency_keys` sin escritor ni purga
-
-**Arquitectura** · **S4 Baja** · esfuerzo **S** · confianza **Leída** · **Abierta**
-
-- **Evidencia:** La tabla existe desde `V20261121100100` y ningún código la escribe ni la purga. La parte de `audit_log` se pagó el 27-nov-2026 (TD-R45): tenía escritor pero no retención.
-- **Interés (qué cuesta no pagarla):** Una tabla vacía que hay que mantener en el esquema; crecerá sin límite el día que se use si no llega con su purga.
-- **Disparador:** Primer endpoint con `Idempotency-Key`.
-- **Remediación propuesta:** El escritor y una purga de 24 h (lo habitual para claves de idempotencia), con el mismo patrón por tandas que `audit_log` y `profile_view_log`.
-- **Criterio de cierre:** Endpoint con `Idempotency-Key`, purga en ejecución y prueba.
-- **Referencias:** `docs/03-architecture/adr/0011-configurable-rate-limiting.md`
 #### TD-016 — Documentación y entrega sin cerrar
 
 **Documentación** · **S2 Alta** · esfuerzo **L** · confianza **Medida** · **Abierta**
@@ -213,7 +202,7 @@ Corte: 27-nov-2026.
 
 **Dominio** · **S3 Media** · esfuerzo **S** · confianza **Leída** · **Planificada**
 
-- **Evidencia:** `snapshotapplicationprofile` está construido y probado (foto del puntaje y copia inmutable del perfil canónico, idempotente por postulación), pero `ats` aún no existe, así que nadie lo invoca.
+- **Evidencia:** `ats` ya la llama al postular, dentro de la transacción de la postulación, y una prueba de punta a punta comprueba la copia (27-nov-2026). Falta el cambio de etapa, que llega con `changeapplicationstage` (sub-paso 5 de `ats`).
 - **Interés (qué cuesta no pagarla):** Sin la llamada, el reclutador evaluaría el perfil que el candidato edite después y no el que presentó (ADR-0017, F6), y no habría historial del puntaje por etapa.
 - **Disparador:** Postulación y pipeline mínimos (`ats`).
 - **Remediación propuesta:** Que el caso de uso de postular llame a `snapshotapplicationprofile` con `APPLIED` y el de cambio de etapa con `STAGE_CHANGED`, dentro de la misma transacción de la postulación, pasando el identificador opaco de la postulación.
@@ -279,6 +268,7 @@ Corte: 27-nov-2026.
 | TD-R53 | Buscar pares de versiones viejas recorría la tabla entera (antes TD-045) | Rendimiento | S4 | 2026-11-27 | Rama `chore/quick-debt-fixes` | El filtro `<>` pasa a dos rangos sobre `idx_csc_version`. Prueba con 20 000 filas y `EXPLAIN` sin `Seq Scan`, que falla con el filtro anterior. |
 | TD-R54 | La bandeja marcaba los eventos procesados uno por uno (antes TD-011) | Rendimiento | S4 | 2026-11-27 | Rama `chore/quick-debt-fixes` | Una sentencia por pasada al final, con el intento de cada fila como testigo (TD-R34). Prueba: 50 eventos, una sola marca. |
 | TD-R55 | El análisis de Sonar del CI descargaba su plugin de Maven Central en cada ejecución y fallaba con un `429` (detectada en los PR #53, #54 y #58) | Operación | S3 | 2026-11-27 | Rama `ci/sonar-own-maven-cache` | Con la caché de `setup-java`, el job restauraba la que guarda el build (sin el plugin de Sonar) y, como la clave coincidía, nunca guardaba la suya. Ahora usa `actions/cache` con su propia clave (`sonar-maven-…`): descarga todo una vez y lo guarda, así que no vuelve a descargar mientras no cambien los `pom.xml` (y, si cambian, parte de su caché anterior). Comprobado en el PR #59: «Cache saved with key: sonar-maven-Linux-…». No puede partir de la caché de `setup-java`, porque `actions/cache` solo restaura cachés de las mismas rutas. |
+| TD-R56 | `idempotency_keys` sin escritor ni purga (TD-010) | Arquitectura | S4 | 2026-11-27 | Rama `feat/ats-submit-application` | Postular es el primer endpoint con `Idempotency-Key`. Puerto `IdempotencyKeysPort` en `common` y adaptador `JdbcIdempotencyKeys` en `app`: la reserva es un `INSERT … ON CONFLICT DO NOTHING` en la transacción del efecto, así un reintento simultáneo espera al primero y recibe su respuesta, y si el efecto falla la clave queda libre. Purga cada hora con retención de 24 h (`jobseeker.idempotency.retention`, nunca menos de una hora), por tandas y con su métrica. Probado contra Postgres, también la espera entre dos transacciones. |
 
 ## 7. Deuda aceptada
 
@@ -322,6 +312,7 @@ Corte: 27-nov-2026.
 | 1.23 | 2026-11-27 | Se pagan los siete arreglos rápidos, todos S4: TD-046, TD-047, TD-025, TD-014, TD-024, TD-045 y TD-011, ahora TD-R48 a TD-R54. Las fichas TD-R45 a TD-R47 citan el PR #56. Quedan 13 abiertas o planificadas (4 S2, 6 S3, 3 S4), 54 resueltas y 7 aceptadas. |
 | 1.24 | 2026-11-27 | Validación completa contra el código. Las 13 abiertas siguen vigentes; se corrigen dos evidencias (TD-016: 40 documentos en revisión, no 35; TD-026: `skill_id` existe pero está vacía). Las 54 resueltas tienen su evidencia en el repositorio y sus 23 PR están fusionados. Se completa TD-A02 (13 excepciones de squawk en 7 migraciones, antes nombraba dos) y se actualiza TD-A06 con el marcado por lotes de TD-R54. Las tablas de resueltas, aceptadas e historial vuelven a orden ascendente, que se había roto desde la 1.19. Sin cambios en el tablero. |
 | 1.25 | 2026-11-27 | Se registra y se paga en la misma PR el fallo recurrente del análisis de Sonar en el CI (TD-R55): tres PR seguidas fallaron por un `429` de Maven Central porque el job no tenía caché propia. Quedan 13 abiertas o planificadas, 55 resueltas y 7 aceptadas. |
+| 1.26 | 2026-11-27 | Sub-pasos 1 y 2 de `ats` (postular): se paga TD-010 (TD-R56) y TD-040 queda a medias (falta el cambio de etapa). Quedan 12 abiertas o planificadas, 56 resueltas y 7 aceptadas. |
 
 ## 9. Plantilla de ficha
 

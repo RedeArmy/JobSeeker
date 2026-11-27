@@ -4,7 +4,7 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | 🟡 En revisión |
-| **Versión** | 0.2 (diseño; nada construido). Decisiones D1 a D6 cerradas por el responsable el 27-nov-2026 |
+| **Versión** | 0.3. Decisiones D1 a D6 cerradas por el responsable el 27-nov-2026; sub-pasos 0 a 2 construidos (§10) |
 | **Fecha** | 26-nov-2026 |
 | **Documentos relacionados** | ADR-0016 (bandeja de salida), ADR-0017 (F6, copia del perfil al postular), ADR-0021 (archivos), ADR-0027 (dueño de tablas), ADR-0031 (puntaje guardado), `domain-model.md` §3 a §6, `data-model.md` §4.8, §4.16 y §4.17, `03-lld.md` §4.1 y §7, `tdd/job-module.md`, `tdd/cv-module.md` §7, `tdd/matching-module.md` §4, BR-TRACK-01 y 02, BR-CAND-01, BR-ACCT-05, BR-JOB-09 y 10, BR-VIS-01 a 03, BR-DATA-04 y 05, REQ-C-03, REQ-C-07, REQ-R-01 y 03, TD-010, TD-017, TD-040 |
 
@@ -124,12 +124,12 @@ Casos de uso **internos** nuevos que `ats` y `tracker` consumen. Se nombran aqu�
 
 | Módulo | Carpeta | Qué responde | Por qué no basta lo existente |
 |---|---|---|---|
-| `job` | `getapplicationgate` | Para (cuenta, vacante): `OPEN`, `NOT_FOUND` (no existe o no es visible para candidatos), `NOT_ACCEPTING` (cerrada o con `acceptingApplications = false`, BR-JOB-10) u `OWN_JOB` (BR-ACCT-05) | `getjobposting` devuelve al candidato un contrato sin dueño ni pausa; `getownedjobstate` solo responde al dueño |
+| `job` | `getapplicationgate` (existe) | Para (cuenta, vacante): `OPEN`, `NOT_FOUND` (no existe o no es visible para candidatos), `NOT_ACCEPTING` (cerrada o con `acceptingApplications = false`, BR-JOB-10) u `OWN_JOB` (BR-ACCT-05) | `getjobposting` devuelve al candidato un contrato sin dueño ni pausa; `getownedjobstate` solo responde al dueño |
 | `job` | `getownedjobstate` (existe) | Si una vacante es del reclutador | Se reutiliza para autorizar el pipeline |
 | `cv` | `checkapplicationreadiness` (existe) | Qué le falta a la cuenta para postular según BR-CAND-01 (nombre, contacto, CV), el perfil de candidato y el identificador del CV vigente | El perfil de candidato no sabe si hay CV; la regla vive con el dato |
 | `cv` | `getapplicantprofiles` | Por lotes: nombre, titular y contacto de los postulantes. Solo lo llama `ats` **después** de autorizar al reclutador | `getprofilesnapshot` excluye nombre y contacto a propósito (minimización); el reclutador de una postulación sí debe verlos (REQ-C-07) |
 | `cv` | `presigncvdownload` | La URL firmada de una versión concreta del CV (ADR-0021 §3), sin autorizar: autoriza quien la pide | La autorización depende de la postulación, que `cv` no conoce (ARCH-06) |
-| `matching` | `snapshotapplicationprofile` (existe) | Copia del perfil y foto del puntaje al postular y al cambiar de etapa | Cierra TD-040 |
+| `matching` | `snapshotapplicationprofile` (existe) | Copia del perfil y foto del puntaje al postular y al cambiar de etapa. Su comando lleva la vacante como `UUID` y un motivo propio (`APPLIED`, `STAGE_CHANGED`): antes exponía tipos del dominio de `matching` y ARCH-04 impedía a `ats` construirlos | Cierra TD-040 |
 | `matching` | `getapplicantscores` | Por lotes, para una vacante y un conjunto de perfiles: el puntaje vigente con su desglose y el de la postulación | Hoy no hay lectura pública de puntajes guardados para el reclutador |
 | `auth` | `resolveactor` (existe) | La capacidad del actor; una cuenta en periodo de gracia ya se rechaza (`PENDING_DELETION`), lo que cumple BR-DATA-04 («no puede postular») | — |
 
@@ -150,7 +150,8 @@ Casos de uso **internos** nuevos que `ats` y `tracker` consumen. Se nombran aqu�
 Tablas de `ats` (ADR-0027). Las claves foráneas apuntan «hacia la izquierda» de la cadena `auth → cv → job → matching → ats`, como permite el ADR-0027:
 
 ```sql
--- Ilustrativo; la migración se escribe con el sub-paso 1.
+-- Resumen; la migración real es V20261127130000__ats_create_applications.sql (sub-paso 1), con sus CHECK
+-- completos y la clave foránea de cv_file_id hacia candidate_cv_files.
 create table applications (
     id uuid primary key,
     candidate_profile_id uuid not null references candidate_profiles (id),
@@ -190,7 +191,7 @@ Cambios al modelo que este diseño exige, a incorporar con el sub-paso que los u
 |---|---|---|
 | A1 | `applications` gana `candidate_account_id`, `cv_file_id`, `stage`, `version`, `updated_at` y `rejection_reason`; `status` gana su `CHECK` | `data-model.md` §4.8 solo tenía `status` sin valores; el índice único parcial ya estaba propuesto en el LLD §4.1 |
 | A2 | `application_status_history`, nueva | Estaba en el ER sin diccionario (`03-lld.md` §4.3); BR-TRACK-02 y REQ-R-03 |
-| A3 | El índice único es sobre `status = 'ACTIVE'`, no sobre `status <> 'WITHDRAWN'` como en el LLD §4.1 | El índice garantiza solo BR-TRACK-01 (una activa). Que un descartado no pueda volver a postular (D3) es una regla del caso de uso: si D3 cambia en la Ola 2, no hace falta otra migración |
+| A3 | El índice único es sobre `status <> 'WITHDRAWN'`, como ya proponía el LLD §4.1, y no solo sobre `status = 'ACTIVE'` | Tras D3, una descartada o contratada sigue contando: el índice impone a la vez BR-TRACK-01 y BR-TRACK-05, también ante dos envíos simultáneos, y reabrir reutiliza la misma fila. Corregido el 27-nov-2026: la primera redacción de esta fila decía lo contrario y contradecía el SQL de arriba |
 | A4 | `candidate_account_id` además del perfil | El tracker y la autorización del candidato trabajan con la cuenta del token; sin ella habría que preguntar a `cv` el perfil en cada lectura |
 
 ## 8. API
@@ -232,12 +233,21 @@ Las pantallas HTMX (`/app/applications/**` del candidato y `/app/jobs/{id}/pipel
 | Sub-paso | Entrega | Depende de |
 |---|---|---|
 | 0 | Subida y descarga del CV en `cv` (`checkapplicationreadiness` incluido). **Hecho:** la subida y la descarga llegaron con el bloque de archivos (ADR-0021); `checkapplicationreadiness` se construyó el 27-nov-2026 | ADR-0021 (aprobado) y sus verificaciones V1 a V3 |
-| 1 | Migración de `applications` (A1, A3, A4) y `application_status_history` (A2); dominio con la máquina de estados y su prueba exhaustiva | 0 |
-| 2 | `getapplicationgate` en `job`; `submitapplication` con idempotencia, copia en `matching` (TD-040) y su evento; API | 1 |
+| 1 | Migración de `applications` (A1, A3, A4) y `application_status_history` (A2); dominio con la máquina de estados y su prueba exhaustiva. **Hecho** el 27-nov-2026 | 0 |
+| 2 | `getapplicationgate` en `job`; `submitapplication` con idempotencia, copia en `matching` (TD-040) y su evento; API. **Hecho** el 27-nov-2026 (§10.1) | 1 |
 | 3 | `withdrawapplication`; `listcandidateapplications`; `tracker` con `listmyapplications` y `getmyapplication` | 2 |
 | 4 | `getapplicantscores` en `matching` y `getapplicantprofiles` en `cv`; `listjobapplications` y `getapplication` | 2 |
 | 5 | `changeapplicationstage`, `decideapplication` y `reopenapplication`; `presigncvdownload` y `getapplicationcv` | 4, 0 |
 | 6 | Pantallas HTMX del candidato y del pipeline | 3, 5 |
+
+### 10.1 Lo construido en los sub-pasos 1 y 2 (27-nov-2026)
+
+- **Datos:** `V20261127130000__ats_create_applications.sql` con las dos tablas de §7. `application_status_history` se añadió a la lista de tablas de `ats` del ADR-0027.
+- **Dominio:** `Application` es inmutable y cada movimiento devuelve la postulación nueva con su fila de historial (`Transition`), así no se puede guardar un cambio sin su historial. La tabla de transiciones vive en `ApplicationMove` y la prueba recorre las 240 combinaciones (movimiento, estado, columna, iniciador), con exactamente 20 válidas.
+- **Postular:** el orden de la regla 3 es capacidad → reserva de la clave → puerta de `job` → preparación de `cv` → duplicado → inserción → copia en `matching` → evento → respuesta guardada, en una sola transacción. La inserción es `INSERT … ON CONFLICT (candidate_profile_id, job_posting_id) WHERE status <> 'WITHDRAWN' DO NOTHING`: de dos envíos simultáneos uno solo escribe, probado en 10 rondas contra Postgres.
+- **Idempotencia (paga TD-010):** la cabecera `Idempotency-Key` es **opcional**; sin ella, un duplicado es `409 ALREADY_APPLIED`. Con ella, repetir el envío devuelve `201` con la misma postulación, y la misma clave para otra vacante es `422 IDEMPOTENCY_KEY_REUSED`. El puerto vive en `common` y el adaptador en `app`, porque la tabla es de infraestructura; la reserva es un `INSERT … ON CONFLICT DO NOTHING` que hace esperar a un reintento simultáneo hasta que el primero confirme. Las claves se purgan cada hora con una retención de 24 h.
+- **Errores nuevos** (sobre estándar): `403 SELF_APPLICATION`, `409 ALREADY_APPLIED`, `422 APPLICATION_REQUIREMENTS_MISSING` (con `FULL_NAME`, `CONTACT` o `CV` en `details`) y `422 IDEMPOTENCY_KEY_REUSED`.
+- **Pendiente de este bloque:** la prueba «si la copia en `matching` falla, no queda postulación» se cubre en la unitaria (el caso de uso se detiene antes del evento y de la respuesta) y por la transacción de Spring; no hay una prueba de punta a punta que fuerce el fallo, porque `matching` solo falla si el perfil no existe, y eso ya lo rechaza antes `cv`.
 
 ## 11. Decisiones abiertas
 

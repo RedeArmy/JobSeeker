@@ -535,17 +535,27 @@ Los vectores los calcula y guarda `matching` (caso de uso `embedentity`), así q
 
 **Copias y fotos del score (`matching`, decisión D5 de su TDD, 24-nov-2026).** La copia del perfil canónico que se guarda al postular (`application_profile_snapshots`) contiene texto libre del candidato, que es un dato derivado de la persona: al anonimizar la cuenta, `canonical_text` y `canonical_hash` pasan a `NULL` y la fila se conserva solo como metadato de la postulación. Las fotos del score (`compatibility_score_snapshots`) no guardan texto del candidato —su evidencia se expresa en términos de los requisitos de la vacante—, así que se conservan tal cual: son el historial que BR-DATA-05 manda preservar.
 
-### 4.8 `applications` (contextos `ats` / `tracker`)
+### 4.8 `applications` y `application_status_history` (contexto `ats`; `tracker` las lee por `ats`)
+
+Construidas el 27-nov-2026 (`V20261127130000__ats_create_applications.sql`, `tdd/ats-tracker-modules.md` §7). Sin datos personales: solo identificadores, estados, fechas y un motivo codificado; nombre y contacto se piden a `cv` al mostrar, así que anonimizar no toca estas tablas (BR-DATA-05).
 
 | Columna | Tipo | Restricciones | Descripción |
 |---|---|---|---|
 | id | uuid | PK | Identificador de la postulación |
-| candidate_profile_id | uuid | FK → candidate_profiles.id | Candidato postulante |
-| job_posting_id | uuid | FK → job_postings.id | Vacante destino |
-| status | varchar | NOT NULL | Estado del pipeline (visible al candidato en `tracker`, BR-TRACK-02) |
-| applied_at | timestamptz | NOT NULL DEFAULT now() | Fecha de postulación |
+| candidate_profile_id | uuid | NOT NULL, FK → candidate_profiles.id | Candidato postulante |
+| candidate_account_id | uuid | NOT NULL, FK → accounts.id | La cuenta del candidato, para el tracker y la autorización sin preguntar a `cv` (A4) |
+| job_posting_id | uuid | NOT NULL, FK → job_postings.id | Vacante destino |
+| cv_file_id | uuid | NOT NULL, FK → candidate_cv_files.id | La versión del CV con que se postuló, no la vigente (ADR-0021 §5) |
+| status | text | NOT NULL, CHECK (`ACTIVE`, `HIRED`, `REJECTED`, `WITHDRAWN`) | Si sigue viva (BR-TRACK-02) |
+| stage | text | NOT NULL, CHECK (`NEW`, `REVIEW`, `INTERVIEW`, `OFFER`) | Columna pública del tablero (BR-TRACK-03, D1) |
+| rejection_reason | text | CHECK catálogo de D5; presente si y solo si `REJECTED` | Motivo interno del descarte; nunca lo ve el candidato |
+| version | bigint | NOT NULL, ≥ 1 | Bloqueo optimista de toda transición |
+| applied_at | timestamptz | NOT NULL | Fecha de postulación |
+| updated_at | timestamptz | NOT NULL, ≥ `applied_at` | Último cambio |
 
-Restricción de unicidad `(candidate_profile_id, job_posting_id)` sobre postulaciones activas, para cumplir BR-TRACK-01 (no duplicar postulación a la misma vacante activa).
+Índice único parcial `uq_app_one_per_job (candidate_profile_id, job_posting_id) WHERE status <> 'WITHDRAWN'`: una sola postulación sin retirar por candidato y vacante (BR-TRACK-01 y BR-TRACK-05). Una descartada o contratada sigue contando, y reabrirla reutiliza la fila (D3); tras retirarse se puede volver a postular (REQ-C-03).
+
+`application_status_history` guarda cada cambio de estado o de columna (BR-TRACK-02, REQ-R-03): `from_status`/`from_stage` (nulos solo en la primera fila), `to_status`, `to_stage`, `actor` (`CANDIDATE`, `RECRUITER`, `SYSTEM`), `rejection_reason` (se conserva aunque reabrir lo quite de la postulación) y `changed_at`. Solo se insertan filas.
 
 ### 4.9 `recruiter_templates` y `branded_cv_exports` (extensión `cv`, consumida por `ats`)
 
@@ -694,7 +704,7 @@ Infraestructura transversal, sin claves foráneas (ADR-0027): el historial de au
 |---|---|---|
 | `outbox_events` | Bandeja de salida transaccional (ADR-0016) | `id` (PK), `aggregate_type`, `aggregate_id`, `aggregate_version`, `event_type`, `event_version`, `payload` (jsonb), `trace_id`, `status` ∈ {`PENDING`, `PROCESSED`, `FAILED`}, `attempts`, `created_at`, `available_at`, `processed_at`. `processed_at` está presente si y solo si `status = 'PROCESSED'`. Índice parcial de pendientes por `available_at` |
 | `processed_events` | Deduplicación de consumidores idempotentes y de los webhooks de Clavaris (ADR-0016 decisiones 3 y 11) | PK `(consumer, event_id)`, `processed_at`; se conserva al menos 30 días |
-| `idempotency_keys` | Idempotencia de los `POST` que crean recursos | PK `(account_id, key)`, `request_hash` (SHA-256 hexadecimal, `char(64)`), `response` (jsonb), `created_at` |
+| `idempotency_keys` | Idempotencia de los `POST` que crean recursos (`Idempotency-Key`; el primero es postular). Se conserva 24 h (`jobseeker.idempotency.retention`, nunca menos de una hora) y se purga cada hora por tandas (TD-R56) | PK `(account_id, key)`, `request_hash` (SHA-256 hexadecimal, `char(64)`), `response` (jsonb: una cadena con lo que el caso de uso guardó, la postulación creada), `created_at` |
 | `audit_log` | Auditoría de acciones relevantes. Se conserva 24 meses (`jobseeker.audit.retention`, nunca menos de un año) y se purga a diario por tandas con el índice `(at)` (TD-010) | `id` (PK), `at`, `actor_account_id`, `organization_id`, `action`, `target_type`, `target_id`, `trace_id`, `details` (jsonb, sin PII) |
 
 ## 5. Índices y consideraciones de rendimiento

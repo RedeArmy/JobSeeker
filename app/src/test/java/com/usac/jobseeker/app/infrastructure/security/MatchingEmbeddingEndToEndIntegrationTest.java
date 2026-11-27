@@ -1300,10 +1300,10 @@ class MatchingEmbeddingEndToEndIntegrationTest {
             new com.usac.jobseeker.matching.application.usecase.snapshotapplicationprofile
                 .SnapshotApplicationProfileCommand(
                 new com.usac.jobseeker.common.domain.model.AccountId(pair.candidate()),
-                new com.usac.jobseeker.matching.domain.model.JobPostingId(
-                    UUID.fromString(pair.jobId())),
+                UUID.fromString(pair.jobId()),
                 application,
-                com.usac.jobseeker.matching.domain.model.SnapshotReason.APPLIED));
+                com.usac.jobseeker.matching.application.usecase.snapshotapplicationprofile
+                    .SnapshotApplicationProfileCommand.Reason.APPLIED));
 
     assertThat(result.profileSnapshotted()).isTrue();
     assertThat(result.scoreSnapshotted()).isTrue();

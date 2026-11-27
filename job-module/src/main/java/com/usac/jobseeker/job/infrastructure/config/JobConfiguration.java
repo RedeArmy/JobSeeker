@@ -9,6 +9,8 @@ import com.usac.jobseeker.job.application.support.PublishingPolicy;
 import com.usac.jobseeker.job.application.support.RecruiterStandingPort;
 import com.usac.jobseeker.job.application.usecase.createjobposting.CreateJobPostingService;
 import com.usac.jobseeker.job.application.usecase.createjobposting.CreateJobPostingUseCase;
+import com.usac.jobseeker.job.application.usecase.getapplicationgate.GetApplicationGateService;
+import com.usac.jobseeker.job.application.usecase.getapplicationgate.GetApplicationGateUseCase;
 import com.usac.jobseeker.job.application.usecase.getjobposting.GetJobPostingService;
 import com.usac.jobseeker.job.application.usecase.getjobposting.GetJobPostingUseCase;
 import com.usac.jobseeker.job.application.usecase.getjobsignals.GetJobSignalsService;
@@ -111,6 +113,13 @@ class JobConfiguration {
   @Bean
   SetRecruitingStageUseCase setRecruitingStageUseCase(JobChange change) {
     return new SetRecruitingStageService(change, Clock.systemUTC());
+  }
+
+  // Interna para `ats`: si una cuenta puede postular (tdd/ats-tracker-modules.md §5).
+  @Bean
+  GetApplicationGateUseCase getApplicationGateUseCase(
+      JdbcJobPostingRepository postings, UseCaseMetricsPort metrics) {
+    return new GetApplicationGateService(postings, metrics);
   }
 
   @Bean

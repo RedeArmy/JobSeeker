@@ -254,6 +254,7 @@ final class MigrationRules {
         owners,
         "ats",
         "applications",
+        "application_status_history",
         "application_answers",
         "application_follow_up_requests",
         "application_follow_up_items");
