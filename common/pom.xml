@@ -16,6 +16,12 @@
     <name>common</name>
     <description>Núcleo compartido: excepciones base, utilidades y tipos comunes usados por los módulos de negocio. Solo biblioteca, sin Dockerfile. Sin dependencias de producción: el núcleo compartido no puede depender de ningún framework.</description>
 
+    <properties>
+        <!-- Sin `src/main/resources`: el padre la añade a lo que analiza Sonar, y una carpeta que no
+             existe hace fallar el análisis. -->
+        <sonar.sources>src/main/java</sonar.sources>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

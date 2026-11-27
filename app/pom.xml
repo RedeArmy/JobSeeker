@@ -16,13 +16,6 @@
     <name>app</name>
     <description>El único desplegable (ADR-0026): @SpringBootApplication, la configuración transversal y las pruebas de arquitectura de los límites entre módulos (ADR-0015). No contiene lógica de negocio.</description>
 
-    <properties>
-        <!-- Por defecto el escáner de Sonar solo lee el código Java. Con las plantillas Thymeleaf dentro del
-             análisis puede seguir los datos hasta ellas y detectar XSS (hallazgo de Sonar del 21-nov-2026).
-             Solo en este módulo: es el único con plantillas, y `htmx.min.js` ya está excluido en el padre. -->
-        <sonar.sources>src/main/java,src/main/resources</sonar.sources>
-    </properties>
-
     <dependencies>
         <!-- Los módulos de negocio son bibliotecas; este módulo las reúne en un solo proceso. -->
         <dependency>
