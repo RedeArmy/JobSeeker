@@ -97,7 +97,7 @@ Carpetas de `cv-module/src/main/java/com/usac/jobseeker/cv/application/usecase/`
 | `downloadmycv` | URL firmada de 5 minutos de una versión propia (ADR-0021 §3) | candidato | — |
 | `reconcileorphancvfiles` | Borra del almacén los CV sin versión que los referencie, con más de 24 h y con un freno ante muchos de golpe (TD-041) | interna (planificada) | — |
 | `uploadprofilephoto` | **Hecho (§10.8).** Subir la foto de perfil, re-codificada sin metadatos EXIF; `getmyprofilephoto` la sirve y `removeprofilephoto` la quita | cuenta | — |
-| `checkapplicationreadiness` | **Planificado para `ats`.** Qué le falta a la cuenta para postular (BR-CAND-01: nombre, contacto y CV) y el CV vigente (`tdd/ats-tracker-modules.md` §5) | interna | — |
+| `checkapplicationreadiness` | **Construido (sub-paso 0 de `ats`).** Qué le falta a la cuenta para postular (BR-CAND-01: `FULL_NAME` sin perfil profesional, `CONTACT` sin perfil de candidato, `CV` sin versión vigente), el perfil de candidato y el CV vigente con los que postularía. Solo devuelve identificadores; una cuenta anonimizada nunca está lista (`tdd/ats-tracker-modules.md` §5) | interna | — |
 | `getapplicantprofiles` | **Planificado para `ats`.** Por lotes, nombre, titular y contacto de postulantes; solo tras autorizar al reclutador en `ats` (REQ-C-07) | interna | — |
 | `presigncvdownload` | **Planificado para `ats`.** URL firmada de una versión concreta del CV; autoriza quien la pide (ADR-0021 §3) | interna | — |
 
