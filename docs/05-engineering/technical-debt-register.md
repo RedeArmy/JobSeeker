@@ -4,7 +4,7 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | 🟡 En revisión |
-| **Versión** | 1.24 — validación completa del registro contra el código |
+| **Versión** | 1.25 — el análisis de Sonar del CI tiene caché propia (TD-R55) |
 | **Fecha** | 27 de noviembre de 2026 |
 | **Dueño del documento** | Responsable del proyecto |
 | **Revisión del registro** | Al cerrar cada sprint y antes de cada hito de la hoja de ruta |
@@ -56,7 +56,7 @@ Corte: 27-nov-2026.
 | S4 Baja | 3 |
 | **Total** | **13** |
 
-- **Abiertas:** 8 · **Planificadas:** 5 · **Resueltas:** 54 · **Aceptadas:** 7.
+- **Abiertas:** 8 · **Planificadas:** 5 · **Resueltas:** 55 · **Aceptadas:** 7.
 - **S2 abiertas con disparador próximo** (decidir el siguiente sprint): TD-005 y TD-016 (primer despliegue), más TD-020 (antes de usuarios reales).
 - **Métricas a seguir en cada revisión:** deuda abierta por severidad, edad de las S2 en días, número de cierres por sprint, aceptadas vencidas.
 
@@ -278,6 +278,7 @@ Corte: 27-nov-2026.
 | TD-R52 | El `Dockerfile` compilaba con una imagen de Java 26 (antes TD-024) | Operación | S4 | 2026-11-27 | Rama `chore/quick-debt-fixes` | `maven:3.9-eclipse-temurin-25-noble` fijada por *digest*; el comprobador de bytecode de Java 25 se conserva como red. ADR-0014 lo anota. |
 | TD-R53 | Buscar pares de versiones viejas recorría la tabla entera (antes TD-045) | Rendimiento | S4 | 2026-11-27 | Rama `chore/quick-debt-fixes` | El filtro `<>` pasa a dos rangos sobre `idx_csc_version`. Prueba con 20 000 filas y `EXPLAIN` sin `Seq Scan`, que falla con el filtro anterior. |
 | TD-R54 | La bandeja marcaba los eventos procesados uno por uno (antes TD-011) | Rendimiento | S4 | 2026-11-27 | Rama `chore/quick-debt-fixes` | Una sentencia por pasada al final, con el intento de cada fila como testigo (TD-R34). Prueba: 50 eventos, una sola marca. |
+| TD-R55 | El análisis de Sonar del CI descargaba su plugin de Maven Central en cada ejecución y fallaba con un `429` (detectada en los PR #53, #54 y #58) | Operación | S3 | 2026-11-27 | Rama `ci/sonar-own-maven-cache` | Con la caché de `setup-java`, el job restauraba la que guarda el build (sin el plugin de Sonar) y, como la clave coincidía, nunca guardaba la suya. Ahora usa `actions/cache` con su propia clave (`sonar-maven-…`): la primera vez parte de la caché del build y después guarda la completa, así que no vuelve a descargar mientras no cambien los `pom.xml`. |
 
 ## 7. Deuda aceptada
 
@@ -320,6 +321,7 @@ Corte: 27-nov-2026.
 | 1.22 | 2026-11-27 | Se paga TD-013 (TD-R46) y se aceptan sus controladores (TD-A07). TD-010, TD-017 y TD-027 se pagan en parte: la retención de `audit_log` (TD-R45); de 25 a 18 contextos de Spring, con el objetivo revisado a ≤ 12 porque los restantes tienen configuración distinta; y la redacción de nombres frecuentes (TD-R47). TD-010 y TD-027 bajan a S4. Las fichas TD-R40 a TD-R44 citan el PR #54. Quedan 20 abiertas o planificadas (4 S2, 6 S3, 10 S4), 47 resueltas y 7 aceptadas. |
 | 1.23 | 2026-11-27 | Se pagan los siete arreglos rápidos, todos S4: TD-046, TD-047, TD-025, TD-014, TD-024, TD-045 y TD-011, ahora TD-R48 a TD-R54. Las fichas TD-R45 a TD-R47 citan el PR #56. Quedan 13 abiertas o planificadas (4 S2, 6 S3, 3 S4), 54 resueltas y 7 aceptadas. |
 | 1.24 | 2026-11-27 | Validación completa contra el código. Las 13 abiertas siguen vigentes; se corrigen dos evidencias (TD-016: 40 documentos en revisión, no 35; TD-026: `skill_id` existe pero está vacía). Las 54 resueltas tienen su evidencia en el repositorio y sus 23 PR están fusionados. Se completa TD-A02 (13 excepciones de squawk en 7 migraciones, antes nombraba dos) y se actualiza TD-A06 con el marcado por lotes de TD-R54. Las tablas de resueltas, aceptadas e historial vuelven a orden ascendente, que se había roto desde la 1.19. Sin cambios en el tablero. |
+| 1.25 | 2026-11-27 | Se registra y se paga en la misma PR el fallo recurrente del análisis de Sonar en el CI (TD-R55): tres PR seguidas fallaron por un `429` de Maven Central porque el job no tenía caché propia. Quedan 13 abiertas o planificadas, 55 resueltas y 7 aceptadas. |
 
 ## 9. Plantilla de ficha
 

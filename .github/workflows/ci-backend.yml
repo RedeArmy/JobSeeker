@@ -83,7 +83,19 @@ jobs:
         with:
           java-version: "25"
           distribution: temurin
-          cache: maven
+
+      # Caché propia (TD-R55). Con la de setup-java este job restauraba la que guarda el build, que no
+      # trae el plugin de Sonar, y como la clave coincidía nunca guardaba la suya: descargaba el plugin
+      # y sus dependencias de Maven Central en cada ejecución, y un 429 de Central tumbaba el análisis
+      # (PR #53, #54 y #58). La primera vez parte de la caché del build y después guarda la completa.
+      - name: Cache the Maven repository for the analysis
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/repository
+          key: sonar-maven-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            sonar-maven-${{ runner.os }}-
+            setup-java-${{ runner.os }}-x64-maven-
 
       - name: Analyze and wait for the quality gate
         env:
