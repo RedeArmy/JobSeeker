@@ -3,7 +3,6 @@ package com.usac.jobseeker.app.infrastructure.security;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
-import com.usac.jobseeker.app.InfrastructureTestConfiguration;
 import java.io.IOException;
 import java.net.URI;
 import java.time.Clock;
@@ -12,15 +11,9 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.context.annotation.Import;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -29,32 +22,7 @@ import org.springframework.web.util.UriComponentsBuilder;
  * Registro del cliente de Clavaris (ADR-0020, tdd/auth-module.md §4.4) y la petición de
  * autorización que construye, contra un emisor falso que solo sirve el descubrimiento.
  */
-@SpringBootTest
-@AutoConfigureMockMvc
-@Import(InfrastructureTestConfiguration.class)
-class ClavarisRegistrationTest {
-
-  private static final StubIssuer ISSUER = start();
-
-  private static StubIssuer start() {
-    try {
-      return new StubIssuer();
-    } catch (java.io.IOException failure) {
-      throw new IllegalStateException(failure);
-    }
-  }
-
-  @DynamicPropertySource
-  static void clavaris(DynamicPropertyRegistry registry) {
-    registry.add("jobseeker.auth.clavaris.issuer-uri", ISSUER::issuerUri);
-    registry.add("jobseeker.auth.clavaris.client-id", () -> "client-de-prueba");
-    registry.add("jobseeker.auth.clavaris.client-secret", () -> "secreto-de-prueba");
-  }
-
-  @AfterAll
-  static void stop() {
-    ISSUER.close();
-  }
+class ClavarisRegistrationTest extends SharedIssuerIntegrationTest {
 
   @Autowired private MockMvc mvc;
 

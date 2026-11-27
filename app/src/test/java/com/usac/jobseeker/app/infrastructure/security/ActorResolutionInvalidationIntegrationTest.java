@@ -17,6 +17,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -28,7 +29,9 @@ import org.springframework.web.context.request.ServletRequestAttributes;
  * cuenta que escribe el adaptador de `auth` llega al ámbito de la petición sin que ningún caso de
  * uso tenga que acordarse de avisar. Es el fallo que apareció al introducirla.
  */
+// TD-017: con MockMvc, aunque no lo use, comparte el contexto de las demás pruebas sin emisor.
 @SpringBootTest
+@AutoConfigureMockMvc
 @Import(InfrastructureTestConfiguration.class)
 class ActorResolutionInvalidationIntegrationTest {
 

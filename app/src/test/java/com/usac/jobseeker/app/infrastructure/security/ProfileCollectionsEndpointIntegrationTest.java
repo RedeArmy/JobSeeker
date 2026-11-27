@@ -9,7 +9,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
-import com.usac.jobseeker.app.InfrastructureTestConfiguration;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -21,20 +20,13 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -45,46 +37,14 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * pueden: que una operación fallida **revierte** el avance de versión, que un elemento ajeno no se
  * toca, y que de dos escrituras simultáneas con la misma versión gana exactamente una.
  */
-@SpringBootTest
-@AutoConfigureMockMvc
 @ExtendWith(OutputCaptureExtension.class)
-@Import(InfrastructureTestConfiguration.class)
-class ProfileCollectionsEndpointIntegrationTest {
+class ProfileCollectionsEndpointIntegrationTest extends SharedIssuerIntegrationTest {
 
   private static final String PROFILE = "/api/v1/me/professional-profile";
-
-  private static final StubIssuer ISSUER = startIssuer();
-  private static final TestTokens KEYS = TestTokens.withKey("kid-collections");
-
-  private static StubIssuer startIssuer() {
-    try {
-      return new StubIssuer();
-    } catch (java.io.IOException failure) {
-      throw new IllegalStateException(failure);
-    }
-  }
-
-  @DynamicPropertySource
-  static void properties(DynamicPropertyRegistry registry) {
-    registry.add("jobseeker.auth.clavaris.issuer-uri", ISSUER::issuerUri);
-    registry.add("jobseeker.auth.clavaris.client-id", () -> TestTokens.CLIENT_ID);
-    registry.add("jobseeker.auth.clavaris.client-secret", () -> "secreto-de-prueba");
-  }
-
-  @AfterAll
-  static void stop() {
-    ISSUER.close();
-  }
 
   @Autowired private MockMvc mvc;
   @Autowired private JdbcTemplate jdbc;
   @Autowired private MeterRegistry meters;
-
-  @BeforeEach
-  void publishTheKeys() {
-    ISSUER.jwks = KEYS.jwks();
-    ISSUER.jwksStatus = 200;
-  }
 
   private String tokenOf(UUID account) {
     return KEYS.token(ISSUER.issuerUri(), Instant.now()).subject(account.toString()).build();

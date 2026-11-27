@@ -23,13 +23,16 @@ import java.util.concurrent.Future;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * Los casos de uso de `auth` contra la tabla real `accounts` de Postgres 17 (ADR-0020, BR-ACCT-09).
  */
+// TD-017: con MockMvc, aunque no lo use, comparte el contexto de las demás pruebas sin emisor.
 @SpringBootTest
+@AutoConfigureMockMvc
 @Import(InfrastructureTestConfiguration.class)
 class AccountPersistenceIntegrationTest {
 
