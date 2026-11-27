@@ -127,11 +127,38 @@ class PiiRedactorTest {
         .isEqualTo("presupuesto [teléfono] USD");
   }
 
-  // Límite conocido (TD-027): los nombres propios no se redactan.
+  // TD-027: un nombre de pila seguido de un apellido conocido se redacta, con o sin tildes y en
+  // mayúsculas.
   @Test
-  void personalNamesAreNotRedactedBecauseThatNeedsALanguageModel() {
-    assertThat(PiiRedactor.redact("Trabajé con Ana López en el equipo de pagos").text())
-        .contains("Ana López");
+  void commonPersonalNamesAreRedacted() {
+    var result = PiiRedactor.redact("Trabajé con Ana López y con JOSÉ Luis Perez Garcia en pagos");
+
+    assertThat(result.text())
+        .isEqualTo("Trabajé con [persona] y con [persona] en pagos")
+        .doesNotContain("Ana", "López", "Perez");
+    assertThat(result.redactions()).isEqualTo(2);
+    assertThat(PiiRedactor.redact("Reporté a José Luis Pérez García").text())
+        .isEqualTo("Reporté a [persona]");
+  }
+
+  // Prima la precisión: sin un apellido conocido, o si no empieza por un nombre de pila, no se
+  // toca.
+  @Test
+  void technologiesPlacesAndLoneGivenNamesAreKept() {
+    String text =
+        "Ruby on Rails, Spring Boot y Julia Computing en San José; Ana revisó el código de"
+            + " Banco Industrial con Mario Andretti";
+
+    var result = PiiRedactor.redact(text);
+
+    assertThat(result.text()).isEqualTo(text);
+    assertThat(result.redactions()).isZero();
+  }
+
+  // Límite conocido (TD-027): un nombre fuera de las listas no se reconoce sin un modelo.
+  @Test
+  void aNameOutsideTheListsIsNotRecognized() {
+    assertThat(PiiRedactor.redact("Trabajé con Ixchel Tzunun").text()).contains("Ixchel Tzunun");
   }
 
   // Propiedad con semilla fija: ningún dato personal inyectado sobrevive, sea cual sea el texto de
