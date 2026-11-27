@@ -7,22 +7,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
-import com.usac.jobseeker.app.InfrastructureTestConfiguration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -32,46 +25,17 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * la API, la lista de operadores de la configuración, la auditoría en Postgres y, al final, la
  * unión con la puerta de publicar (TD-030): verificar a un reclutador es lo que le sube el tope.
  */
-@SpringBootTest
-@AutoConfigureMockMvc
-@Import(InfrastructureTestConfiguration.class)
-class RecruiterReviewEndpointIntegrationTest {
+class RecruiterReviewEndpointIntegrationTest extends SharedIssuerIntegrationTest {
 
   private static final String ADMIN = "/api/v1/admin/recruiters/%s/verification";
   private static final String JOBS = "/api/v1/job/postings";
   private static final String ERROR_CODE = "$.error.code";
-  private static final UUID OPERATOR = UUID.randomUUID();
-  private static final StubIssuer ISSUER = startIssuer();
-  private static final TestTokens KEYS = TestTokens.withKey("kid-review");
-
-  private static StubIssuer startIssuer() {
-    try {
-      return new StubIssuer();
-    } catch (java.io.IOException failure) {
-      throw new IllegalStateException(failure);
-    }
-  }
-
-  @DynamicPropertySource
-  static void properties(DynamicPropertyRegistry registry) {
-    registry.add("jobseeker.auth.clavaris.issuer-uri", ISSUER::issuerUri);
-    registry.add("jobseeker.auth.clavaris.client-id", () -> TestTokens.CLIENT_ID);
-    registry.add("jobseeker.auth.clavaris.client-secret", () -> "secreto-de-prueba");
-    registry.add("jobseeker.auth.operators.account-ids", OPERATOR::toString);
-  }
-
-  @AfterAll
-  static void stop() {
-    ISSUER.close();
-  }
 
   @Autowired private MockMvc mvc;
   @Autowired private JdbcTemplate jdbc;
 
   @BeforeEach
   void prepare() {
-    ISSUER.jwks = KEYS.jwks();
-    ISSUER.jwksStatus = 200;
     // El operador es una cuenta local como cualquier otra: la cadena exige que exista.
     jdbc.update(
         "insert into accounts (id, is_candidate_enabled) values (?, true) on conflict do nothing",

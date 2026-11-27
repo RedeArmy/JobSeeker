@@ -6,23 +6,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.usac.jobseeker.app.InfrastructureTestConfiguration;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
 import java.util.UUID;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.system.OutputCaptureExtension;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
@@ -31,38 +23,12 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * necesiten (TD-004): se cuentan las llamadas que llegan a la resolución real, la que consulta la
  * base de datos. Antes eran 2 por una lectura y 3 por el reemplazo de un conjunto.
  */
-@SpringBootTest
-@AutoConfigureMockMvc
 @ExtendWith(OutputCaptureExtension.class)
-@Import(InfrastructureTestConfiguration.class)
-class ActorResolutionPerRequestIntegrationTest {
+class ActorResolutionPerRequestIntegrationTest extends SharedIssuerIntegrationTest {
 
   private static final String PROFILE = "/api/v1/me/professional-profile";
   private static final String CANDIDATE = "/api/v1/me/candidate-profile";
   private static final String BASE = "{\"contactEmail\":\"ana@example.test\",\"version\":%d}";
-
-  private static final StubIssuer ISSUER = startIssuer();
-  private static final TestTokens KEYS = TestTokens.withKey("kid-actor");
-
-  private static StubIssuer startIssuer() {
-    try {
-      return new StubIssuer();
-    } catch (java.io.IOException failure) {
-      throw new IllegalStateException(failure);
-    }
-  }
-
-  @DynamicPropertySource
-  static void properties(DynamicPropertyRegistry registry) {
-    registry.add("jobseeker.auth.clavaris.issuer-uri", ISSUER::issuerUri);
-    registry.add("jobseeker.auth.clavaris.client-id", () -> TestTokens.CLIENT_ID);
-    registry.add("jobseeker.auth.clavaris.client-secret", () -> "secreto-de-prueba");
-  }
-
-  @AfterAll
-  static void stop() {
-    ISSUER.close();
-  }
 
   @org.springframework.test.context.bean.override.mockito.MockitoSpyBean(
       name = "resolveActorUseCase")
@@ -77,12 +43,6 @@ class ActorResolutionPerRequestIntegrationTest {
   private com.usac.jobseeker.cv.application.usecase.getvisibleavailability
           .GetVisibleAvailabilityUseCase
       visibleAvailability;
-
-  @BeforeEach
-  void publishTheKeys() {
-    ISSUER.jwks = KEYS.jwks();
-    ISSUER.jwksStatus = 200;
-  }
 
   private String tokenOf(UUID account) {
     return KEYS.token(ISSUER.issuerUri(), Instant.now()).subject(account.toString()).build();

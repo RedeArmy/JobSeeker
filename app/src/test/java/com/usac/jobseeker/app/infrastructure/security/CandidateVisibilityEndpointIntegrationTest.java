@@ -9,7 +9,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
-import com.usac.jobseeker.app.InfrastructureTestConfiguration;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -20,19 +19,12 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.system.OutputCaptureExtension;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
@@ -42,39 +34,13 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * los dobles en memoria no pueden: capacidad, bloqueo optimista real, reemplazo de conjuntos y
  * eventos en la bandeja.
  */
-@SpringBootTest
-@AutoConfigureMockMvc
 @ExtendWith(OutputCaptureExtension.class)
-@Import(InfrastructureTestConfiguration.class)
-class CandidateVisibilityEndpointIntegrationTest {
+class CandidateVisibilityEndpointIntegrationTest extends SharedIssuerIntegrationTest {
 
   private static final String PROFILE = "/api/v1/me/professional-profile";
   private static final String CANDIDATE = "/api/v1/me/candidate-profile";
   private static final String EXCL = CANDIDATE + "/availability-exclusions";
   private static final String BASE = "{\"contactEmail\":\"ana@example.test\",\"version\":%d}";
-
-  private static final StubIssuer ISSUER = startIssuer();
-  private static final TestTokens KEYS = TestTokens.withKey("kid-visibility");
-
-  private static StubIssuer startIssuer() {
-    try {
-      return new StubIssuer();
-    } catch (java.io.IOException failure) {
-      throw new IllegalStateException(failure);
-    }
-  }
-
-  @DynamicPropertySource
-  static void properties(DynamicPropertyRegistry registry) {
-    registry.add("jobseeker.auth.clavaris.issuer-uri", ISSUER::issuerUri);
-    registry.add("jobseeker.auth.clavaris.client-id", () -> TestTokens.CLIENT_ID);
-    registry.add("jobseeker.auth.clavaris.client-secret", () -> "secreto-de-prueba");
-  }
-
-  @AfterAll
-  static void stop() {
-    ISSUER.close();
-  }
 
   @Autowired private MockMvc mvc;
   @Autowired private JdbcTemplate jdbc;
@@ -84,12 +50,6 @@ class CandidateVisibilityEndpointIntegrationTest {
   private com.usac.jobseeker.cv.application.usecase.getvisibleavailability
           .GetVisibleAvailabilityUseCase
       visibleAvailability;
-
-  @BeforeEach
-  void publishTheKeys() {
-    ISSUER.jwks = KEYS.jwks();
-    ISSUER.jwksStatus = 200;
-  }
 
   private String tokenOf(UUID account) {
     return KEYS.token(ISSUER.issuerUri(), Instant.now()).subject(account.toString()).build();

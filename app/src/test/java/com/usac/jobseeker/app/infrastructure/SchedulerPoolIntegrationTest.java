@@ -9,6 +9,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
@@ -17,7 +18,9 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
  * Ollama durante segundos; con el hilo único por defecto retrasaría el sondeo de la bandeja y
  * cualquier lote.
  */
+// TD-017: con MockMvc, aunque no lo use, comparte el contexto de las demás pruebas sin emisor.
 @SpringBootTest
+@AutoConfigureMockMvc
 @Import(InfrastructureTestConfiguration.class)
 class SchedulerPoolIntegrationTest {
 

@@ -695,7 +695,7 @@ Infraestructura transversal, sin claves foráneas (ADR-0027): el historial de au
 | `outbox_events` | Bandeja de salida transaccional (ADR-0016) | `id` (PK), `aggregate_type`, `aggregate_id`, `aggregate_version`, `event_type`, `event_version`, `payload` (jsonb), `trace_id`, `status` ∈ {`PENDING`, `PROCESSED`, `FAILED`}, `attempts`, `created_at`, `available_at`, `processed_at`. `processed_at` está presente si y solo si `status = 'PROCESSED'`. Índice parcial de pendientes por `available_at` |
 | `processed_events` | Deduplicación de consumidores idempotentes y de los webhooks de Clavaris (ADR-0016 decisiones 3 y 11) | PK `(consumer, event_id)`, `processed_at`; se conserva al menos 30 días |
 | `idempotency_keys` | Idempotencia de los `POST` que crean recursos | PK `(account_id, key)`, `request_hash` (SHA-256 hexadecimal, `char(64)`), `response` (jsonb), `created_at` |
-| `audit_log` | Auditoría de acciones relevantes | `id` (PK), `at`, `actor_account_id`, `organization_id`, `action`, `target_type`, `target_id`, `trace_id`, `details` (jsonb, sin PII) |
+| `audit_log` | Auditoría de acciones relevantes. Se conserva 24 meses (`jobseeker.audit.retention`, nunca menos de un año) y se purga a diario por tandas con el índice `(at)` (TD-010) | `id` (PK), `at`, `actor_account_id`, `organization_id`, `action`, `target_type`, `target_id`, `trace_id`, `details` (jsonb, sin PII) |
 
 ## 5. Índices y consideraciones de rendimiento
 

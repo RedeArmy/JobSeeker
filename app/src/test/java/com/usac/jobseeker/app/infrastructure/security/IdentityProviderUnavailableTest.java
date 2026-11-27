@@ -21,7 +21,9 @@ import org.springframework.test.web.servlet.MockMvc;
 @SpringBootTest(
     properties = {
       "jobseeker.auth.clavaris.issuer-uri=http://127.0.0.1:1/o/inalcanzable",
-      "jobseeker.auth.clavaris.client-id=id",
+      // TD-017: las mismas propiedades que ApiIdentityProviderDownIntegrationTest, para compartir
+      // su contexto.
+      "jobseeker.auth.clavaris.client-id=client-de-prueba",
       "jobseeker.auth.clavaris.client-secret=secreto",
       "jobseeker.auth.clavaris.connect-timeout=300ms"
     })
