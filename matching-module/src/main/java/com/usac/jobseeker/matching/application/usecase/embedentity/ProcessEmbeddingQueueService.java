@@ -6,6 +6,7 @@ import com.usac.jobseeker.matching.application.usecase.recomputescoresforentity.
 import com.usac.jobseeker.matching.domain.model.JobPostingId;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import org.slf4j.Logger;
@@ -55,9 +56,21 @@ public class ProcessEmbeddingQueueService implements ProcessEmbeddingQueueUseCas
 
   @Override
   public int execute() {
+    Instant claimedAt = clock.instant();
     List<EmbeddingWorkQueuePort.Job> jobs =
         queue.claim(policy.batchSize(), policy.lease(), policy.maxAttempts());
-    jobs.forEach(this::run);
+    // El lote se arrienda entero pero se ejecuta en serie, y cada llamada al modelo puede tardar
+    // hasta su tiempo de espera: pasado el 80 % del arrendamiento, lo que falta se devuelve sin
+    // ejecutar, para que otro trabajador no lo tome mientras este aún lo tiene.
+    Instant deadline = claimedAt.plus(policy.lease().multipliedBy(4).dividedBy(5));
+    for (EmbeddingWorkQueuePort.Job job : jobs) {
+      if (clock.instant().isBefore(deadline)) {
+        run(job);
+      } else {
+        queue.release(job);
+        metrics.count(USE_CASE, "released");
+      }
+    }
     return jobs.size();
   }
 

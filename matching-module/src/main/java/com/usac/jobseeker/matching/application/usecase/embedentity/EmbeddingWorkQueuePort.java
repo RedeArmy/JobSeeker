@@ -49,6 +49,15 @@ public interface EmbeddingWorkQueuePort {
   /** Lo deja para revisión: no se reintenta más. */
   void fail(Job job);
 
+  /**
+   * Devuelve un trabajo reclamado que no se llegó a ejecutar porque su arrendamiento estaba por
+   * vencer: queda disponible enseguida. El adaptador real además le devuelve el intento, que no se
+   * gastó; por defecto basta con reprogramarlo para ya.
+   */
+  default void release(Job job) {
+    retryAt(job, Instant.EPOCH);
+  }
+
   /** Descarta lo pendiente de una entidad (la anonimizaron: no hay nada que calcular). */
   void discard(EmbeddingEntity entity, UUID key);
 
