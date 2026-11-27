@@ -48,7 +48,7 @@ public class JdbcScoreStore implements ScoreStorePort {
   private static final String AT = "at";
   // Todas las consultas son constantes: solo los valores viajan como parámetros, nunca se arma SQL
   // con datos de la petición.
-  private static final String SELECT_CURRENT =
+  static final String SELECT_CURRENT =
       "select candidate_profile_id, job_posting_id, overall, completeness, calibrated,"
           + " algorithm_version, breakdown, reason, computed_at from compatibility_scores_current";
   private static final String PAIR =
@@ -88,6 +88,14 @@ public class JdbcScoreStore implements ScoreStorePort {
           + ", cur.reason), array_position("
           + REASON_RANK
           + ", excluded.reason))]";
+
+  private static final String NOT_ANONYMIZED = " and anonymized_at is null";
+
+  // TD-045: `<>` no puede usar el índice `(algorithm_version, computed_at)`; dos rangos sí, y tras
+  // la migración casi no hay filas en ninguno, así que la pasada de mantenimiento no recorre la
+  // tabla entera. Visible al paquete para probar el plan con EXPLAIN.
+  static final String STALE_VERSION =
+      " where (algorithm_version < :version or algorithm_version > :version)" + NOT_ANONYMIZED;
 
   private final JdbcClient jdbc;
 
@@ -175,10 +183,7 @@ public class JdbcScoreStore implements ScoreStorePort {
 
   @Override
   public List<StoredScore> staleVersion(String currentVersion, int limit) {
-    return jdbc.sql(
-            SELECT_CURRENT
-                + " where algorithm_version <> :version and anonymized_at is null"
-                + " order by computed_at limit :limit")
+    return jdbc.sql(SELECT_CURRENT + STALE_VERSION + " order by computed_at limit :limit")
         .param(VERSION, currentVersion)
         .param(LIMIT, limit)
         .query((rows, n) -> storedOf(rows))
@@ -250,21 +255,21 @@ public class JdbcScoreStore implements ScoreStorePort {
     jdbc.sql(
             "update compatibility_scores_current set breakdown = cast('{}' as jsonb),"
                 + " anonymized_at = :at where candidate_profile_id = :profile"
-                + " and anonymized_at is null")
+                + NOT_ANONYMIZED)
         .param(AT, when)
         .param(PROFILE, profile.value())
         .update();
     jdbc.sql(
             "update compatibility_score_snapshots set breakdown = cast('{}' as jsonb),"
                 + " anonymized_at = :at where candidate_profile_id = :profile"
-                + " and anonymized_at is null")
+                + NOT_ANONYMIZED)
         .param(AT, when)
         .param(PROFILE, profile.value())
         .update();
     jdbc.sql(
             "update application_profile_snapshots set canonical_text = null, canonical_hash = null,"
                 + " anonymized_at = :at where candidate_profile_id = :profile"
-                + " and anonymized_at is null")
+                + NOT_ANONYMIZED)
         .param(AT, when)
         .param(PROFILE, profile.value())
         .update();

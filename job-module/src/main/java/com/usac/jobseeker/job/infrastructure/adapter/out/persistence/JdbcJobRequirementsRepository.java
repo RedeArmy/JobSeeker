@@ -70,26 +70,49 @@ public class JdbcJobRequirementsRepository implements JobRequirementsStorePort {
     jdbc.sql("delete from job_requirements where job_posting_id = :posting")
         .param(POSTING, id.value())
         .update();
-    for (int position = 0; position < requirements.size(); position++) {
-      JobRequirement r = requirements.get(position);
-      jdbc.sql(
-              "insert into job_requirements (id, job_posting_id, requirement_type, is_mandatory,"
-                  + " position, skill_name, min_level, education_level, min_years, language,"
-                  + " min_proficiency) values (:id, :posting, :type, :mandatory, :position,"
-                  + " :skillName, :minLevel, :education, :minYears, :language, :proficiency)")
-          .param("id", UUID.randomUUID())
-          .param(POSTING, id.value())
-          .param("type", r.type().name())
-          .param("mandatory", r.mandatory())
-          .param("position", position)
-          .param("skillName", r.skillName())
-          .param("minLevel", r.minLevel())
-          .param("education", r.educationLevel() == null ? null : r.educationLevel().name())
-          .param("minYears", r.minYears())
-          .param("language", r.language())
-          .param("proficiency", r.minProficiency() == null ? null : r.minProficiency().name())
-          .update();
+    if (requirements.isEmpty()) {
+      return;
     }
+    // TD-047: una sola sentencia para todo el conjunto, como `cv` (TD-R11), en lugar de una por
+    // requisito. La posición sale del orden de los arreglos (`with ordinality`, que empieza en 1).
+    jdbc.sql(
+            "insert into job_requirements (id, job_posting_id, requirement_type, is_mandatory,"
+                + " position, skill_name, min_level, education_level, min_years, language,"
+                + " min_proficiency)"
+                + " select id, :posting, t, m, ord - 1, sn, ml, ed, my, la, pr"
+                + " from unnest(cast(:ids as uuid[]), cast(:types as text[]),"
+                + " cast(:mandatory as boolean[]), cast(:skillNames as text[]),"
+                + " cast(:minLevels as integer[]), cast(:educations as text[]),"
+                + " cast(:minYears as integer[]), cast(:languages as text[]),"
+                + " cast(:proficiencies as text[]))"
+                + " with ordinality as x(id, t, m, sn, ml, ed, my, la, pr, ord)")
+        .param(POSTING, id.value())
+        .param("ids", requirements.stream().map(r -> UUID.randomUUID()).toArray(UUID[]::new))
+        .param("types", requirements.stream().map(r -> r.type().name()).toArray(String[]::new))
+        .param(
+            "mandatory",
+            requirements.stream().map(JobRequirement::mandatory).toArray(Boolean[]::new))
+        .param(
+            "skillNames",
+            requirements.stream().map(JobRequirement::skillName).toArray(String[]::new))
+        .param(
+            "minLevels",
+            requirements.stream().map(JobRequirement::minLevel).toArray(Integer[]::new))
+        .param(
+            "educations",
+            requirements.stream()
+                .map(r -> r.educationLevel() == null ? null : r.educationLevel().name())
+                .toArray(String[]::new))
+        .param(
+            "minYears", requirements.stream().map(JobRequirement::minYears).toArray(Integer[]::new))
+        .param(
+            "languages", requirements.stream().map(JobRequirement::language).toArray(String[]::new))
+        .param(
+            "proficiencies",
+            requirements.stream()
+                .map(r -> r.minProficiency() == null ? null : r.minProficiency().name())
+                .toArray(String[]::new))
+        .update();
   }
 
   private static JobRequirement requirementOf(ResultSet rows) throws SQLException {
