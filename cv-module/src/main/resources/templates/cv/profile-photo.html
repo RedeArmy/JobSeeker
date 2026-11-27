@@ -1,5 +1,11 @@
 <!DOCTYPE html>
 <html lang="es" xmlns:th="http://www.thymeleaf.org">
+<!-- Este archivo solo aporta el fragmento `section`, que HTMX inserta en /app/profile; nunca se
+     sirve como página. La cabecera existe para que el archivo sea HTML válido por sí mismo. -->
+<head>
+  <meta charset="UTF-8"/>
+  <title>Foto de perfil · JobSeeker</title>
+</head>
 <body>
 <!-- La foto vive aparte del formulario del perfil (tdd/cv-module.md §10.8): se carga sola y se
      reemplaza sin tocar lo que se esté escribiendo en el resto de la página. -->

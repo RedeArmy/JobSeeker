@@ -11,7 +11,7 @@ cd "$(dirname "$0")/.."
 
 a="TO"; b="DO"; c="FIX"; d="ME"
 sin_dueno="\\b(${a}${b}|${c}${d})\\b(?!\\([A-Za-z0-9_.-]+\\): ?\\S)"
-if git grep -nIP --untracked -e "$sin_dueno" -- '*.java' '*.yml' '*.yaml' '*.sql' '*.sh' '*.xml' '*.py' '*.properties' ':!scripts/check-work-markers.sh'; then
+if git grep -nIP --untracked -e "$sin_dueno" -- '*.java' '*.yml' '*.yaml' '*.sql' '*.sh' '*.xml' '*.py' '*.properties' '*.html' ':!scripts/check-work-markers.sh'; then
   echo "ERROR: hay marcadores de trabajo pendiente sin dueño y razón; usa la forma ${a}${b}(dueño): razón." >&2
   exit 1
 fi
