@@ -5,6 +5,7 @@ import com.usac.jobseeker.common.application.outbox.DomainEventPublisherPort;
 import com.usac.jobseeker.common.application.outbox.OutboxEvent;
 import com.usac.jobseeker.common.domain.error.StaleStateException;
 import com.usac.jobseeker.common.domain.error.ValidationFailedException;
+import com.usac.jobseeker.cv.application.support.Stamp;
 import com.usac.jobseeker.cv.application.usecase.getmyprofessionalprofile.ProfessionalProfileView;
 import com.usac.jobseeker.cv.application.usecase.getmyprofessionalprofile.ProfileCollectionsReadPort;
 import com.usac.jobseeker.cv.domain.event.ProfileUpdated;
@@ -12,11 +13,8 @@ import com.usac.jobseeker.cv.domain.model.ProfessionalIdentity;
 import com.usac.jobseeker.cv.domain.model.ProfessionalProfile;
 import com.usac.jobseeker.cv.domain.model.ProfessionalProfileId;
 import com.usac.jobseeker.cv.domain.model.ProfileCollections;
-import java.time.Clock;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.UUID;
-import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -39,8 +37,8 @@ public class SaveProfessionalProfileService implements SaveProfessionalProfileUs
   private final CandidateCapabilityPort capabilities;
   private final DomainEventPublisherPort events;
   private final UseCaseMetricsPort metrics;
-  private final Clock clock;
-  private final Supplier<UUID> ids;
+  // TD-014: el reloj y los identificadores llegan juntos, como en el resto del módulo.
+  private final Stamp stamp;
 
   public SaveProfessionalProfileService(
       ProfessionalProfileStorePort profiles,
@@ -48,15 +46,13 @@ public class SaveProfessionalProfileService implements SaveProfessionalProfileUs
       CandidateCapabilityPort capabilities,
       DomainEventPublisherPort events,
       UseCaseMetricsPort metrics,
-      Clock clock,
-      Supplier<UUID> ids) {
+      Stamp stamp) {
     this.profiles = Objects.requireNonNull(profiles, "profiles");
     this.collections = Objects.requireNonNull(collections, "collections");
     this.capabilities = Objects.requireNonNull(capabilities, "capabilities");
     this.events = Objects.requireNonNull(events, "events");
     this.metrics = Objects.requireNonNull(metrics, "metrics");
-    this.clock = Objects.requireNonNull(clock, "clock");
-    this.ids = Objects.requireNonNull(ids, "ids");
+    this.stamp = Objects.requireNonNull(stamp, "stamp");
   }
 
   @Override
@@ -119,7 +115,10 @@ public class SaveProfessionalProfileService implements SaveProfessionalProfileUs
     }
     ProfessionalProfile profile =
         ProfessionalProfile.create(
-            new ProfessionalProfileId(ids.get()), command.accountId(), identity, clock.instant());
+            new ProfessionalProfileId(stamp.ids().get()),
+            command.accountId(),
+            identity,
+            stamp.clock().instant());
     if (!profiles.insertIfAbsent(profile)) {
       throw stale();
     }
@@ -131,7 +130,7 @@ public class SaveProfessionalProfileService implements SaveProfessionalProfileUs
     if (current.version() != expectedVersion) {
       throw stale();
     }
-    ProfessionalProfile edited = current.edit(identity, clock.instant());
+    ProfessionalProfile edited = current.edit(identity, stamp.clock().instant());
     if (!profiles.updateIfVersion(edited, expectedVersion)) {
       throw stale();
     }
@@ -146,7 +145,7 @@ public class SaveProfessionalProfileService implements SaveProfessionalProfileUs
   private void publishUpdated(ProfessionalProfile profile) {
     events.publish(
         new OutboxEvent(
-            ids.get(),
+            stamp.ids().get(),
             ProfileUpdated.AGGREGATE_TYPE,
             profile.id().value(),
             profile.version(),

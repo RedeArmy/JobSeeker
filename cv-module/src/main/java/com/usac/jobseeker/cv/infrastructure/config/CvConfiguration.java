@@ -75,7 +75,6 @@ import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcProfileC
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcProfilePhotoRepository;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcProjectRepository;
 import java.time.Clock;
-import java.util.UUID;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -116,13 +115,7 @@ class CvConfiguration {
       DomainEventPublisherPort events,
       UseCaseMetricsPort metrics) {
     return new SaveProfessionalProfileService(
-        repository,
-        collections,
-        capabilities,
-        events,
-        metrics,
-        Clock.systemUTC(),
-        UUID::randomUUID);
+        repository, collections, capabilities, events, metrics, Stamp.system());
   }
 
   // Lo común a las cuatro colecciones (versión, evento, métrica y log) se construye una vez.
@@ -134,13 +127,7 @@ class CvConfiguration {
       DomainEventPublisherPort events,
       UseCaseMetricsPort metrics) {
     return new ProfileChange(
-        repository,
-        collections,
-        capabilities,
-        events,
-        metrics,
-        Clock.systemUTC(),
-        UUID::randomUUID);
+        repository, collections, capabilities, events, metrics, Stamp.system());
   }
 
   @Bean
@@ -205,7 +192,7 @@ class CvConfiguration {
       DomainEventPublisherPort events,
       UseCaseMetricsPort metrics) {
     return new CandidateChange(
-        profiles, collections, capabilities, events, metrics, Clock.systemUTC(), UUID::randomUUID);
+        profiles, collections, capabilities, events, metrics, Stamp.system());
   }
 
   @Bean
@@ -252,7 +239,7 @@ class CvConfiguration {
       CandidateChange change,
       UseCaseMetricsPort metrics) {
     return new ManageAvailabilityExclusionsService(
-        exclusions, directory, change, Clock.systemUTC(), metrics);
+        exclusions, directory, change, Stamp.system(), metrics);
   }
 
   // Un solo bean con las dos interfaces (individual y por lotes): dos instancias del mismo servicio

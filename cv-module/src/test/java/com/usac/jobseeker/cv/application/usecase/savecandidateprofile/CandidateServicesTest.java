@@ -126,8 +126,7 @@ class CandidateServicesTest {
           },
           events::add,
           (useCase, outcome) -> metrics.add(useCase + ":" + outcome),
-          Clock.fixed(now, ZoneOffset.UTC),
-          UUID::randomUUID);
+          new Stamp(Clock.fixed(now, ZoneOffset.UTC), UUID::randomUUID));
   private final GetMyCandidateProfileService get =
       new GetMyCandidateProfileService(
           db, db, a -> isCandidate, (useCase, outcome) -> metrics.add(useCase + ":" + outcome));
