@@ -95,9 +95,16 @@ public class JdbcEmbeddingRepository
   // escrituras puede dejar nada de ella, ni siquiera la de un cálculo que ya estaba en curso cuando
   // llegó la anonimización (BR-DATA-05). La condición va en la propia sentencia, no en una lectura
   // previa, para que no haya una ventana entre comprobar y escribir.
+  //
+  // TD-043: la fila de la cuenta se lee `FOR SHARE`. Una lectura normal usaría la foto del inicio
+  // de
+  // la sentencia y no vería una anonimización que confirma mientras tanto; con el candado, si la
+  // anonimización está en curso se espera a que confirme y se lee su versión nueva, ya con la
+  // lápida. Ambas operaciones toman primero esa fila, así que no se bloquean mutuamente. Un perfil
+  // sin cuenta registrada se puede escribir, como hasta ahora.
   private static final String NOT_ANONYMIZED =
-      " where not exists (select 1 from profile_embedding_accounts a"
-          + " where a.candidate_profile_id = :id and a.anonymized_at is not null)";
+      " where coalesce((select a.anonymized_at is null from profile_embedding_accounts a"
+          + " where a.candidate_profile_id = :id for share), true)";
 
   // En un conflicto solo se reemplaza el bloque del vector: la copia de `discoverable` se deja como
   // está, porque el evento de descubribilidad es posterior al snapshot que leyó quien calculó el
