@@ -4,6 +4,7 @@ import com.usac.jobseeker.common.application.outbox.OutboxEvent;
 import com.usac.jobseeker.common.application.outbox.OutboxEventConsumer;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.LongSupplier;
@@ -74,15 +75,22 @@ public class OutboxPoller {
     // rompiendo el orden por agregado (ADR-0016, decisión 4). Pasado el margen, se devuelven sin
     // despachar.
     long deadline = claimedAt + safeWindow(properties.lease()).toNanos();
+    List<OutboxStore.Claimed> dispatched = new ArrayList<>();
     for (OutboxStore.Claimed claimed : batch) {
       if (nanoClock.getAsLong() - deadline >= 0) {
         if (store.release(claimed.event().id(), claimed.attempts())) {
           count("released");
         }
-      } else {
-        dispatch(claimed);
+      } else if (dispatch(claimed)) {
+        dispatched.add(claimed);
       }
     }
+    // TD-011: los despachados se marcan juntos, en una sentencia, al final de la pasada. Siguen
+    // arrendados hasta entonces, así que nadie más los toma; si el proceso muere antes de marcarlos
+    // se vuelven a entregar, que los consumidores idempotentes toleran (ADR-0016, decisión 3).
+    int marked = store.markProcessed(dispatched);
+    count("processed", marked);
+    count(LEASE_LOST, dispatched.size() - marked);
     return batch.size();
   }
 
@@ -112,8 +120,9 @@ public class OutboxPoller {
   }
 
   // Cualquier fallo de un consumidor se reintenta con retroceso; no debe tumbar el lote entero.
+  // Devuelve si todos los consumidores lo procesaron: entonces se marca con el resto de la pasada.
   @SuppressWarnings("PMD.AvoidCatchingGenericException")
-  private void dispatch(OutboxStore.Claimed claimed) {
+  private boolean dispatch(OutboxStore.Claimed claimed) {
     OutboxEvent event = claimed.event();
     try {
       for (OutboxEventConsumer consumer : consumers) {
@@ -121,7 +130,7 @@ public class OutboxPoller {
           consumer.consume(event);
         }
       }
-      count(store.markProcessed(event.id(), claimed.attempts()) ? "processed" : LEASE_LOST);
+      return true;
     } catch (RuntimeException e) {
       // El intento ya se contó al reclamar.
       int attempt = claimed.attempts();
@@ -145,10 +154,17 @@ public class OutboxPoller {
             attempt,
             e);
       }
+      return false;
     }
   }
 
   private void count(String outcome) {
-    meters.counter("jobseeker_outbox_events_total", "outcome", outcome).increment();
+    count(outcome, 1);
+  }
+
+  private void count(String outcome, int times) {
+    if (times > 0) {
+      meters.counter("jobseeker_outbox_events_total", "outcome", outcome).increment(times);
+    }
   }
 }

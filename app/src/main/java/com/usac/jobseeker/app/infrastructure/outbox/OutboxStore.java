@@ -139,6 +139,25 @@ public class OutboxStore implements DomainEventPublisherPort {
         == 1;
   }
 
+  /**
+   * Marca como procesados todos los eventos despachados de una pasada en una sola sentencia
+   * (TD-011), cada uno con su intento como testigo de propiedad, como {@link #markProcessed(UUID,
+   * int)}. Devuelve cuántos marcó: los que faltan habían perdido su arrendamiento.
+   */
+  public int markProcessed(List<Claimed> dispatched) {
+    if (dispatched.isEmpty()) {
+      return 0;
+    }
+    return jdbc.sql(
+            "update outbox_events e set status = 'PROCESSED', processed_at = now(),"
+                + " locked_until = null"
+                + " from unnest(cast(:ids as uuid[]), cast(:attempts as integer[])) as x(id, attempt)"
+                + " where e.id = x.id and e.attempts = x.attempt and e.status = 'PENDING'")
+        .param("ids", dispatched.stream().map(c -> c.event().id()).toArray(UUID[]::new))
+        .param("attempts", dispatched.stream().map(Claimed::attempts).toArray(Integer[]::new))
+        .update();
+  }
+
   /** Programa el reintento: la fila vuelve a estar disponible tras el retroceso. */
   public boolean markRetry(UUID id, int attempt, Duration delay) {
     return jdbc.sql(

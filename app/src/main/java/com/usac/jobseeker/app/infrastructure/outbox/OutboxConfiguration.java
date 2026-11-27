@@ -46,7 +46,7 @@ class OutboxConfiguration {
   @Bean
   OutboxScheduler outboxScheduler(
       OutboxPoller poller, OutboxStore store, JdbcProcessedEvents processedEvents) {
-    return new OutboxScheduler(poller, store, processedEvents);
+    return new OutboxScheduler(poller, store, processedEvents, java.time.Clock.systemUTC());
   }
 
   /** Gancho de planificación; un fallo de una pasada no debe detener las siguientes. */
@@ -64,11 +64,18 @@ class OutboxConfiguration {
     private final OutboxPoller poller;
     private final OutboxStore store;
     private final JdbcProcessedEvents processedEvents;
+    // TD-025: el reloj se inyecta, como en el resto del código, para probar el corte sin esperar.
+    private final java.time.Clock clock;
 
-    OutboxScheduler(OutboxPoller poller, OutboxStore store, JdbcProcessedEvents processedEvents) {
+    OutboxScheduler(
+        OutboxPoller poller,
+        OutboxStore store,
+        JdbcProcessedEvents processedEvents,
+        java.time.Clock clock) {
       this.poller = poller;
       this.store = store;
       this.processedEvents = processedEvents;
+      this.clock = clock;
     }
 
     // Una pasada fallida no debe cancelar las siguientes de la planificación.
@@ -76,7 +83,7 @@ class OutboxConfiguration {
     @Scheduled(cron = "0 15 3 * * *")
     void purge() {
       try {
-        java.time.Instant now = java.time.Instant.now();
+        java.time.Instant now = clock.instant();
         int outbox = store.purgeProcessedBefore(now.minus(OUTBOX_RETENTION));
         int processed = processedEvents.purgeOlderThan(now.minus(PROCESSED_EVENTS_RETENTION));
         LOG.info(

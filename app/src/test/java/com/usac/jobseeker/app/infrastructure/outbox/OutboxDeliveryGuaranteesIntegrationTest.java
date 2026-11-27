@@ -402,4 +402,48 @@ class OutboxDeliveryGuaranteesIntegrationTest {
                 released))
         .isTrue();
   }
+
+  // TD-011: una pasada de 50 eventos los marca procesados con una sola sentencia, no una por fila.
+  @Test
+  void aPassMarksAllItsDispatchedEventsWithASingleStatement() {
+    List<UUID> ids = new java.util.ArrayList<>();
+    for (int i = 0; i < 50; i++) {
+      ids.add(publish(UUID.randomUUID(), 1));
+    }
+    int[] batchCalls = {0};
+    int[] singleCalls = {0};
+    OutboxStore counting =
+        new OutboxStore(org.springframework.jdbc.core.simple.JdbcClient.create(jdbc)) {
+          @Override
+          public int markProcessed(List<Claimed> dispatched) {
+            batchCalls[0]++;
+            return super.markProcessed(dispatched);
+          }
+
+          @Override
+          public boolean markProcessed(UUID id, int attempt) {
+            singleCalls[0]++;
+            return super.markProcessed(id, attempt);
+          }
+        };
+    var poller =
+        new OutboxPoller(
+            counting,
+            List.of(consumer(event -> {})),
+            new OutboxProperties(
+                Duration.ofSeconds(1),
+                50,
+                3,
+                Duration.ofMillis(1),
+                Duration.ofMillis(5),
+                Duration.ofMinutes(5)),
+            new TransactionTemplate(transactions),
+            new SimpleMeterRegistry());
+
+    assertThat(poller.pollOnce()).isEqualTo(50);
+
+    assertThat(batchCalls[0]).isOne();
+    assertThat(singleCalls[0]).isZero();
+    assertThat(ids).allMatch(id -> "PROCESSED".equals(status(id)));
+  }
 }
