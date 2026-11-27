@@ -1,6 +1,9 @@
 package com.usac.jobseeker.app.infrastructure.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oidcLogin;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -18,6 +21,9 @@ import com.usac.jobseeker.common.domain.model.AccountId;
 import com.usac.jobseeker.cv.application.usecase.anonymizeprofiledata.AnonymizeProfileDataCommand;
 import com.usac.jobseeker.cv.application.usecase.anonymizeprofiledata.AnonymizeProfileDataUseCase;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -27,6 +33,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import javax.imageio.ImageIO;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -51,9 +58,10 @@ import org.testcontainers.images.builder.Transferable;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * El CV de punta a punta (ADR-0021, `tdd/cv-module.md` §10.7): la API real con tokens firmados,
- * Postgres, Redis y SeaweedFS reales. El antivirus es un doble que marca la cadena de prueba EICAR:
- * el contrato con ClamAV real lo cubre {@code ClamAvContractTest}, que no corre en cada push.
+ * El CV y la foto de perfil de punta a punta (ADR-0021, `tdd/cv-module.md` §10.7 y §10.8): la API
+ * real con tokens firmados, Postgres, Redis y SeaweedFS reales. El antivirus es un doble que marca
+ * la cadena de prueba EICAR: el contrato con ClamAV real lo cubre {@code ClamAvContractTest}, que
+ * no corre en cada push.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -63,6 +71,7 @@ class CvFileEndpointIntegrationTest {
   private static final String PROFILE = "/api/v1/me/professional-profile";
   private static final String CANDIDATE = "/api/v1/me/candidate-profile";
   private static final String CV = CANDIDATE + "/cv";
+  private static final String PHOTO = PROFILE + "/photo";
   private static final byte[] PDF =
       "%PDF-1.7\ncurrículum de prueba\n%%EOF".getBytes(StandardCharsets.UTF_8);
   private static final String ACCESS = "prueba-acceso";
@@ -261,6 +270,221 @@ class CvFileEndpointIntegrationTest {
                 Integer.class,
                 me))
         .isZero();
+  }
+
+  // ---- foto de perfil (tdd/cv-module.md §10.8) ----
+
+  // Se guarda re-codificada y reducida, se sirve por la propia aplicación y reemplazarla borra la
+  // anterior del almacén por la bandeja.
+  @Test
+  void aPhotoIsStoredReducedServedByTheAppAndReplacingItDeletesThePreviousOne() throws Exception {
+    UUID me = withCandidateProfile();
+    byte[] big = png(1600, 800);
+
+    String body =
+        mvc.perform(authed(multipart(PHOTO).file(file("yo.png", big)), me))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.type").value("PNG"))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    String first = photoKeyOf(me);
+    assertThat(first).endsWith(JsonPath.<String>read(body, "$.tag"));
+
+    byte[] served =
+        mvc.perform(authed(get(PHOTO), me))
+            .andExpect(status().isOk())
+            .andExpect(header().string("Content-Type", "image/png"))
+            .andExpect(header().string("Cache-Control", "max-age=300, private"))
+            .andReturn()
+            .getResponse()
+            .getContentAsByteArray();
+    BufferedImage image = ImageIO.read(new ByteArrayInputStream(served));
+    assertThat(image.getWidth()).isEqualTo(512);
+    assertThat(image.getHeight()).isEqualTo(256);
+
+    mvc.perform(authed(multipart(PHOTO).file(file("otra.png", png(10, 10))), me))
+        .andExpect(status().isCreated());
+    deliverEvents();
+
+    assertThat(photoKeyOf(me)).isNotEqualTo(first);
+    assertThat(storage.exists(new StoredObjectKey(first))).isFalse();
+  }
+
+  @Test
+  void aPhotoThatIsNotAnImageOrCarriesMalwareIsRejected() throws Exception {
+    UUID me = withCandidateProfile();
+    byte[] infected = png(4, 4);
+    byte[] withEicar = new byte[infected.length + 5];
+    System.arraycopy(infected, 0, withEicar, 0, infected.length);
+    System.arraycopy("EICAR".getBytes(StandardCharsets.US_ASCII), 0, withEicar, infected.length, 5);
+
+    for (var rejected :
+        List.of(
+            List.of(PDF, "UNSUPPORTED_TYPE"),
+            List.of(withEicar, "MALWARE_DETECTED"),
+            List.of(new byte[2 * 1024 * 1024 + 1], "TOO_LARGE"))) {
+      mvc.perform(authed(multipart(PHOTO).file(file("f.png", (byte[]) rejected.get(0))), me))
+          .andExpect(status().isUnprocessableContent())
+          .andExpect(jsonPath("$.error.code").value("FILE_REJECTED"));
+    }
+    mvc.perform(authed(get(PHOTO), me)).andExpect(status().isNotFound());
+    assertThat(photoKeyOf(me)).isNull();
+  }
+
+  @Test
+  void removingThePhotoAndAnonymizingTheAccountDeleteItFromTheStorage() throws Exception {
+    UUID removing = withCandidateProfile();
+    mvc.perform(authed(multipart(PHOTO).file(file("yo.png", png(20, 20))), removing))
+        .andExpect(status().isCreated());
+    String removed = photoKeyOf(removing);
+    UUID leaving = withCandidateProfile();
+    mvc.perform(authed(multipart(PHOTO).file(file("yo.png", png(20, 20))), leaving))
+        .andExpect(status().isCreated());
+    String anonymized = photoKeyOf(leaving);
+
+    mvc.perform(authed(delete(PHOTO), removing)).andExpect(status().isNoContent());
+    mvc.perform(authed(delete(PHOTO), removing)).andExpect(status().isNoContent());
+    anonymize.execute(new AnonymizeProfileDataCommand(new AccountId(leaving)));
+    deliverEvents();
+
+    assertThat(storage.exists(new StoredObjectKey(removed))).isFalse();
+    assertThat(storage.exists(new StoredObjectKey(anonymized))).isFalse();
+    mvc.perform(authed(get(PHOTO), removing)).andExpect(status().isNotFound());
+  }
+
+  // ---- pantallas HTMX (ADR-0005) ----
+
+  @Test
+  void theCvScreenUploadsAVersionAndListsItWithItsDownloadLink() throws Exception {
+    UUID me = withCandidateProfile();
+
+    String page = screen(get("/app/candidate-cv").with(as(me)), 200);
+    assertThat(page).contains("Aún no has subido tu CV", "hx-encoding=\"multipart/form-data\"");
+
+    String fragment =
+        screen(
+            multipart("/app/candidate-cv").file(file("Mi CV.pdf", PDF)).with(as(me)).with(csrf()),
+            200);
+    assertThat(fragment).contains("Tu CV quedó guardado", "Mi CV.pdf", "Vigente", "1 de 20");
+    String fileId =
+        jdbc.queryForObject(
+            "select f.id::text from candidate_cv_files f join candidate_profiles p"
+                + " on p.id = f.candidate_profile_id where p.account_id = ?",
+            String.class,
+            me);
+    assertThat(fragment).contains("/app/candidate-cv/" + fileId + "/download");
+    mvc.perform(get("/app/candidate-cv/" + fileId + "/download").with(as(me)))
+        .andExpect(status().isFound())
+        .andExpect(header().string("Cache-Control", "no-store"));
+  }
+
+  // Un rechazo responde 422 con el motivo en castellano, sin repetir el nombre del archivo.
+  @Test
+  void theCvScreenExplainsWhyAFileWasRejected() throws Exception {
+    UUID me = withCandidateProfile();
+
+    String errors =
+        screen(
+            multipart("/app/candidate-cv")
+                .file(file("secreto-ana.exe", "MZ".getBytes(StandardCharsets.US_ASCII)))
+                .with(as(me))
+                .with(csrf()),
+            422);
+
+    assertThat(errors).contains("Solo se aceptan CV en PDF").doesNotContain("secreto-ana");
+    assertThat(versionsOf(me)).isZero();
+  }
+
+  @Test
+  void theCvScreenWithoutACandidateProfileAsksToCreateItFirst() throws Exception {
+    UUID me = UUID.randomUUID();
+    jdbc.update("insert into accounts (id, is_candidate_enabled) values (?, true)", me);
+
+    assertThat(screen(get("/app/candidate-cv").with(as(me)), 200))
+        .contains("Primero crea tu", "/app/candidate-profile");
+  }
+
+  @Test
+  void theProfileScreenLoadsThePhotoSectionAndChangesThePhotoInPlace() throws Exception {
+    UUID me = withCandidateProfile();
+    assertThat(screen(get("/app/profile").with(as(me)), 200))
+        .contains("hx-get=\"/app/profile/photo-section\"");
+    assertThat(screen(get("/app/profile/photo-section").with(as(me)), 200))
+        .contains("Aún no tienes foto");
+
+    String uploaded =
+        screen(
+            multipart("/app/profile/photo")
+                .file(file("yo.jpg", jpeg(30, 30)))
+                .with(as(me))
+                .with(csrf()),
+            200);
+    String key = photoKeyOf(me);
+    assertThat(uploaded)
+        .contains(
+            "Tu foto quedó guardada", "/app/profile/photo?v=" + key.substring(key.length() - 12));
+    mvc.perform(get("/app/profile/photo").with(as(me)))
+        .andExpect(status().isOk())
+        .andExpect(header().string("Content-Type", "image/jpeg"));
+
+    String removed = screen(delete("/app/profile/photo").with(as(me)).with(csrf()), 200);
+    assertThat(removed).contains("Quitamos tu foto", "Aún no tienes foto");
+  }
+
+  // El error vuelve a la propia sección (HX-Retarget), no a la zona de errores del formulario.
+  @Test
+  void aRejectedPhotoIsExplainedInsideThePhotoSection() throws Exception {
+    UUID me = withCandidateProfile();
+
+    var response =
+        mvc.perform(
+                multipart("/app/profile/photo").file(file("x.png", PDF)).with(as(me)).with(csrf()))
+            .andExpect(status().isUnprocessableContent())
+            .andExpect(header().string("HX-Retarget", "#photo-section"))
+            .andExpect(header().string("HX-Reswap", "outerHTML"))
+            .andReturn()
+            .getResponse();
+
+    assertThat(response.getContentAsString(StandardCharsets.UTF_8))
+        .contains("id=\"photo-section\"", "Solo se aceptan imágenes PNG o JPEG");
+  }
+
+  private String screen(
+      org.springframework.test.web.servlet.RequestBuilder request, int expectedStatus)
+      throws Exception {
+    return mvc.perform(request)
+        .andExpect(status().is(expectedStatus))
+        .andReturn()
+        .getResponse()
+        .getContentAsString(StandardCharsets.UTF_8);
+  }
+
+  private static org.springframework.security.test.web.servlet.request
+          .SecurityMockMvcRequestPostProcessors.OidcLoginRequestPostProcessor
+      as(UUID account) {
+    return oidcLogin().idToken(token -> token.subject(account.toString()));
+  }
+
+  private String photoKeyOf(UUID account) {
+    return jdbc.queryForObject(
+        "select profile_photo_key from professional_profiles where account_id = ?",
+        String.class,
+        account);
+  }
+
+  private static byte[] png(int width, int height) throws java.io.IOException {
+    return encode(new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB), "png");
+  }
+
+  private static byte[] jpeg(int width, int height) throws java.io.IOException {
+    return encode(new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB), "jpeg");
+  }
+
+  private static byte[] encode(BufferedImage image, String format) throws java.io.IOException {
+    var out = new ByteArrayOutputStream();
+    ImageIO.write(image, format, out);
+    return out.toByteArray();
   }
 
   private void rejected(UUID account, MockMultipartFile file, String reason) throws Exception {

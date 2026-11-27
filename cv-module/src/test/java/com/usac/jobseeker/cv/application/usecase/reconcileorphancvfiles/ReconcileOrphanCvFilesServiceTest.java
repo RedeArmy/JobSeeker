@@ -38,7 +38,7 @@ class ReconcileOrphanCvFilesServiceTest {
   private ReconcileOrphanCvFilesService service(int pageSize, int scanLimit, int deleteLimit) {
     return new ReconcileOrphanCvFilesService(
         storage,
-        keys -> {
+        (purpose, keys) -> {
           referenceQueries.add(keys.size());
           Set<String> found = new HashSet<>(keys);
           found.retainAll(referenced);
@@ -64,6 +64,21 @@ class ReconcileOrphanCvFilesServiceTest {
     assertThat(storage.objects).containsKeys(inUse, uploading, foreign);
     assertThat(result).isEqualTo(new ReconcileOrphanCvFilesUseCase.Result(4, 1, 1, false));
     assertThat(metrics).containsExactly("deleted");
+  }
+
+  // Las fotos de perfil también se reconcilian, contra su propia columna (tdd/cv-module.md §10.8).
+  @Test
+  void anOrphanProfilePhotoIsDeletedAndOneInUseIsKept() {
+    String orphan = StoredObjectKey.random(FilePurpose.PHOTO).value();
+    String inUse = StoredObjectKey.random(FilePurpose.PHOTO).value();
+    storage.objects.put(orphan, OLD);
+    storage.objects.put(inUse, OLD);
+    referenced.add(inUse);
+
+    var result = service(100, 1000, 10).execute();
+
+    assertThat(storage.deleted).containsExactly(orphan);
+    assertThat(result.scanned()).isEqualTo(2);
   }
 
   // Muchos huérfanos de golpe no es lo esperable: se frena sin borrar ninguno.
@@ -98,7 +113,7 @@ class ReconcileOrphanCvFilesServiceTest {
     for (int i = 0; i < 7; i++) {
       referenced.add(put(OLD));
     }
-    // El almacén lista en orden de clave, no en el de alta.
+    // El almacén lista en orden de clave, no en el de alta. Solo se miran los recorridos del CV.
     List<String> keys = new ArrayList<>(storage.objects.keySet());
     var service = service(2, 4, 10);
 
@@ -167,9 +182,18 @@ class ReconcileOrphanCvFilesServiceTest {
       if (down) {
         throw new UpstreamUnavailableException("storage", new IOException("caído"));
       }
-      startAfters.add(startAfter);
-      Map<String, Instant> tail =
-          startAfter.isEmpty() ? objects : objects.tailMap(startAfter, false);
+      if (purpose == FilePurpose.CV) {
+        startAfters.add(startAfter);
+      }
+      String prefix = purpose.prefix() + "/";
+      Map<String, Instant> tail = new TreeMap<>();
+      (startAfter.isEmpty() ? objects : objects.tailMap(startAfter, false))
+          .forEach(
+              (key, at) -> {
+                if (key.startsWith(prefix)) {
+                  tail.put(key, at);
+                }
+              });
       List<ObjectPage.Entry> page = new ArrayList<>();
       for (var entry : tail.entrySet()) {
         if (page.size() == maxKeys) {
@@ -178,6 +202,11 @@ class ReconcileOrphanCvFilesServiceTest {
         page.add(new ObjectPage.Entry(entry.getKey(), entry.getValue()));
       }
       return new ObjectPage(page, tail.size() > page.size());
+    }
+
+    @Override
+    public java.util.Optional<byte[]> get(StoredObjectKey key) {
+      throw new UnsupportedOperationException("la reconciliación no lee contenidos");
     }
 
     @Override

@@ -35,6 +35,11 @@ class FileDeletionConsumerTest {
         }
 
         @Override
+        public java.util.Optional<byte[]> get(StoredObjectKey key) {
+          throw new UnsupportedOperationException("el consumidor solo borra");
+        }
+
+        @Override
         public void delete(StoredObjectKey key) {
           if (down) {
             throw new UpstreamUnavailableException("storage", new IOException("caído"));

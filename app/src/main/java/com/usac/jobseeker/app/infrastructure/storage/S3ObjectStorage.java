@@ -79,6 +79,18 @@ final class S3ObjectStorage implements ObjectStoragePort, AutoCloseable {
     }
   }
 
+  @Override
+  public java.util.Optional<byte[]> get(StoredObjectKey key) {
+    try {
+      return java.util.Optional.of(
+          s3.getObjectAsBytes(b -> b.bucket(bucket).key(key.value())).asByteArray());
+    } catch (NoSuchKeyException _) {
+      return java.util.Optional.empty();
+    } catch (SdkException e) {
+      throw unavailable(e);
+    }
+  }
+
   // S3 trata borrar lo que no existe como un éxito, que es lo que pide el reintento (§6).
   @Override
   public void delete(StoredObjectKey key) {

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<body>
+<!-- La foto vive aparte del formulario del perfil (tdd/cv-module.md §10.8): se carga sola y se
+     reemplaza sin tocar lo que se esté escribiendo en el resto de la página. -->
+<section id="photo-section" th:fragment="section">
+  <h2>Foto de perfil</h2>
+  <div role="alert" aria-live="polite">
+    <p class="notice" th:if="${notice != null}" th:text="${notice}">aviso</p>
+    <p class="errors" th:if="${error != null}" th:text="${error}">error</p>
+  </div>
+  <!-- Se sirve desde la propia aplicación (CSP img-src 'self'); `v` cambia con cada foto nueva
+       para que el navegador no muestre la anterior desde su caché. -->
+  <img th:if="${photo != null}" class="avatar" th:src="@{/app/profile/photo(v=${photo.tag()})}"
+       alt="Tu foto de perfil" width="128" height="128"/>
+  <p th:if="${photo == null}">Aún no tienes foto.</p>
+  <p>PNG o JPEG de hasta 2 MB. La reducimos a 512 px y le quitamos los metadatos, incluida la ubicación.</p>
+  <form th:attr="hx-post=@{/app/profile/photo}" hx-encoding="multipart/form-data" hx-target="#photo-section" hx-swap="outerHTML">
+    <label>Imagen <input type="file" name="file" required accept="image/png,image/jpeg"/></label>
+    <button type="submit" th:text="${photo == null ? 'Subir foto' : 'Cambiar foto'}">Subir foto</button>
+  </form>
+  <button th:if="${photo != null}" type="button" class="danger" hx-confirm="¿Quitar tu foto de perfil?"
+          hx-target="#photo-section" hx-swap="outerHTML" th:attr="hx-delete=@{/app/profile/photo}">Quitar foto</button>
+</section>
+</body>
+</html>

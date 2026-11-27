@@ -175,7 +175,7 @@ Soporta BR-DATA-02 a 06: el titular de una cuenta puede solicitar la eliminació
 
 | Dato | Tratamiento al vencer la gracia |
 |---|---|
-| PII directa (`professional_profiles.full_name`/`bio`/`headline`/`profile_photo_url`, `candidate_profiles.contact_email`/`contact_phone`/`raw_cv_text`/`embedding`) | Anonimizado (`NULL` o placeholder genérico) |
+| PII directa (`professional_profiles.full_name`/`bio`/`headline`/`profile_photo_key` (y el objeto de la foto), `candidate_profiles.contact_email`/`contact_phone`/`raw_cv_text`/`embedding`) | Anonimizado (`NULL` o placeholder genérico) |
 | Filas hijas de solo el titular (`experiences`, `education_entries`, `certifications`, `projects`, `candidate_work_authorizations`, `candidate_languages`) | Borrado físico — nadie más tiene interés legítimo sobre el detalle de la experiencia laboral de una persona |
 | `applications`, `compatibility_scores`, historial de pipeline | **Conservados**, referenciando el perfil ya anonimizado — el reclutador que evaluó al candidato no pierde su propio historial de decisión por una acción del titular (mismo principio que BR-JOB-09) |
 | Identidad real en Clavaris (email, credencial, identidades sociales) | Eliminada vía la API de administración de Clavaris en el mismo proceso (BR-DATA-06) — el borrado no es completo si la identidad sigue existiendo fuera de JobSeeker. Se usa una **Secret Key de la organización** (`OrganizationClient`) con el único scope `platform:accounts:delete` (TD-SEC-101 de Clavaris): solo alcanza cuentas de su propia organización, a diferencia del credencial de plataforma. Responde 204 incluso con Redis caído; se reintenta solo ante errores de red o 5xx |

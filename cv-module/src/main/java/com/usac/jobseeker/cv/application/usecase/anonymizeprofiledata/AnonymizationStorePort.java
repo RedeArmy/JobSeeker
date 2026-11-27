@@ -37,4 +37,11 @@ public interface AnonymizationStorePort {
    * §6); la fila se conserva porque una postulación puede referenciarla.
    */
   List<String> discardCvFiles(UUID candidateProfileId, Instant now);
+
+  /**
+   * Quita la foto del perfil profesional vivo de la cuenta y devuelve la clave que tenía, para
+   * pedir su borrado físico (ADR-0021 §6). Se llama **antes** de anonimizar el perfil, que la deja
+   * a nulo.
+   */
+  Optional<String> discardProfilePhoto(AccountId accountId);
 }

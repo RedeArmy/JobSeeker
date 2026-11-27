@@ -26,6 +26,7 @@ class AnonymizeProfileDataServiceTest {
   private Optional<AnonymizationStorePort.Anonymized> professional = Optional.empty();
   private Optional<AnonymizationStorePort.Anonymized> candidate = Optional.empty();
   private List<String> cvKeys = List.of();
+  private Optional<String> photoKey = Optional.empty();
 
   private final AnonymizeProfileDataService service =
       new AnonymizeProfileDataService(
@@ -44,6 +45,11 @@ class AnonymizeProfileDataServiceTest {
             public List<String> discardCvFiles(UUID candidateProfileId, Instant now) {
               calls.add("cv:" + now);
               return cvKeys;
+            }
+
+            public Optional<String> discardProfilePhoto(AccountId id) {
+              calls.add("photo");
+              return photoKey;
             }
           },
           events::add,
@@ -71,7 +77,7 @@ class AnonymizeProfileDataServiceTest {
         .isEqualTo("{\"accountId\":\"" + account + "\",\"version\":5}");
     assertThat(calls)
         .containsExactly(
-            "professional:Candidato eliminado:" + NOW, "candidate:" + NOW, "cv:" + NOW);
+            "photo", "professional:Candidato eliminado:" + NOW, "candidate:" + NOW, "cv:" + NOW);
     assertThat(metrics).containsExactly("anonymize_profile_data:anonymized");
   }
 
@@ -123,5 +129,24 @@ class AnonymizeProfileDataServiceTest {
     service.execute(new AnonymizeProfileDataCommand(account));
 
     assertThat(events).extracting(OutboxEvent::eventType).containsExactly("profile.anonymized");
+  }
+
+  // La foto se descarta antes de anonimizar y su borrado viaja en el mismo evento que el de los CV.
+  @Test
+  void thePhotoAndTheCvFilesAreDeletedInOneRequestAssociatedToTheRootProfile() {
+    professional = Optional.of(anonymized(5));
+    candidate = Optional.of(anonymized(9));
+    String photo = "photo/" + UUID.randomUUID();
+    String cv = "cv/" + UUID.randomUUID();
+    photoKey = Optional.of(photo);
+    cvKeys = List.of(cv);
+
+    service.execute(new AnonymizeProfileDataCommand(account));
+
+    var deletion = events.get(1);
+    assertThat(deletion.eventType()).isEqualTo("storage.file_deletion_requested");
+    assertThat(deletion.aggregateId()).isEqualTo(professional.get().profileId());
+    assertThat(deletion.payload()).contains(photo, cv);
+    assertThat(calls.get(0)).isEqualTo("photo");
   }
 }

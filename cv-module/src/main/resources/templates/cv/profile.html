@@ -19,6 +19,11 @@
   <p><a th:href="@{/app/home}">Inicio</a></p>
   <h1>Mi perfil profesional</h1>
 
+  <!-- La foto se carga aparte (tdd/cv-module.md §10.8): cambiarla no recarga este formulario. -->
+  <section id="photo-section" th:attr="hx-get=@{/app/profile/photo-section}" hx-trigger="load" hx-swap="outerHTML">
+    <p>Cargando tu foto…</p>
+  </section>
+
   <!-- `content` y `errors` son también los fragmentos que HTMX pide por separado. -->
   <div id="profile-content" th:fragment="content">
 

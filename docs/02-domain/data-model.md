@@ -75,7 +75,8 @@ erDiagram
         string full_name
         string headline
         text bio
-        string profile_photo_url
+        string profile_photo_key
+        string profile_photo_type
         bigint version
         timestamptz updated_at
     }
@@ -348,11 +349,12 @@ CHECK `(is_candidate_enabled OR is_recruiter_enabled)` — toda cuenta debe tene
 | full_name | varchar | NOT NULL | Nombre completo (antes vivía en `candidate_profiles`, ahora compartido — ADR-0008) |
 | headline | varchar | NULL | Titular profesional (p. ej. "Senior Backend Engineer", "Tech Recruiter @ Acme") |
 | bio | text | NULL | Biografía / "acerca de" |
-| profile_photo_url | varchar | NULL | Foto de perfil |
+| profile_photo_key | text | NULL, `CHECK` `^photo/[0-9a-f-]{36}$` | Clave de la foto en el almacén (ADR-0021); sustituye a `profile_photo_url`, que nunca se usó. La sirve la aplicación, no una URL externa (`tdd/cv-module.md` §10.8) |
+| profile_photo_type | text | NULL, `PNG` o `JPEG` | Tipo de la foto re-codificada; un `CHECK` exige que clave y tipo estén los dos o ninguno |
 | version | bigint | NOT NULL DEFAULT 0 | Bloqueo optimista: dos ediciones simultáneas no se pisan, la segunda recibe `409 STALE_STATE`. Editar una fila hija incrementa la versión de la raíz (`tdd/cv-module.md` §5) |
 | updated_at | timestamptz | NOT NULL DEFAULT now() | Fecha de la última edición. El recálculo del score lo dispara el **evento** `ProfileUpdatedEvent` por la bandeja de salida (ADR-0016), no esta columna, y solo si la cuenta tiene capacidad de candidato habilitada (BR-MATCH-03, BR-ACCT-06) |
 
-**Anonimización (BR-DATA-05, ADR-0013):** al ejecutarse `AnonymizeExpiredAccountDeletionsUseCase`, `full_name` → placeholder genérico ("Candidato eliminado"), `bio`/`headline`/`profile_photo_url` → `NULL`. Las filas hijas (`experiences`, `education_entries`, `certifications`, `projects`) se eliminan físicamente — a diferencia de `Application`/`CompatibilityScore`, no hay un tercero con interés legítimo en conservar el detalle de la experiencia laboral de alguien que pidió ser olvidado. `anonymized_at` (nulo mientras el perfil está vivo, migración `V20261124110000`) marca el estado terminal y hace idempotente el proceso; la aplicación trata un perfil con `anonymized_at` como inexistente, y una restricción `CHECK` impide que conserve titular, biografía o foto. Cada anonimización incrementa `version`.
+**Anonimización (BR-DATA-05, ADR-0013):** al ejecutarse `AnonymizeExpiredAccountDeletionsUseCase`, `full_name` → placeholder genérico ("Candidato eliminado"), `bio`/`headline`/`profile_photo_key`/`profile_photo_type` → `NULL` (y el objeto de la foto se borra del almacén por la bandeja, ADR-0021 §6). Las filas hijas (`experiences`, `education_entries`, `certifications`, `projects`) se eliminan físicamente — a diferencia de `Application`/`CompatibilityScore`, no hay un tercero con interés legítimo en conservar el detalle de la experiencia laboral de alguien que pidió ser olvidado. `anonymized_at` (nulo mientras el perfil está vivo, migración `V20261124110000`) marca el estado terminal y hace idempotente el proceso; la aplicación trata un perfil con `anonymized_at` como inexistente, y una restricción `CHECK` impide que conserve titular, biografía o foto. Cada anonimización incrementa `version`.
 
 ### 4.3 `experiences`, `education_entries`, `certifications`, `projects` (contexto `cv`, hijas de `professional_profiles`)
 

@@ -40,6 +40,7 @@ class JdbcAnonymizationRepositoryTest {
   private static final Instant T0 = Instant.parse("2026-11-24T10:00:00Z");
   private static final Instant LATER = T0.plusSeconds(3600);
   private static final String SECRET_NAME = "Ana Lopez Secretisima";
+  private static final String PHOTO_KEY = "photo/" + UUID.randomUUID();
 
   private final JdbcClient jdbc = JdbcClient.create(CvPostgres.dataSource());
   private final JdbcProfessionalProfileRepository professionals =
@@ -76,7 +77,9 @@ class JdbcAnonymizationRepositoryTest {
             T0);
     professionals.insertIfAbsent(professional);
     jdbc.sql(
-            "update professional_profiles set profile_photo_url = 'https://foto.example/ana.png' where id = :id")
+            "update professional_profiles set profile_photo_key = :key, profile_photo_type = 'PNG'"
+                + " where id = :id")
+        .param("key", PHOTO_KEY)
         .param("id", professional.id().value())
         .update();
     experiences.insert(
@@ -131,7 +134,7 @@ class JdbcAnonymizationRepositoryTest {
     assertThat(result.get().version()).isEqualTo(4);
     var row =
         jdbc.sql(
-                "select full_name, headline, bio, profile_photo_url, anonymized_at from professional_profiles where id = :id")
+                "select full_name, headline, bio, profile_photo_key, anonymized_at from professional_profiles where id = :id")
             .param("id", person.professional().value())
             .query(
                 (rows, n) ->
@@ -296,5 +299,26 @@ class JdbcAnonymizationRepositoryTest {
             .param("id", person.candidate().value());
 
     assertThatThrownBy(blank::update).isInstanceOf(DataAccessException.class);
+  }
+
+  // ADR-0021 §6: la foto se descarta antes de anonimizar y su clave vuelve para borrarla del
+  // almacén.
+  @Test
+  void theProfilePhotoIsDiscardedOnceAndItsKeyReturned() {
+    var person = aFullPerson();
+
+    var first = anonymization.discardProfilePhoto(person.account());
+    var again = anonymization.discardProfilePhoto(person.account());
+
+    assertThat(first).contains(PHOTO_KEY);
+    assertThat(again).isEmpty();
+    assertThat(
+            jdbc.sql(
+                    "select count(*) from professional_profiles where id = :id"
+                        + " and (profile_photo_key is not null or profile_photo_type is not null)")
+                .param("id", person.professional().value())
+                .query(Integer.class)
+                .single())
+        .isZero();
   }
 }

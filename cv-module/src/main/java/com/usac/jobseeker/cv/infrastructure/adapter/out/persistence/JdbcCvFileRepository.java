@@ -1,5 +1,6 @@
 package com.usac.jobseeker.cv.infrastructure.adapter.out.persistence;
 
+import com.usac.jobseeker.common.application.storage.FilePurpose;
 import com.usac.jobseeker.common.domain.rules.FileType;
 import com.usac.jobseeker.cv.application.usecase.reconcileorphancvfiles.CvFileReferencePort;
 import com.usac.jobseeker.cv.application.usecase.uploadcv.CvFileStorePort;
@@ -102,17 +103,23 @@ public class JdbcCvFileRepository implements CvFileStorePort, CvFileReferencePor
         .update();
   }
 
-  // Una clave borrada al anonimizar ya es nula, así que no figura: su objeto sí es huérfano.
+  // Una clave borrada al anonimizar o al reemplazar la foto ya es nula, así que no figura: su
+  // objeto sí es huérfano. Cada propósito mira solo su columna.
   @Override
-  public Set<String> referenced(Collection<String> keys) {
+  public Set<String> referenced(FilePurpose purpose, Collection<String> keys) {
     if (keys.isEmpty()) {
       return Set.of();
     }
+    String sql =
+        switch (purpose) {
+          case CV -> "select object_key from candidate_cv_files where object_key = any(:keys)";
+          case PHOTO ->
+              "select profile_photo_key from professional_profiles"
+                  + " where profile_photo_key = any(:keys)";
+          case ANSWER -> throw new IllegalArgumentException("Las respuestas no son de cv");
+        };
     return new HashSet<>(
-        jdbc.sql("select object_key from candidate_cv_files where object_key = any(:keys)")
-            .param("keys", keys.toArray(String[]::new))
-            .query(String.class)
-            .list());
+        jdbc.sql(sql).param("keys", keys.toArray(String[]::new)).query(String.class).list());
   }
 
   private static CvFile fileOf(ResultSet rows, int n) throws SQLException {

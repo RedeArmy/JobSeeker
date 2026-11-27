@@ -16,6 +16,9 @@ import org.springframework.util.unit.DataSize;
  * @param orphanPageSize objetos por página al listar el almacén
  * @param orphanScanLimit objetos que examina una pasada
  * @param orphanDeleteLimit freno: más huérfanos que esto en una pasada no borra ninguno
+ * @param photoMaxSize tamaño máximo de la foto subida (ADR-0021 §4)
+ * @param photoMaxSide lado máximo de la foto guardada; una mayor se reduce
+ * @param photoMaxPixels píxeles máximos que se aceptan decodificar
  */
 @ConfigurationProperties("jobseeker.cv")
 record CvFileProperties(
@@ -24,4 +27,7 @@ record CvFileProperties(
     @DefaultValue("24h") Duration orphanGrace,
     @DefaultValue("500") int orphanPageSize,
     @DefaultValue("10000") int orphanScanLimit,
-    @DefaultValue("500") int orphanDeleteLimit) {}
+    @DefaultValue("500") int orphanDeleteLimit,
+    @DefaultValue("2MB") DataSize photoMaxSize,
+    @DefaultValue("512") int photoMaxSide,
+    @DefaultValue("40000000") long photoMaxPixels) {}

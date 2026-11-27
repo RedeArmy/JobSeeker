@@ -96,7 +96,7 @@ Carpetas de `cv-module/src/main/java/com/usac/jobseeker/cv/application/usecase/`
 | `getmycv` | El CV vigente y las versiones anteriores, sin URL | candidato | — |
 | `downloadmycv` | URL firmada de 5 minutos de una versión propia (ADR-0021 §3) | candidato | — |
 | `reconcileorphancvfiles` | Borra del almacén los CV sin versión que los referencie, con más de 24 h y con un freno ante muchos de golpe (TD-041) | interna (planificada) | — |
-| `uploadprofilephoto` | **Planificado (ADR-0021).** Subir la foto de perfil, re-codificada sin metadatos EXIF | cuenta | — |
+| `uploadprofilephoto` | **Hecho (§10.8).** Subir la foto de perfil, re-codificada sin metadatos EXIF; `getmyprofilephoto` la sirve y `removeprofilephoto` la quita | cuenta | — |
 | `checkapplicationreadiness` | **Planificado para `ats`.** Qué le falta a la cuenta para postular (BR-CAND-01: nombre, contacto y CV) y el CV vigente (`tdd/ats-tracker-modules.md` §5) | interna | — |
 | `getapplicantprofiles` | **Planificado para `ats`.** Por lotes, nombre, titular y contacto de postulantes; solo tras autorizar al reclutador en `ats` (REQ-C-07) | interna | — |
 | `presigncvdownload` | **Planificado para `ats`.** URL firmada de una versión concreta del CV; autoriza quien la pide (ADR-0021 §3) | interna | — |
@@ -180,6 +180,7 @@ Las pruebas de la migración (la de «publicadas inmutables» y el análisis de 
 | 5 | ✅ **Hecho (24-nov-2026).** `getprofilesnapshot`, el catálogo de eventos de `cv` y sus pruebas de contrato (forma del resultado, eventos por la bandeja real). Detalle y desvíos de este documento en §10.5 | 3, TDD de `matching` |
 | 6 | ✅ **Hecho (24-nov-2026).** `anonymizeprofiledata` con su migración, el evento `profile.anonymized` y sus pruebas. Detalle y desvíos de este documento en §10.6 | 2, 3, 4 |
 | 7 | ✅ **Hecho (26-nov-2026).** El CV (ADR-0021): `candidate_cv_files` (M8), `uploadcv`, `getmycv`, `downloadmycv`, su API y el borrado físico al anonimizar. Diseño y desvíos en §10.7 | 3, 6, ADR-0021 |
+| 8 | ✅ **Hecho (26-nov-2026).** La foto de perfil (`uploadprofilephoto`, `getmyprofilephoto`, `removeprofilephoto`), su API, su sección en `/app/profile` y la pantalla del CV `/app/candidate-cv`. Diseño y desvíos en §10.8 | 2, 7 |
 
 ### 10.1 Sub-paso 1: qué se construyó y en qué se desvió de este documento
 
@@ -316,6 +317,31 @@ Cada sub-paso sale como una PR propia con su definición de hecho completa (Open
 - **El límite de `multipart` de Spring es de 6 MB**, algo mayor que el del CV: un archivo de 5 a 6 MB recibe el `FILE_REJECTED` del caso de uso y uno mayor se corta antes de leerlo, con el mismo `422 FILE_REJECTED / TOO_LARGE`, no un `413` genérico.
 - **`cv` gana la dependencia `spring-boot`** para `CvFileProperties` (`jobseeker.cv.cv-max-size`, `jobseeker.cv.cv-max-versions`), como `job` y `matching`.
 - **Reconciliación de huérfanos (TD-041, resuelta).** `reconcileorphancvfiles`, disparado cada 6 h por un planificador de `cv` (15 min después de arrancar), lista los objetos `cv/` por páginas y borra los que no tienen versión viva. Cubre dos casos: un alta que falló al confirmar y un borrado por anonimización que agotó sus reintentos. Reglas de seguridad: no juzga objetos de menos de 24 h (una subida en curso), nunca borra una clave con un formato que la aplicación no crea y, si una pasada encuentra más de 500 huérfanos, **no borra ninguno** y lo registra como error (una base restaurada desde una copia anterior al almacén los haría parecer huérfanos a todos). Cada pasada examina hasta 10 000 objetos y la siguiente sigue donde quedó.
+### 10.8 Sub-paso 8: la foto de perfil y las pantallas de subida (ADR-0021)
+
+**Columnas en `professional_profiles`** (migración `V20261126130000`): `profile_photo_url` desaparece (nunca se escribió: D6) y la sustituyen `profile_photo_key` (`photo/{uuid}`, `CHECK` de formato) y `profile_photo_type` (`PNG` o `JPEG`). Un `CHECK` exige las dos o ninguna, y el de anonimización pasa a exigir la clave nula.
+
+**`uploadprofilephoto`, en este orden.** Perfil profesional (404 si no hay; la foto es de la cuenta, no de una capacidad) → tamaño, 2 MB (`TOO_LARGE`) → tipo real PNG o JPEG (`UNSUPPORTED_TYPE`) → escaneo **del original** (`MALWARE_DETECTED`) → re-codificación → `put` de la imagen re-codificada → bloqueo del perfil (`FOR UPDATE`) y nueva clave → si había otra foto, `storage.file_deletion_requested` con la anterior. Un fallo después del `put` borra el objeto nuevo por *best effort*.
+
+**Re-codificación con ImageIO del JDK** (`ImageIoPhotoProcessor`), sin dependencias nuevas. Antes de decodificar lee solo la cabecera y rechaza más de 40 megapíxeles: una imagen pequeña que dice medir 50 000 × 50 000 agotaría la memoria (bomba de descompresión). Reduce a 512 px de lado mayor y escribe una imagen nueva desde los píxeles, de modo que **no se copia ningún metadato** (EXIF, ubicación GPS); una prueba lo comprueba con un segmento EXIF real. Una imagen que ImageIO no sabe leer se rechaza como `UNSUPPORTED_TYPE`. Límites en `jobseeker.cv.photo-max-size`, `photo-max-side` y `photo-max-pixels`.
+
+**Desvío del ADR-0021 §3: la foto no se descarga por URL firmada, la sirve la aplicación.** La CSP de las pantallas es `img-src 'self' data:`: una `<img>` que apunte (o redirija) a la URL firmada del almacén no se cargaría. Abrir la CSP al dominio del almacén exigiría además URLs firmadas nuevas en cada render, que no se pueden cachear. Como la imagen ya está reducida (decenas de KB), `getmyprofilephoto` la lee del almacén (`ObjectStoragePort.get`, nuevo) y la aplicación la devuelve con `Cache-Control: private, max-age=300`. La autorización es la misma que el ADR exige: solo el dueño la pide, por su sesión o su token. El parámetro `?v=` de la `<img>`, derivado de la clave aleatoria, cambia con cada foto, así que la caché nunca muestra la anterior.
+
+**Quitar la foto** (`removeprofilephoto`) es idempotente: quitar una que no hay no es un error ni emite evento.
+
+**Anonimización:** `anonymizeprofiledata` descarta la foto **antes** de anonimizar el perfil (después la clave ya sería nula) y pide su borrado **en el mismo evento** que el de los CV, asociado al perfil raíz.
+
+**Reconciliación (TD-041):** recorre también el prefijo `photo/`, con su propio cursor, y compara contra `profile_photo_key`. Así queda cubierta una foto reemplazada cuyo borrado agotó los reintentos.
+
+**API:** `POST`, `GET` y `DELETE` en `/api/v1/me/professional-profile/photo`. El `POST` responde `201` con el tipo y la etiqueta, y el `GET` devuelve la imagen.
+
+**Pantallas (Thymeleaf + HTMX, ADR-0005):**
+
+- `/app/candidate-cv` (enlazada desde el inicio y desde el perfil de candidato) muestra la versión vigente, la lista de versiones con sus enlaces de descarga (`302` a la URL firmada, como la API) y el formulario de subida `multipart` por HTMX (`hx-encoding`). El token CSRF viaja en la cabecera que pone la página, así que la cadena web lo comprueba sin leer el cuerpo (ADR-0020); el barrido de rutas lo verifica.
+- La sección de la foto en `/app/profile` se carga aparte (`hx-trigger="load"`) para que cambiarla no recargue el formulario del perfil ni pierda lo que se esté escribiendo. Sus errores vuelven a la propia sección con `HX-Retarget`/`HX-Reswap`, que HTMX aplica después de la regla `422` de la página.
+- **Un rechazo o un antivirus caído responden `422` con el motivo en castellano en las pantallas** (la API JSON sí distingue el `503 UPSTREAM_UNAVAILABLE`): es el código con que estas páginas reemplazan su zona de errores, y lo que el usuario necesita es leer qué pasó. Los mensajes nunca repiten el nombre del archivo (BR-DATA-01).
+- `cv` gana `jakarta.servlet-api` con alcance `provided`, solo para fijar esas cabeceras desde el controlador de la pantalla.
+
 ## 11. Pruebas
 
 - **Dominio y casos de uso:** unitarias sin Spring, con puertos en memoria. Cada invariante de §3 y cada error de §6 tiene su caso, y se pasa PIT con los mutadores `STRONGER` como en `auth`.
@@ -339,14 +365,14 @@ Las siete preguntas que dejó la primera versión de este documento están resue
 | **D3** | Moneda de la expectativa salarial | **Moneda y periodo por registro**, como ya diseñó `03-lld.md` §4. Se comparan solo importes de la misma moneda, llevados al mismo periodo, sin conversión (BR-CAND-07, BR-JOB-21, BR-MATCH-10). Una moneda distinta excluye la dimensión del score, y lo dice el desglose |
 | **D4** | Catálogos cerrados | **Aprobados** (§3.1) y con su `CHECK` en el modelo |
 | **D5** | Qué pasa con el perfil si se deshabilita la capacidad | **La fila se conserva** y reactivar la capacidad recupera los datos. Que deje de ser descubrible lo hará `cv` al reaccionar al cambio de capacidad que emitirá `auth` cuando exista su caso de uso (hoy `auth` no desactiva capacidades: §7 de su TDD). Hasta entonces no hay forma de apagar una capacidad, así que no hay estado que cubrir |
-| **D6** | Foto de perfil | **Campo vacío en la Ola 1**, sin aceptar URLs externas (filtrarían la visita del usuario a un tercero). Se activa con el ADR-0021 |
+| **D6** | Foto de perfil | Sin aceptar URLs externas (filtrarían la visita del usuario a un tercero). **Activada con el ADR-0021** (§10.8): la foto se sube, se re-codifica y la sirve la propia aplicación |
 | **D7** | Habilidades como texto libre | **Aceptado**, con `skill_id` ya previsto en la tabla para que el ADR-0019 añada la normalización sin reescribirla |
 
 **Lo que sigue abierto y no es de este documento:** quién es dueño del lote de eliminación de cuentas (§9) y qué pasa con las vacantes publicadas al desactivar la capacidad de reclutador (`domain-model.md` §8).
 
 ## 13. No cubierto todavía
 
-- Subida, almacenamiento y análisis del CV, y la foto (ADR-0021).
+- La foto de perfil vista por **otros** (el reclutador en su pipeline): hoy solo la ve su dueño. Llega con `ats`, que decidirá si la muestra (§10.8).
 - `RecruiterProfile` y las plantillas y exportaciones de marca (Ola 3).
 - Generación del CV propio en PDF (Ola 3).
 - La orquestación de la eliminación de cuenta y la cancelación al volver a iniciar sesión (bloque de cumplimiento).
