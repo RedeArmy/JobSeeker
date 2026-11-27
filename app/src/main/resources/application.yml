@@ -4,6 +4,15 @@
 # aporten `application-dev.yml` chocan por nombre y Spring solo carga uno, en silencio. Los
 # módulos de negocio aportan únicamente `application-<modulo>.yml` (nombre único), que se
 # importa explícitamente abajo; los perfiles dev y prod están en este módulo.
+# TD-042: detrás del proxy inverso (ADR-0026), la IP del cliente y el esquema llegan en
+# X-Forwarded-For y X-Forwarded-Proto. Tomcat solo las cree si la conexión viene de un proxy de
+# confianza: TRUSTED_PROXIES es una expresión regular con su IP. Vacía, no confía en nadie y las
+# ignora, que es lo seguro sin proxy: cualquiera podría escribirlas para evadir el límite por IP.
+server:
+  forward-headers-strategy: native
+  tomcat:
+    remoteip:
+      internal-proxies: ${TRUSTED_PROXIES:}
 spring:
   application:
     name: jobseeker

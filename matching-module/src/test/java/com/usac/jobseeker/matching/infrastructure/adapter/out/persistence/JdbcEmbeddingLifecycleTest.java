@@ -133,4 +133,57 @@ class JdbcEmbeddingLifecycleTest {
     assertThat(hasVector()).isTrue();
     assertThat(discoverable()).isTrue();
   }
+
+  // TD-043: la escritura empieza mientras la anonimización está en curso (aún sin confirmar). Sin
+  // el
+  // candado leería la cuenta como viva y, al confirmar la otra, reescribiría el vector vaciado.
+  @Test
+  void aWriteThatStartsWhileTheAnonymizationIsInFlightWaitsAndLeavesNothing() throws Exception {
+    store.registerProfile(account, profile);
+    store.setProfileDiscoverable(profile, true);
+    store.saveProfileEmbedding(profile, true, embedding());
+    var transactions =
+        new org.springframework.transaction.support.TransactionTemplate(
+            new org.springframework.jdbc.datasource.DataSourceTransactionManager(
+                MatchingPostgres.dataSource()));
+    var anonymizing = new java.util.concurrent.CountDownLatch(1);
+    var release = new java.util.concurrent.CountDownLatch(1);
+    var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+    try {
+      var anonymization =
+          pool.submit(
+              () ->
+                  transactions.executeWithoutResult(
+                      t -> {
+                        store.anonymizeProfile(account);
+                        anonymizing.countDown();
+                        await(release);
+                      }));
+      await(anonymizing);
+      var write = pool.submit(() -> store.saveProfileEmbedding(profile, true, embedding()));
+      // La escritura tiene que quedarse esperando el candado de la cuenta.
+      org.assertj.core.api.Assertions.assertThatThrownBy(
+              () -> write.get(300, java.util.concurrent.TimeUnit.MILLISECONDS))
+          .as("la escritura espera a que la anonimización confirme")
+          .isInstanceOf(java.util.concurrent.TimeoutException.class);
+      release.countDown();
+      anonymization.get(10, java.util.concurrent.TimeUnit.SECONDS);
+
+      assertThat(write.get(10, java.util.concurrent.TimeUnit.SECONDS)).isFalse();
+    } finally {
+      release.countDown();
+      pool.shutdownNow();
+    }
+    assertThat(hasVector()).isFalse();
+    assertThat(discoverable()).isFalse();
+  }
+
+  private static void await(java.util.concurrent.CountDownLatch latch) {
+    try {
+      latch.await(10, java.util.concurrent.TimeUnit.SECONDS);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException(e);
+    }
+  }
 }

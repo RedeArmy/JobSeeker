@@ -22,7 +22,6 @@ import java.util.Objects;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Se registra como bean en `infrastructure.config` (ADR-0015, ARCH-02). El orden protege al
@@ -60,9 +59,12 @@ public class UploadProfilePhotoService implements UploadProfilePhotoUseCase {
     this.stamp = Objects.requireNonNull(stamp, "stamp");
   }
 
+  // TD-044: sin transacción hasta el alta, como el CV. El escaneo, la re-codificación y la subida
+  // no
+  // retienen una conexión del pool; solo el cambio de foto y su evento van en una transacción
+  // corta.
   // Cualquier fallo tras el `put` deja un objeto sin referencia: se borra y se relanza tal cual.
   @Override
-  @Transactional
   @SuppressWarnings("PMD.AvoidCatchingGenericException")
   public ProfilePhotoView execute(UploadProfilePhotoCommand command) {
     if (sources.photos().find(command.accountId()).isEmpty()) {
@@ -81,24 +83,30 @@ public class UploadProfilePhotoService implements UploadProfilePhotoUseCase {
     ProcessedPhoto processed = process(content, type);
     StoredObjectKey key = put(processed);
     try {
-      PhotoSlot slot =
-          sources.photos().lock(command.accountId()).orElseThrow(NotFoundException::new);
-      sources.photos().set(slot.profileId(), key.value(), processed.type());
-      if (slot.hasPhoto()) {
-        FileDeletionRequests.request(
-            events,
-            stamp,
-            ProfileUpdated.AGGREGATE_TYPE,
-            slot.profileId().value(),
-            slot.version(),
-            List.of(new StoredObjectKey(slot.key())));
-      }
+      sources.transactions().executeWithoutResult(status -> replace(command, key, processed));
       metrics.count(USE_CASE, "uploaded");
       LOG.info("event=profile_photo_uploaded Foto de perfil guardada");
       return new ProfilePhotoView(processed.type().name(), tagOf(key.value()));
     } catch (RuntimeException e) {
       discard(key);
       throw e;
+    }
+  }
+
+  // La transacción corta: bloquea el perfil, cambia la foto y pide borrar la anterior, que solo se
+  // borra si esta transacción confirma (por la bandeja, ADR-0021 §6).
+  private void replace(
+      UploadProfilePhotoCommand command, StoredObjectKey key, ProcessedPhoto photo) {
+    PhotoSlot slot = sources.photos().lock(command.accountId()).orElseThrow(NotFoundException::new);
+    sources.photos().set(slot.profileId(), key.value(), photo.type());
+    if (slot.hasPhoto()) {
+      FileDeletionRequests.request(
+          events,
+          stamp,
+          ProfileUpdated.AGGREGATE_TYPE,
+          slot.profileId().value(),
+          slot.version(),
+          List.of(new StoredObjectKey(slot.key())));
     }
   }
 

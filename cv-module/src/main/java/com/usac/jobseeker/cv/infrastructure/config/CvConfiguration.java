@@ -80,6 +80,8 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** Cablea los casos de uso de `cv` como beans: `application` no lleva estereotipos (ADR-0015). */
 @Configuration(proxyBeanMethods = false)
@@ -308,21 +310,25 @@ class CvConfiguration {
     return new CvFilePolicy(properties.cvMaxSize().toBytes(), properties.cvMaxVersions());
   }
 
+  // TD-044: la subida solo abre una transacción corta para registrar la versión.
   @Bean
-  UploadCvUseCase uploadCvUseCase(
-      CandidateChange change,
+  CvFileSources cvFileSources(
       JdbcCandidateProfileRepository profiles,
       JdbcCvFileRepository files,
       ObjectStoragePort storage,
       MalwareScanPort scanner,
+      PlatformTransactionManager transactions) {
+    return new CvFileSources(
+        profiles, files, storage, scanner, new TransactionTemplate(transactions));
+  }
+
+  @Bean
+  UploadCvUseCase uploadCvUseCase(
+      CandidateChange change,
+      CvFileSources sources,
       CvFilePolicy policy,
       UseCaseMetricsPort metrics) {
-    return new UploadCvService(
-        change,
-        new CvFileSources(profiles, files, storage, scanner),
-        policy,
-        metrics,
-        Stamp.system());
+    return new UploadCvService(change, sources, policy, metrics, Stamp.system());
   }
 
   @Bean
@@ -382,17 +388,26 @@ class CvConfiguration {
     return new ImageIoPhotoProcessor(properties.photoMaxSide(), properties.photoMaxPixels());
   }
 
+  // TD-044: como el CV, solo el cambio de foto va en una transacción corta.
   @Bean
-  UploadProfilePhotoUseCase uploadProfilePhotoUseCase(
+  ProfilePhotoSources profilePhotoSources(
       JdbcProfilePhotoRepository photos,
       ObjectStoragePort storage,
       MalwareScanPort scanner,
       ImageIoPhotoProcessor processor,
+      PlatformTransactionManager transactions) {
+    return new ProfilePhotoSources(
+        photos, storage, scanner, processor, new TransactionTemplate(transactions));
+  }
+
+  @Bean
+  UploadProfilePhotoUseCase uploadProfilePhotoUseCase(
+      ProfilePhotoSources sources,
       CvFileProperties properties,
       DomainEventPublisherPort events,
       UseCaseMetricsPort metrics) {
     return new UploadProfilePhotoService(
-        new ProfilePhotoSources(photos, storage, scanner, processor),
+        sources,
         new ProfilePhotoPolicy(properties.photoMaxSize().toBytes()),
         events,
         metrics,

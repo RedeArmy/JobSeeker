@@ -89,10 +89,13 @@ class CvConfigurationTest {
 
     assertThat(
             config.uploadProfilePhotoUseCase(
-                photos,
-                storage,
-                scanner,
-                config.imageIoPhotoProcessor(properties),
+                config.profilePhotoSources(
+                    photos,
+                    storage,
+                    scanner,
+                    config.imageIoPhotoProcessor(properties),
+                    new org.springframework.jdbc.datasource.DataSourceTransactionManager(
+                        CvPostgres.dataSource())),
                 properties,
                 event -> {},
                 (useCase, outcome) -> {}))

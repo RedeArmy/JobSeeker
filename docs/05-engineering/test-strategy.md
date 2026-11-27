@@ -52,7 +52,7 @@ flowchart TD
 
 - **`domain/`**: pruebas unitarias puras, sin mocks de framework (no hay nada que mockear — sin dependencias externas por regla de arquitectura, ver `coding-standards.md` §2).
 - **`application/usecase/`**: pruebas unitarias con los puertos de salida (`*Port`) mockeados, verificando la orquestación del caso de uso, no la implementación del adaptador.
-- **`infrastructure/adapter/out/persistence/`**: pruebas de integración con Testcontainers, verificando que el mapeo JPA y las queries realmente cumplen el contrato del puerto.
+- **`infrastructure/adapter/out/persistence/`**: pruebas de integración con Testcontainers, verificando que el SQL de los adaptadores JDBC (ADR-0032) realmente cumple el contrato del puerto, incluidas las restricciones de la base.
 - **`infrastructure/adapter/out/ai/`**: pruebas de integración contra una instancia real o simulada de Ollama (a definir: instancia real en CI vs. mock de contrato — ver Preguntas abiertas).
 - **`infrastructure/adapter/in/web/`**: pruebas de integración de controladores (`@WebMvcTest` o equivalente) verificando contratos de `api-contract-overview.md` (formato de error, códigos de estado).
 

@@ -25,7 +25,7 @@ import java.util.Objects;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionOperations;
 
 /**
  * Se registra como bean en `infrastructure.config` (ADR-0015, ARCH-02). El orden es el de
@@ -46,6 +46,7 @@ public class UploadCvService implements UploadCvUseCase {
   private final CvFileStorePort files;
   private final ObjectStoragePort storage;
   private final MalwareScanPort scanner;
+  private final TransactionOperations transactions;
   private final CvFilePolicy policy;
   private final UseCaseMetricsPort metrics;
   private final Stamp stamp;
@@ -62,14 +63,18 @@ public class UploadCvService implements UploadCvUseCase {
     this.files = sources.files();
     this.storage = sources.storage();
     this.scanner = sources.scanner();
+    this.transactions = sources.transactions();
     this.policy = Objects.requireNonNull(policy, "policy");
     this.metrics = Objects.requireNonNull(metrics, "metrics");
     this.stamp = Objects.requireNonNull(stamp, "stamp");
   }
 
+  // TD-044: sin transacción hasta el alta. El escaneo y la subida tardan hasta sus tiempos de
+  // espera
+  // y no deben retener una conexión del pool; las lecturas previas son de autocommit, y el tope se
+  // vuelve a comprobar dentro de la transacción corta, con el perfil bloqueado.
   // Cualquier fallo tras el `put` deja un objeto sin referencia: se borra y se relanza tal cual.
   @Override
-  @Transactional
   @SuppressWarnings("PMD.AvoidCatchingGenericException")
   public CvFileView execute(UploadCvCommand command) {
     change.requireCandidate(USE_CASE, command.accountId());
@@ -95,7 +100,10 @@ public class UploadCvService implements UploadCvUseCase {
     scan(content);
     StoredObjectKey key = put(content, type);
     try {
-      CvFile stored = register(profile, key, command.originalName(), type, content, sha256);
+      CvFile stored =
+          Objects.requireNonNull(
+              transactions.execute(
+                  status -> register(profile, key, command.originalName(), type, content, sha256)));
       metrics.count(USE_CASE, "uploaded");
       LOG.info("event=cv_uploaded outcome=uploaded Versión del CV guardada");
       return CvFileView.of(stored);

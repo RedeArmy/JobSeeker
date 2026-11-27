@@ -65,13 +65,16 @@ public record MatchingProperties(
    * @param maxPageSize el máximo de candidatos por petición
    * @param retrievalCap cuántos candidatos recupera la etapa 1 para puntuarlos en la etapa 2
    * @param tieTolerance puntos de ventaja con que `OPEN_TO_WORK` adelanta en el orden (BR-MATCH-07)
+   * @param viewLogRetention cuánto se conserva el registro de perfiles vistos (TD-035): bastante
+   *     para reconstruir un abuso (T-N1) y nunca menos que la ventana de la cuota
    */
   public record Suggestions(
       @DefaultValue("200") int viewQuota,
       @DefaultValue("24h") Duration window,
       @DefaultValue("50") int maxPageSize,
       @DefaultValue("200") int retrievalCap,
-      @DefaultValue("1.0") double tieTolerance) {}
+      @DefaultValue("1.0") double tieTolerance,
+      @DefaultValue("90d") Duration viewLogRetention) {}
 
   /**
    * @param efSearch candidatos que explora el índice HNSW por consulta: más recall y más latencia;

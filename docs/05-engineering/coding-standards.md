@@ -37,11 +37,11 @@ Ejemplo: `com.usac.jobseeker.matching.application.usecase.calculatecompatibility
 | `UseCase` | `application/usecase/<caso-de-uso>/` | `CalculateCompatibilityScoreUseCase` |
 | `Port` | `application/usecase/<caso-de-uso>/` (interfaz de puerto de salida) | `CompatibilityScorePort` |
 | `Controller` | `infrastructure/adapter/in/web/` | `JobPostingController` |
-| `JpaRepository` / `...RepositoryAdapter` | `infrastructure/adapter/out/persistence/` | `JobPostingRepositoryAdapter` |
+| `Jdbc...Repository` | `infrastructure/adapter/out/persistence/` | `JdbcJobPostingRepository` |
 | `...Client` / `...Adapter` | `infrastructure/adapter/out/ai/` | `OllamaEmbeddingClient` |
 | Sin sufijo técnico | `domain/model/` | `CandidateProfile`, `CompatibilityScore` (nombres de dominio puros, sin "Entity", "DTO", etc.) |
 
-Una entidad de dominio (`domain/model/`) nunca lleva anotaciones JPA; su contraparte persistente (si se requiere una clase separada) vive en `infrastructure/adapter/out/persistence/` con su propio nombre (p. ej. `CandidateProfileJpaEntity`), mapeada explícitamente — nunca se reutiliza la clase de dominio como entidad JPA.
+Una entidad de dominio (`domain/model/`) nunca lleva anotaciones de persistencia. La persistencia es JDBC explícito con `JdbcClient` (ADR-0032): el adaptador de `infrastructure/adapter/out/persistence/` traduce filas a los registros del dominio y al revés, con el SQL en constantes y los valores siempre como parámetros con nombre.
 
 ## 5. Estándar de comentarios
 

@@ -36,7 +36,10 @@ public final class MatchingPostgres {
       } catch (SQLException failure) {
         throw new IllegalStateException("no se pudo crear la extensión vector", failure);
       }
+      // Como en `app` (ADR-0027, decisión 8): con el bloqueo transaccional de Flyway, un
+      // CREATE INDEX CONCURRENTLY espera a la propia transacción de Flyway y no termina nunca.
       Flyway.configure()
+          .configuration(java.util.Map.of("flyway.postgresql.transactional.lock", "false"))
           .dataSource(dataSource)
           .locations("classpath:db/migration")
           .load()

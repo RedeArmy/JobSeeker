@@ -71,7 +71,8 @@ class SuggestionsControllerTest {
           new MatchingProperties(
               null,
               null,
-              new MatchingProperties.Suggestions(200, Duration.ofHours(24), 50, 200, 0.5),
+              new MatchingProperties.Suggestions(
+                  200, Duration.ofHours(24), 50, 200, 0.5, Duration.ofDays(90)),
               new MatchingProperties.Retrieval(100),
               null));
 
@@ -165,7 +166,8 @@ class SuggestionsControllerTest {
             new MatchingProperties(
                 null,
                 null,
-                new MatchingProperties.Suggestions(200, Duration.ofHours(24), 50, 200, 0.5),
+                new MatchingProperties.Suggestions(
+                    200, Duration.ofHours(24), 50, 200, 0.5, Duration.ofDays(90)),
                 new MatchingProperties.Retrieval(100),
                 null));
 

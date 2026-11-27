@@ -46,6 +46,10 @@ class ProfilePhotoServicesTest {
   private static final byte[] PDF = "%PDF-1.7 no soy una foto".getBytes();
 
   private final AccountId account = new AccountId(UUID.randomUUID());
+  private final com.usac.jobseeker.cv.application.support.RecordingTransactions transactions =
+      new com.usac.jobseeker.cv.application.support.RecordingTransactions();
+  // Qué operación ocurrió con la transacción abierta y cuál sin ella (TD-044).
+  private final List<String> boundaries = new ArrayList<>();
   private final Photos photos = new Photos();
   private final Store storage = new Store();
   private final Scanner scanner = new Scanner();
@@ -64,7 +68,7 @@ class ProfilePhotoServicesTest {
 
   private UploadProfilePhotoService upload(long maxBytes) {
     return new UploadProfilePhotoService(
-        new ProfilePhotoSources(photos, storage, scanner, processor),
+        new ProfilePhotoSources(photos, storage, scanner, processor, transactions),
         new ProfilePhotoPolicy(maxBytes),
         events::add,
         (useCase, outcome) -> metrics.add(outcome),
@@ -73,6 +77,22 @@ class ProfilePhotoServicesTest {
 
   private UploadProfilePhotoService upload() {
     return upload(2_000_000);
+  }
+
+  // TD-044: el antivirus y el almacén trabajan sin transacción; solo el cambio de foto va en una.
+  @Test
+  void onlyThePhotoChangeRunsInsideTheShortTransaction() {
+    photos.create(account);
+    java.util.function.Consumer<String> observer =
+        step -> boundaries.add(step + (transactions.open() ? ":tx" : ":sin-tx"));
+    photos.observer = observer;
+    scanner.observer = observer;
+    storage.observer = observer;
+
+    upload().execute(new UploadProfilePhotoCommand(account, PNG));
+
+    assertThat(boundaries).containsExactly("scan:sin-tx", "put:sin-tx", "lock:tx");
+    assertThat(transactions.started()).isOne();
   }
 
   @Test
@@ -353,8 +373,11 @@ class ProfilePhotoServicesTest {
       return account.equals(owner) ? Optional.of(slot) : Optional.empty();
     }
 
+    java.util.function.Consumer<String> observer = step -> {};
+
     @Override
     public Optional<PhotoSlot> lock(AccountId account) {
+      observer.accept("lock");
       return find(account);
     }
 
@@ -372,8 +395,11 @@ class ProfilePhotoServicesTest {
     boolean down;
     int scanned;
 
+    java.util.function.Consumer<String> observer = step -> {};
+
     @Override
     public ScanVerdict scan(byte[] content) {
+      observer.accept("scan");
       if (down) {
         throw new UpstreamUnavailableException("clamav", new IOException("caído"));
       }
@@ -388,8 +414,11 @@ class ProfilePhotoServicesTest {
     boolean putDown;
     boolean deleteDown;
 
+    java.util.function.Consumer<String> observer = step -> {};
+
     @Override
     public StoredObjectKey put(FilePurpose purpose, byte[] content, FileType type) {
+      observer.accept("put");
       if (putDown) {
         throw new UpstreamUnavailableException("storage", new IOException("caído"));
       }

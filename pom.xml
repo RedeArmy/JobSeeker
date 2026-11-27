@@ -60,6 +60,13 @@
         <!-- HTMX es código de terceros incluido tal cual (huella fijada en VendoredAssetsTest): analizarlo
              solo generaría hallazgos que no podemos corregir. -->
         <sonar.exclusions>**/static/js/htmx.min.js</sonar.exclusions>
+        <!-- Por defecto el escáner solo lee el código Java. Con los recursos dentro, sigue los datos
+             hasta las plantillas Thymeleaf y detecta XSS en ellas (hallazgos de Sonar del 21-nov y del
+             27-nov-2026). Va aquí y no módulo a módulo porque las plantillas ya están en `app` y `cv` y
+             llegarán con `ats` y `tracker`: un módulo nuevo queda analizado sin acordarse de nada.
+             `common` no tiene recursos y lo sobrescribe, porque una carpeta que no existe hace fallar
+             el análisis. -->
+        <sonar.sources>src/main/java,src/main/resources</sonar.sources>
         <!-- La regla S1135 busca su marcador sin distinguir mayúsculas y, en comentarios en español, lo
              confunde con el cuantificador de totalidad, que se escribe igual. Se desactiva para Java y
              XML y la reemplaza scripts/check-work-markers.sh, que sí exige dueño y razón

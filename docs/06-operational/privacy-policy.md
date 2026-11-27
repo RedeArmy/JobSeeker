@@ -46,7 +46,9 @@ JobSeeker es una plataforma que calcula compatibilidad entre perfiles profesiona
 
 ## 5. Cuánto tiempo conservamos tus datos
 
-Mientras tu cuenta esté activa. Si solicitas la eliminación de tu cuenta:
+Mientras tu cuenta esté activa, con una excepción: el registro de qué perfiles de candidato mostró la plataforma a cada reclutador (solo identificadores, sin tus datos de contacto) se conserva **90 días** y después se borra. Sirve para limitar cuántos perfiles puede ver un reclutador y para investigar un uso abusivo.
+
+Si solicitas la eliminación de tu cuenta:
 
 1. Entra en un periodo de gracia de 30 días (configurable), durante el cual puedes cancelar la solicitud volviendo a iniciar sesión.
 2. Vencido ese plazo, anonimizamos tu información personal identificable (nombre, contacto, CV, foto, y en tu perfil de candidato también tus habilidades, idiomas, autorizaciones de trabajo, expectativa salarial y disponibilidad) — no la borramos de forma que rompa el historial de procesos de selección en los que ya participaste, porque el reclutador que evaluó tu postulación tiene derecho a conservar su propio historial de decisión. Tu identidad de acceso (email, contraseña, cuentas sociales vinculadas) se elimina por completo del proveedor de identidad.
