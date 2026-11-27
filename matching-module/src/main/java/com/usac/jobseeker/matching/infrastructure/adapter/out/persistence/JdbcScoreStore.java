@@ -16,6 +16,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -69,7 +70,11 @@ public class JdbcScoreStore implements ScoreStorePort {
     if (unique.isEmpty()) {
       return;
     }
+    // Orden fijo por par: dos transacciones que escriben pares cruzados (los sugeridos de una
+    // vacante y el recálculo de un perfil) toman los candados de fila en el mismo orden y no se
+    // bloquean mutuamente.
     List<StoredScore> rows = new ArrayList<>(unique.values());
+    rows.sort(PAIR_ORDER);
     jdbc.sql(
             "insert into compatibility_scores_current (candidate_profile_id, job_posting_id,"
                 + " overall, completeness, calibrated, algorithm_version, breakdown, reason,"
@@ -82,9 +87,18 @@ public class JdbcScoreStore implements ScoreStorePort {
                 + " cast(:breakdowns as text[]), cast(:reasons as text[]), cast(:at as text[]))"
                 + " as x(p, j, o, c, cal, v, b, r, t)"
                 + " on conflict (candidate_profile_id, job_posting_id) do update set"
-                + " overall = excluded.overall, completeness = excluded.completeness,"
-                + " calibrated = excluded.calibrated, algorithm_version = excluded.algorithm_version,"
-                + " breakdown = excluded.breakdown, computed_at = excluded.computed_at,"
+                + " overall = "
+                + newer("overall")
+                + ", completeness = "
+                + newer(COMPLETENESS)
+                + ", calibrated = "
+                + newer(CALIBRATED)
+                + ", algorithm_version = "
+                + newer("algorithm_version")
+                + ", breakdown = "
+                + newer("breakdown")
+                + ", computed_at = greatest(compatibility_scores_current.computed_at,"
+                + " excluded.computed_at),"
                 + " reason = ("
                 + REASON_RANK
                 + ")[greatest(array_position("
@@ -109,6 +123,21 @@ public class JdbcScoreStore implements ScoreStorePort {
         .param("reasons", rows.stream().map(r -> r.reason().name()).toArray(String[]::new))
         .param(AT, rows.stream().map(r -> r.computedAt().toString()).toArray(String[]::new))
         .update();
+  }
+
+  private static final Comparator<StoredScore> PAIR_ORDER =
+      Comparator.comparing((StoredScore r) -> r.profile().value())
+          .thenComparing(r -> r.job().value());
+
+  // Un cálculo que empezó antes que el guardado (un recálculo lento frente a un sugerido recién
+  // puntuado) no lo pisa: cada columna del puntaje se queda con el valor del cálculo más reciente.
+  // El motivo, en cambio, se combina siempre (el más fuerte gana).
+  private static String newer(String column) {
+    return "case when excluded.computed_at >= compatibility_scores_current.computed_at then excluded."
+        + column
+        + " else compatibility_scores_current."
+        + column
+        + " end";
   }
 
   private static boolean[] toBooleans(List<StoredScore> rows) {

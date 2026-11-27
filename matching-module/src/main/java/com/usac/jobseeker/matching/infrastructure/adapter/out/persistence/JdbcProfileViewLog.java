@@ -54,21 +54,24 @@ public class JdbcProfileViewLog implements ProfileViewLogPort {
             .list());
   }
 
+  // Una sola sentencia para todos los mostrados (hasta la página máxima), no una por candidato: se
+  // ejecuta con el candado del reclutador tomado, así que cada viaje a la base alarga la fila.
   @Override
   public void append(
       AccountId viewer, JobPostingId job, List<CandidateProfileId> shown, Instant at) {
-    for (CandidateProfileId candidate : shown) {
-      jdbc.sql(
-              "insert into profile_view_log (id, viewer_account_id, candidate_profile_id,"
-                  + " job_posting_id, context, viewed_at)"
-                  + " values (:id, :viewer, :candidate, :job, :context, :at)")
-          .param("id", UUID.randomUUID())
-          .param("viewer", viewer.value())
-          .param("candidate", candidate.value())
-          .param("job", job.value())
-          .param("context", CONTEXT)
-          .param("at", OffsetDateTime.ofInstant(at, ZoneOffset.UTC))
-          .update();
+    if (shown.isEmpty()) {
+      return;
     }
+    jdbc.sql(
+            "insert into profile_view_log (id, viewer_account_id, candidate_profile_id,"
+                + " job_posting_id, context, viewed_at)"
+                + " select gen_random_uuid(), :viewer, c, :job, :context, :at"
+                + " from unnest(cast(:candidates as uuid[])) as c")
+        .param("viewer", viewer.value())
+        .param("candidates", shown.stream().map(CandidateProfileId::value).toArray(UUID[]::new))
+        .param("job", job.value())
+        .param("context", CONTEXT)
+        .param("at", OffsetDateTime.ofInstant(at, ZoneOffset.UTC))
+        .update();
   }
 }

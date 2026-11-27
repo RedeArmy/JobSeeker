@@ -159,6 +159,68 @@ class JdbcScoreStoreTest {
     assertThat(reasonOf(other)).isEqualTo("APPLIED");
   }
 
+  // Un recálculo lento que empezó antes no pisa un puntaje más reciente; el motivo sí se combina.
+  @Test
+  void anOlderCalculationNeverOverwritesANewerScoreButItsReasonStillCounts() {
+    var candidate = world.candidate("Java");
+    var job = world.job("PUBLISHED");
+    var newer = stored(candidate, job, 0.9, ScoreReason.SUGGESTED, T0.plusSeconds(60));
+    var older = stored(candidate, job, 0.1, ScoreReason.APPLIED, T0);
+    assertThat(older.score().overall()).isNotEqualTo(newer.score().overall());
+
+    store.upsertCurrent(List.of(newer));
+    store.upsertCurrent(List.of(older));
+
+    var read = store.findCurrent(newer.profile(), newer.job()).orElseThrow();
+    assertThat(read.computedAt()).isEqualTo(T0.plusSeconds(60));
+    assertThat(read.score().overall())
+        .isCloseTo(newer.score().overall(), org.assertj.core.data.Offset.offset(0.01));
+    assertThat(read.reason()).isEqualTo(ScoreReason.APPLIED);
+  }
+
+  // Pares cruzados escritos a la vez por dos transacciones, en órdenes opuestos: con las filas
+  // ordenadas antes de escribir ninguna espera a la otra en ciclo. Sin el orden, Postgres puede
+  // abortar una con «deadlock detected»; la carrera no es determinista, así que se repite.
+  @Test
+  void crossedBatchesWrittenConcurrentlyDoNotDeadlock() throws Exception {
+    var a = world.candidate("Java");
+    var b = world.candidate("Kotlin");
+    var x = world.job("PUBLISHED");
+    var y = world.job("PUBLISHED");
+    List<StoredScore> forward =
+        List.of(
+            stored(a, x, 0.5, ScoreReason.SUGGESTED, T0),
+            stored(a, y, 0.5, ScoreReason.SUGGESTED, T0),
+            stored(b, x, 0.5, ScoreReason.SUGGESTED, T0),
+            stored(b, y, 0.5, ScoreReason.SUGGESTED, T0));
+    List<StoredScore> backward = new java.util.ArrayList<>(forward);
+    java.util.Collections.reverse(backward);
+    store.upsertCurrent(forward);
+    var transactions =
+        new org.springframework.transaction.support.TransactionTemplate(
+            new org.springframework.jdbc.datasource.DataSourceTransactionManager(
+                MatchingPostgres.dataSource()));
+    var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+    try {
+      var futures = new java.util.ArrayList<java.util.concurrent.Future<?>>();
+      for (int round = 0; round < 20; round++) {
+        futures.add(
+            pool.submit(
+                () -> transactions.executeWithoutResult(t -> store.upsertCurrent(forward))));
+        futures.add(
+            pool.submit(
+                () -> transactions.executeWithoutResult(t -> store.upsertCurrent(backward))));
+      }
+      for (var future : futures) {
+        future.get(30, java.util.concurrent.TimeUnit.SECONDS);
+      }
+    } finally {
+      pool.shutdownNow();
+    }
+
+    assertThat(count()).isEqualTo(4);
+  }
+
   private static StoredScore withReason(StoredScore pair, ScoreReason reason) {
     return new StoredScore(pair.profile(), pair.job(), pair.score(), reason, pair.computedAt());
   }
