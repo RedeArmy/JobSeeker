@@ -90,7 +90,7 @@ public class JdbcEmbeddingWorkQueue implements EmbeddingWorkQueuePort {
                     EmbeddingEntity.valueOf(rows.getString("entity_type")),
                     rows.getObject("entity_key", UUID.class),
                     rows.getLong("generation"),
-                    rows.getInt("attempts"),
+                    rows.getInt(ATTEMPTS),
                     rows.getObject("pending_since", OffsetDateTime.class).toInstant()))
         .list();
   }

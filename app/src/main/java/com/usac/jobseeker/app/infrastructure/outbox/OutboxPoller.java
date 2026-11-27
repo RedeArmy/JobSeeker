@@ -23,6 +23,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class OutboxPoller {
 
   private static final Logger LOG = LoggerFactory.getLogger(OutboxPoller.class);
+  private static final String LEASE_LOST = "lease_lost";
 
   private final OutboxStore store;
   private final List<OutboxEventConsumer> consumers;
@@ -120,12 +121,12 @@ public class OutboxPoller {
           consumer.consume(event);
         }
       }
-      count(store.markProcessed(event.id(), claimed.attempts()) ? "processed" : "lease_lost");
+      count(store.markProcessed(event.id(), claimed.attempts()) ? "processed" : LEASE_LOST);
     } catch (RuntimeException e) {
       // El intento ya se contó al reclamar.
       int attempt = claimed.attempts();
       if (attempt >= properties.maxAttempts()) {
-        count(store.markFailed(event.id(), attempt) ? "failed" : "lease_lost");
+        count(store.markFailed(event.id(), attempt) ? "failed" : LEASE_LOST);
         LOG.error(
             "event=outbox_failed eventType={} attempts={} Evento de la bandeja agotó sus intentos",
             event.eventType(),
@@ -137,7 +138,7 @@ public class OutboxPoller {
                 event.id(),
                 attempt,
                 properties.backoff(attempt, ThreadLocalRandom.current().nextDouble()));
-        count(owned ? "retried" : "lease_lost");
+        count(owned ? "retried" : LEASE_LOST);
         LOG.warn(
             "event=outbox_retry eventType={} attempt={} Evento de la bandeja se reintentará",
             event.eventType(),

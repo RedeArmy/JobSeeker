@@ -54,6 +54,41 @@ public class JdbcScoreStore implements ScoreStorePort {
   private static final String PAIR =
       " where candidate_profile_id = :profile and job_posting_id = :job";
 
+  // Un cálculo que empezó antes que el guardado (un recálculo lento frente a un sugerido recién
+  // puntuado) no lo pisa: cada columna del puntaje se queda con el valor del cálculo más reciente.
+  // El motivo, en cambio, se combina siempre (el más fuerte gana). Es una constante entera: ninguna
+  // parte de la sentencia se arma en tiempo de ejecución.
+  private static final String UPSERT =
+      "insert into compatibility_scores_current as cur (candidate_profile_id, job_posting_id,"
+          + " overall, completeness, calibrated, algorithm_version, breakdown, reason,"
+          + " computed_at)"
+          + " select p, j, round(cast(o as numeric), 2), round(cast(c as numeric), 3), cal, v,"
+          + " cast(b as jsonb), r, cast(t as timestamptz)"
+          + " from unnest(cast(:profiles as uuid[]), cast(:jobs as uuid[]),"
+          + " cast(:overall as float8[]), cast(:completeness as float8[]),"
+          + " cast(:calibrated as boolean[]), cast(:versions as text[]),"
+          + " cast(:breakdowns as text[]), cast(:reasons as text[]), cast(:at as text[]))"
+          + " as x(p, j, o, c, cal, v, b, r, t)"
+          + " on conflict (candidate_profile_id, job_posting_id) do update set"
+          + " overall = case when excluded.computed_at >= cur.computed_at"
+          + " then excluded.overall else cur.overall end,"
+          + " completeness = case when excluded.computed_at >= cur.computed_at"
+          + " then excluded.completeness else cur.completeness end,"
+          + " calibrated = case when excluded.computed_at >= cur.computed_at"
+          + " then excluded.calibrated else cur.calibrated end,"
+          + " algorithm_version = case when excluded.computed_at >= cur.computed_at"
+          + " then excluded.algorithm_version else cur.algorithm_version end,"
+          + " breakdown = case when excluded.computed_at >= cur.computed_at"
+          + " then excluded.breakdown else cur.breakdown end,"
+          + " computed_at = greatest(cur.computed_at, excluded.computed_at),"
+          + " reason = ("
+          + REASON_RANK
+          + ")[greatest(array_position("
+          + REASON_RANK
+          + ", cur.reason), array_position("
+          + REASON_RANK
+          + ", excluded.reason))]";
+
   private final JdbcClient jdbc;
 
   public JdbcScoreStore(JdbcClient jdbc) {
@@ -75,37 +110,7 @@ public class JdbcScoreStore implements ScoreStorePort {
     // bloquean mutuamente.
     List<StoredScore> rows = new ArrayList<>(unique.values());
     rows.sort(PAIR_ORDER);
-    jdbc.sql(
-            "insert into compatibility_scores_current (candidate_profile_id, job_posting_id,"
-                + " overall, completeness, calibrated, algorithm_version, breakdown, reason,"
-                + " computed_at)"
-                + " select p, j, round(cast(o as numeric), 2), round(cast(c as numeric), 3), cal, v,"
-                + " cast(b as jsonb), r, cast(t as timestamptz)"
-                + " from unnest(cast(:profiles as uuid[]), cast(:jobs as uuid[]),"
-                + " cast(:overall as float8[]), cast(:completeness as float8[]),"
-                + " cast(:calibrated as boolean[]), cast(:versions as text[]),"
-                + " cast(:breakdowns as text[]), cast(:reasons as text[]), cast(:at as text[]))"
-                + " as x(p, j, o, c, cal, v, b, r, t)"
-                + " on conflict (candidate_profile_id, job_posting_id) do update set"
-                + " overall = "
-                + newer("overall")
-                + ", completeness = "
-                + newer(COMPLETENESS)
-                + ", calibrated = "
-                + newer(CALIBRATED)
-                + ", algorithm_version = "
-                + newer("algorithm_version")
-                + ", breakdown = "
-                + newer("breakdown")
-                + ", computed_at = greatest(compatibility_scores_current.computed_at,"
-                + " excluded.computed_at),"
-                + " reason = ("
-                + REASON_RANK
-                + ")[greatest(array_position("
-                + REASON_RANK
-                + ", compatibility_scores_current.reason), array_position("
-                + REASON_RANK
-                + ", excluded.reason))]")
+    jdbc.sql(UPSERT)
         .param("profiles", rows.stream().map(r -> r.profile().value()).toArray(UUID[]::new))
         .param("jobs", rows.stream().map(r -> r.job().value()).toArray(UUID[]::new))
         .param(OVERALL, rows.stream().mapToDouble(r -> r.score().overall()).toArray())
@@ -128,17 +133,6 @@ public class JdbcScoreStore implements ScoreStorePort {
   private static final Comparator<StoredScore> PAIR_ORDER =
       Comparator.comparing((StoredScore r) -> r.profile().value())
           .thenComparing(r -> r.job().value());
-
-  // Un cálculo que empezó antes que el guardado (un recálculo lento frente a un sugerido recién
-  // puntuado) no lo pisa: cada columna del puntaje se queda con el valor del cálculo más reciente.
-  // El motivo, en cambio, se combina siempre (el más fuerte gana).
-  private static String newer(String column) {
-    return "case when excluded.computed_at >= compatibility_scores_current.computed_at then excluded."
-        + column
-        + " else compatibility_scores_current."
-        + column
-        + " end";
-  }
 
   private static boolean[] toBooleans(List<StoredScore> rows) {
     boolean[] calibrated = new boolean[rows.size()];

@@ -207,8 +207,8 @@ class FlagsAndReadsTest {
 
     assertThat(batch).containsOnlyKeys(ids.get(0), ids.get(1));
     for (UUID id : batch.keySet()) {
-      assertThat(batch.get(id))
-          .isEqualTo(signals.execute(new GetJobSignalsQuery(id)).orElseThrow());
+      assertThat(batch)
+          .containsEntry(id, signals.execute(new GetJobSignalsQuery(id)).orElseThrow());
     }
     assertThat(
             signals.executeAll(

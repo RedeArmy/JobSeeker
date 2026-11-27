@@ -37,30 +37,37 @@ class ProcessEmbeddingQueueLeaseTest {
     var service =
         new ProcessEmbeddingQueueService(
             new EmbeddingWorkQueuePort() {
+              @Override
               public void request(EmbeddingEntity entity, UUID key, Instant notBefore) {
                 throw new UnsupportedOperationException();
               }
 
+              @Override
               public List<Job> claim(int limit, Duration lease, int maxAttempts) {
                 return ready;
               }
 
+              @Override
               public void complete(Job job) {
                 outcomes.add("complete");
               }
 
+              @Override
               public void retryAt(Job job, Instant notBefore) {
                 outcomes.add("retry");
               }
 
+              @Override
               public void fail(Job job) {
                 outcomes.add("fail");
               }
 
+              @Override
               public void release(Job job) {
                 outcomes.add("release");
               }
 
+              @Override
               public void discard(EmbeddingEntity entity, UUID key) {
                 throw new UnsupportedOperationException();
               }
@@ -90,21 +97,35 @@ class ProcessEmbeddingQueueLeaseTest {
     List<Instant> retried = new ArrayList<>();
     EmbeddingWorkQueuePort port =
         new EmbeddingWorkQueuePort() {
-          public void request(EmbeddingEntity entity, UUID key, Instant notBefore) {}
+          @Override
+          public void request(EmbeddingEntity entity, UUID key, Instant notBefore) {
+            throw new UnsupportedOperationException("la prueba no pide trabajos");
+          }
 
+          @Override
           public List<Job> claim(int limit, Duration lease, int maxAttempts) {
             return List.of();
           }
 
-          public void complete(Job job) {}
+          @Override
+          public void complete(Job job) {
+            throw new UnsupportedOperationException("la prueba no completa trabajos");
+          }
 
+          @Override
           public void retryAt(Job job, Instant notBefore) {
             retried.add(notBefore);
           }
 
-          public void fail(Job job) {}
+          @Override
+          public void fail(Job job) {
+            throw new UnsupportedOperationException("la prueba no da trabajos por fallidos");
+          }
 
-          public void discard(EmbeddingEntity entity, UUID key) {}
+          @Override
+          public void discard(EmbeddingEntity entity, UUID key) {
+            throw new UnsupportedOperationException("la prueba no descarta trabajos");
+          }
         };
 
     port.release(job());
