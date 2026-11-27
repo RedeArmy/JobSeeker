@@ -6,10 +6,10 @@ import com.usac.jobseeker.common.domain.error.FieldViolation;
 import com.usac.jobseeker.common.domain.error.NotFoundException;
 import com.usac.jobseeker.common.domain.error.ValidationFailedException;
 import com.usac.jobseeker.cv.application.support.CandidateChange;
+import com.usac.jobseeker.cv.application.support.Stamp;
 import com.usac.jobseeker.cv.domain.event.CandidateAvailabilityExclusionChanged;
 import com.usac.jobseeker.cv.domain.model.AvailabilityExclusion;
 import com.usac.jobseeker.cv.domain.model.CandidateProfile;
-import java.time.Clock;
 import java.util.List;
 import java.util.Objects;
 import org.slf4j.Logger;
@@ -33,19 +33,20 @@ public class ManageAvailabilityExclusionsService implements ManageAvailabilityEx
   private final AvailabilityExclusionStorePort exclusions;
   private final AccountDirectoryPort directory;
   private final CandidateChange change;
-  private final Clock clock;
+  // TD-014: el reloj llega con el resto del sello, como en el resto del módulo.
+  private final Stamp stamp;
   private final UseCaseMetricsPort metrics;
 
   public ManageAvailabilityExclusionsService(
       AvailabilityExclusionStorePort exclusions,
       AccountDirectoryPort directory,
       CandidateChange change,
-      Clock clock,
+      Stamp stamp,
       UseCaseMetricsPort metrics) {
     this.exclusions = Objects.requireNonNull(exclusions, "exclusions");
     this.directory = Objects.requireNonNull(directory, "directory");
     this.change = Objects.requireNonNull(change, "change");
-    this.clock = Objects.requireNonNull(clock, "clock");
+    this.stamp = Objects.requireNonNull(stamp, "stamp");
     this.metrics = Objects.requireNonNull(metrics, "metrics");
   }
 
@@ -111,7 +112,7 @@ public class ManageAvailabilityExclusionsService implements ManageAvailabilityEx
       if (exclusions.count(profile.id()) >= AvailabilityExclusion.MAX_PER_CANDIDATE) {
         throw new ValidationFailedException(List.of(new FieldViolation("exclusions", "TOO_MANY")));
       }
-      return AvailabilityExclusion.of(c.accountId(), c.excludedAccount(), clock.instant());
+      return AvailabilityExclusion.of(c.accountId(), c.excludedAccount(), stamp.clock().instant());
     } catch (ValidationFailedException invalid) {
       metrics.count(USE_CASE_ADD, "invalid");
       throw invalid;

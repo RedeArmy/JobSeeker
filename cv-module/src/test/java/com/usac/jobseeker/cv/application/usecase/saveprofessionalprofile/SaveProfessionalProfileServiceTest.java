@@ -9,6 +9,7 @@ import com.usac.jobseeker.common.application.outbox.OutboxEvent;
 import com.usac.jobseeker.common.domain.error.StaleStateException;
 import com.usac.jobseeker.common.domain.error.ValidationFailedException;
 import com.usac.jobseeker.common.domain.model.AccountId;
+import com.usac.jobseeker.cv.application.support.Stamp;
 import com.usac.jobseeker.cv.application.usecase.getmyprofessionalprofile.ProfileCollectionsReadPort;
 import com.usac.jobseeker.cv.domain.model.ProfessionalProfile;
 import com.usac.jobseeker.cv.domain.model.ProfileCollections;
@@ -19,7 +20,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
 
 class SaveProfessionalProfileServiceTest {
@@ -41,8 +41,7 @@ class SaveProfessionalProfileServiceTest {
         id -> candidate,
         events::add,
         (useCase, outcome) -> metrics.add(useCase + ":" + outcome),
-        Clock.fixed(NOW, ZoneOffset.UTC),
-        () -> new UUID(0, sequence.incrementAndGet()));
+        new Stamp(Clock.fixed(NOW, ZoneOffset.UTC), () -> new UUID(0, sequence.incrementAndGet())));
   }
 
   private SaveProfessionalProfileResult save(String name, long expectedVersion) {
@@ -251,36 +250,25 @@ class SaveProfessionalProfileServiceTest {
     CandidateCapabilityPort cap = id -> true;
     DomainEventPublisherPort publisher = events::add;
     UseCaseMetricsPort counter = (a, b) -> {};
-    Supplier<UUID> ids = UUID::randomUUID;
+    Stamp stamp = new Stamp(clock, UUID::randomUUID);
 
     assertThatThrownBy(
-            () ->
-                new SaveProfessionalProfileService(null, none, cap, publisher, counter, clock, ids))
+            () -> new SaveProfessionalProfileService(null, none, cap, publisher, counter, stamp))
         .isInstanceOf(NullPointerException.class);
     assertThatThrownBy(
-            () ->
-                new SaveProfessionalProfileService(
-                    store, null, cap, publisher, counter, clock, ids))
+            () -> new SaveProfessionalProfileService(store, null, cap, publisher, counter, stamp))
         .isInstanceOf(NullPointerException.class);
     assertThatThrownBy(
-            () ->
-                new SaveProfessionalProfileService(
-                    store, none, null, publisher, counter, clock, ids))
+            () -> new SaveProfessionalProfileService(store, none, null, publisher, counter, stamp))
         .isInstanceOf(NullPointerException.class);
     assertThatThrownBy(
-            () -> new SaveProfessionalProfileService(store, none, cap, null, counter, clock, ids))
+            () -> new SaveProfessionalProfileService(store, none, cap, null, counter, stamp))
         .isInstanceOf(NullPointerException.class);
     assertThatThrownBy(
-            () -> new SaveProfessionalProfileService(store, none, cap, publisher, null, clock, ids))
+            () -> new SaveProfessionalProfileService(store, none, cap, publisher, null, stamp))
         .isInstanceOf(NullPointerException.class);
     assertThatThrownBy(
-            () ->
-                new SaveProfessionalProfileService(store, none, cap, publisher, counter, null, ids))
-        .isInstanceOf(NullPointerException.class);
-    assertThatThrownBy(
-            () ->
-                new SaveProfessionalProfileService(
-                    store, none, cap, publisher, counter, clock, null))
+            () -> new SaveProfessionalProfileService(store, none, cap, publisher, counter, null))
         .isInstanceOf(NullPointerException.class);
   }
 }

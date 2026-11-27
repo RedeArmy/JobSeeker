@@ -17,10 +17,8 @@ import com.usac.jobseeker.cv.domain.model.ProfessionalProfile;
 import com.usac.jobseeker.cv.domain.model.ProfessionalProfileId;
 import com.usac.jobseeker.cv.domain.model.ProfileCollections;
 import com.usac.jobseeker.cv.domain.model.ProfileItemId;
-import java.time.Clock;
 import java.util.List;
 import java.util.Objects;
-import java.util.UUID;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,8 +47,8 @@ public class ProfileChange {
   private final CandidateCapabilityPort capabilities;
   private final DomainEventPublisherPort events;
   private final UseCaseMetricsPort metrics;
-  private final Clock clock;
-  private final Supplier<UUID> ids;
+  // TD-014: el reloj y los identificadores llegan juntos, como en el resto del módulo.
+  private final Stamp stamp;
 
   public ProfileChange(
       ProfessionalProfileStorePort profiles,
@@ -58,15 +56,13 @@ public class ProfileChange {
       CandidateCapabilityPort capabilities,
       DomainEventPublisherPort events,
       UseCaseMetricsPort metrics,
-      Clock clock,
-      Supplier<UUID> ids) {
+      Stamp stamp) {
     this.profiles = Objects.requireNonNull(profiles, "profiles");
     this.collections = Objects.requireNonNull(collections, "collections");
     this.capabilities = Objects.requireNonNull(capabilities, "capabilities");
     this.events = Objects.requireNonNull(events, "events");
     this.metrics = Objects.requireNonNull(metrics, "metrics");
-    this.clock = Objects.requireNonNull(clock, "clock");
-    this.ids = Objects.requireNonNull(ids, "ids");
+    this.stamp = Objects.requireNonNull(stamp, "stamp");
   }
 
   /** Una versión negativa no existe: 0 es «sin crear» y las guardadas empiezan en 1. */
@@ -76,7 +72,7 @@ public class ProfileChange {
 
   /** Un identificador nuevo para un elemento. */
   public ProfileItemId newItemId() {
-    return new ProfileItemId(ids.get());
+    return new ProfileItemId(stamp.ids().get());
   }
 
   /**
@@ -120,7 +116,7 @@ public class ProfileChange {
     if (current.version() != expectedVersion) {
       throw failed(useCase, "stale", new StaleStateException());
     }
-    ProfessionalProfile touched = current.touched(clock.instant());
+    ProfessionalProfile touched = current.touched(stamp.clock().instant());
     if (!profiles.updateIfVersion(touched, expectedVersion)) {
       throw failed(useCase, "stale", new StaleStateException());
     }
@@ -150,7 +146,7 @@ public class ProfileChange {
   private void publish(ProfessionalProfile profile, String change) {
     events.publish(
         new OutboxEvent(
-            ids.get(),
+            stamp.ids().get(),
             ProfileUpdated.AGGREGATE_TYPE,
             profile.id().value(),
             profile.version(),

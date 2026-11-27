@@ -11,6 +11,7 @@ import com.usac.jobseeker.common.domain.error.StaleStateException;
 import com.usac.jobseeker.common.domain.error.ValidationFailedException;
 import com.usac.jobseeker.common.domain.model.AccountId;
 import com.usac.jobseeker.cv.application.support.CandidateChange;
+import com.usac.jobseeker.cv.application.support.Stamp;
 import com.usac.jobseeker.cv.application.usecase.changeavailability.AvailabilityStorePort;
 import com.usac.jobseeker.cv.application.usecase.changeavailability.ChangeAvailabilityCommand;
 import com.usac.jobseeker.cv.application.usecase.changeavailability.ChangeAvailabilityService;
@@ -139,8 +140,7 @@ class VisibilityServicesTest {
           a -> isCandidate,
           events::add,
           (useCase, outcome) -> metrics.add(useCase + ":" + outcome),
-          Clock.fixed(NOW, ZoneOffset.UTC),
-          UUID::randomUUID);
+          new Stamp(Clock.fixed(NOW, ZoneOffset.UTC), UUID::randomUUID));
   private final ChangeDiscoverabilityService discoverability =
       new ChangeDiscoverabilityService(db, change);
   private final ChangeAvailabilityService availability = new ChangeAvailabilityService(db, change);
@@ -149,7 +149,7 @@ class VisibilityServicesTest {
           db,
           a -> otherExists,
           change,
-          Clock.fixed(NOW, ZoneOffset.UTC),
+          new Stamp(Clock.fixed(NOW, ZoneOffset.UTC), UUID::randomUUID),
           (useCase, outcome) -> metrics.add(useCase + ":" + outcome));
   private final GetVisibleAvailabilityService visible = new GetVisibleAvailabilityService(db, db);
 

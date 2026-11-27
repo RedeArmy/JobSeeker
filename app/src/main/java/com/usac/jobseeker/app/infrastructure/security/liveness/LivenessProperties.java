@@ -15,7 +15,10 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *     reutilización de Clavaris configurada (30 s)
  * @param negativeCache tras un fallo transitorio no se reintenta esa sesión durante este tiempo
  * @param lockTtl vida del cerrojo; debe superar con holgura la duración máxima de una renovación
- * @param lockWait cuánto espera una petición al cerrojo antes de seguir sin renovar
+ * @param lockWait cuánto espera una petición al cerrojo antes de seguir sin renovar. Corto a
+ *     propósito (TD-046): quien no lo obtiene sigue igualmente con el estado que tenía, que está
+ *     dentro del margen, así que esperar más solo ocupaba un hilo de Tomcat mientras otra petición
+ *     de la misma sesión hablaba con Clavaris
  */
 @ConfigurationProperties("jobseeker.auth.liveness")
 public record LivenessProperties(
@@ -25,7 +28,7 @@ public record LivenessProperties(
     @DefaultValue("false") boolean retryOnceWithinGrace,
     @DefaultValue("45s") Duration negativeCache,
     @DefaultValue("30s") Duration lockTtl,
-    @DefaultValue("10s") Duration lockWait,
+    @DefaultValue("250ms") Duration lockWait,
     @DefaultValue("2s") Duration connectTimeout,
     @DefaultValue("5s") Duration readTimeout) {
 

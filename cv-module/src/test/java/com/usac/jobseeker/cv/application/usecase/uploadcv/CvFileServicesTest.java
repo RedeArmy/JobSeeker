@@ -62,8 +62,7 @@ class CvFileServicesTest {
           a -> isCandidate,
           e -> {},
           (useCase, outcome) -> metrics.add(useCase + ":" + outcome),
-          Clock.fixed(NOW, ZoneOffset.UTC),
-          UUID::randomUUID);
+          new Stamp(Clock.fixed(NOW, ZoneOffset.UTC), UUID::randomUUID));
   private final com.usac.jobseeker.cv.application.support.RecordingTransactions transactions =
       new com.usac.jobseeker.cv.application.support.RecordingTransactions();
   private final CvFilePolicy policy = new CvFilePolicy(1024, 3);

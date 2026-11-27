@@ -51,8 +51,9 @@ class ManageCollectionsServicesTest {
             id -> candidate,
             events::add,
             (useCase, outcome) -> metrics.add(useCase + ":" + outcome),
-            Clock.fixed(Instant.parse("2026-11-23T10:00:00Z"), ZoneOffset.UTC),
-            () -> new UUID(0, sequence.incrementAndGet()));
+            new Stamp(
+                Clock.fixed(Instant.parse("2026-11-23T10:00:00Z"), ZoneOffset.UTC),
+                () -> new UUID(0, sequence.incrementAndGet())));
 
     ProfessionalProfile createProfile(AccountId owner) {
       var profile =

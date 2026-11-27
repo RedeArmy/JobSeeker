@@ -221,6 +221,42 @@ class JdbcScoreStoreTest {
     assertThat(count()).isEqualTo(4);
   }
 
+  // TD-045: con la tabla poblada y casi todo en la versión vigente, buscar los pares de versiones
+  // viejas usa el índice de la versión y no recorre la tabla entera.
+  @Test
+  void findingStalePairsUsesTheVersionIndexInsteadOfScanningTheTable() {
+    jdbc.sql(
+            "insert into compatibility_scores_current (candidate_profile_id, job_posting_id,"
+                + " overall, completeness, calibrated, algorithm_version, breakdown, reason,"
+                + " computed_at) select gen_random_uuid(), gen_random_uuid(), 50, 0.5, false,"
+                + " case when g % 1000 = 0 then 'c|m|w|1' else 'c|m|w|2' end, cast('{}' as jsonb),"
+                + " 'SUGGESTED', now() - make_interval(secs => g) from generate_series(1, 20000) g")
+        .update();
+    jdbc.sql("analyze compatibility_scores_current").update();
+
+    String plan =
+        String.join(
+            "\n",
+            jdbc.sql(
+                    "explain "
+                        + JdbcScoreStore.SELECT_CURRENT
+                        + JdbcScoreStore.STALE_VERSION
+                        + " order by computed_at limit 100")
+                .param("version", "c|m|w|2")
+                .query(String.class)
+                .list());
+
+    assertThat(plan).contains("idx_csc_version").doesNotContain("Seq Scan");
+    assertThat(
+            jdbc.sql(
+                    "select count(*) from compatibility_scores_current"
+                        + JdbcScoreStore.STALE_VERSION)
+                .param("version", "c|m|w|2")
+                .query(Integer.class)
+                .single())
+        .isEqualTo(20);
+  }
+
   private static StoredScore withReason(StoredScore pair, ScoreReason reason) {
     return new StoredScore(pair.profile(), pair.job(), pair.score(), reason, pair.computedAt());
   }

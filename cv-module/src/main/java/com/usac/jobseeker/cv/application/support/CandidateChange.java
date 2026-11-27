@@ -15,10 +15,8 @@ import com.usac.jobseeker.cv.domain.event.ProfileUpdated;
 import com.usac.jobseeker.cv.domain.model.CandidateCollections;
 import com.usac.jobseeker.cv.domain.model.CandidateProfile;
 import com.usac.jobseeker.cv.domain.model.CandidateProfileId;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.Objects;
-import java.util.UUID;
 import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
 import java.util.function.Function;
@@ -50,8 +48,8 @@ public class CandidateChange {
   private final CandidateCapabilityPort capabilities;
   private final DomainEventPublisherPort events;
   private final UseCaseMetricsPort metrics;
-  private final Clock clock;
-  private final Supplier<UUID> ids;
+  // TD-014: el reloj y los identificadores llegan juntos, como en el resto del módulo.
+  private final Stamp stamp;
 
   public CandidateChange(
       CandidateProfileStorePort profiles,
@@ -59,15 +57,13 @@ public class CandidateChange {
       CandidateCapabilityPort capabilities,
       DomainEventPublisherPort events,
       UseCaseMetricsPort metrics,
-      Clock clock,
-      Supplier<UUID> ids) {
+      Stamp stamp) {
     this.profiles = Objects.requireNonNull(profiles, "profiles");
     this.collections = Objects.requireNonNull(collections, "collections");
     this.capabilities = Objects.requireNonNull(capabilities, "capabilities");
     this.events = Objects.requireNonNull(events, "events");
     this.metrics = Objects.requireNonNull(metrics, "metrics");
-    this.clock = Objects.requireNonNull(clock, "clock");
-    this.ids = Objects.requireNonNull(ids, "ids");
+    this.stamp = Objects.requireNonNull(stamp, "stamp");
   }
 
   /** Falla con 403 si la cuenta no tiene la capacidad de candidato; se comprueba antes que nada. */
@@ -121,7 +117,7 @@ public class CandidateChange {
           useCase);
       return CandidateProfileView.of(current, stored);
     }
-    CandidateProfile touched = current.touched(clock.instant());
+    CandidateProfile touched = current.touched(stamp.clock().instant());
     if (!profiles.updateIfVersion(touched, expectedVersion)) {
       throw failed(useCase, OUTCOME_STALE, new StaleStateException());
     }
@@ -150,7 +146,7 @@ public class CandidateChange {
   public void publishEvent(CandidateProfile profile, String eventType, String payload) {
     events.publish(
         new OutboxEvent(
-            ids.get(),
+            stamp.ids().get(),
             ProfileUpdated.CANDIDATE_AGGREGATE_TYPE,
             profile.id().value(),
             profile.version(),
@@ -201,7 +197,7 @@ public class CandidateChange {
           "event=candidate_profile_changed use_case={} outcome=unchanged Sin cambios", useCase);
       return CandidateProfileView.of(current, collections.findByProfileId(current.id()));
     }
-    CandidateProfile changed = change.edit().apply(current, clock.instant());
+    CandidateProfile changed = change.edit().apply(current, stamp.clock().instant());
     if (!change.write().test(changed, expectedVersion)) {
       throw failed(useCase, OUTCOME_STALE, new StaleStateException());
     }
