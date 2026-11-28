@@ -17,6 +17,8 @@ import com.usac.jobseeker.cv.application.usecase.checkapplicationreadiness.Check
 import com.usac.jobseeker.cv.application.usecase.checkapplicationreadiness.CheckApplicationReadinessUseCase;
 import com.usac.jobseeker.cv.application.usecase.downloadmycv.DownloadMyCvService;
 import com.usac.jobseeker.cv.application.usecase.downloadmycv.DownloadMyCvUseCase;
+import com.usac.jobseeker.cv.application.usecase.getapplicantprofiles.GetApplicantProfilesService;
+import com.usac.jobseeker.cv.application.usecase.getapplicantprofiles.GetApplicantProfilesUseCase;
 import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.GetMyCandidateProfileService;
 import com.usac.jobseeker.cv.application.usecase.getmycandidateprofile.GetMyCandidateProfileUseCase;
 import com.usac.jobseeker.cv.application.usecase.getmycv.GetMyCvService;
@@ -65,6 +67,7 @@ import com.usac.jobseeker.cv.application.usecase.uploadprofilephoto.UploadProfil
 import com.usac.jobseeker.cv.infrastructure.adapter.in.scheduled.OrphanCvReconciliationJob;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.image.ImageIoPhotoProcessor;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcAnonymizationRepository;
+import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcApplicantProfileReader;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcAvailabilityExclusionRepository;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcCandidateCollectionsRepository;
 import com.usac.jobseeker.cv.infrastructure.adapter.out.persistence.JdbcCandidateProfileRepository;
@@ -318,6 +321,13 @@ class CvConfiguration {
       CvFilePolicy policy,
       UseCaseMetricsPort metrics) {
     return new UploadCvService(change, sources, policy, metrics, Stamp.system());
+  }
+
+  // Interna para `ats`, solo tras autorizar al reclutador (REQ-C-07, TDD de `ats` §5).
+  @Bean
+  GetApplicantProfilesUseCase getApplicantProfilesUseCase(
+      JdbcClient jdbc, UseCaseMetricsPort metrics) {
+    return new GetApplicantProfilesService(new JdbcApplicantProfileReader(jdbc), metrics);
   }
 
   // Interna para `ats` (BR-CAND-01, `tdd/ats-tracker-modules.md` §5).
