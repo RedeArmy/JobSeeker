@@ -64,6 +64,19 @@ public class JdbcJobPostingRepository implements JobPostingStorePort {
         .list();
   }
 
+  // BR-JOB-09: la fila de una eliminada se conserva justo para esto, que el candidato la siga
+  // viendo.
+  @Override
+  public List<JobPosting> findAllByIdsIncludingDeleted(Collection<JobPostingId> ids) {
+    if (ids.isEmpty()) {
+      return List.of();
+    }
+    return jdbc.sql("select " + COLUMNS + " from job_postings where id = any(:ids)")
+        .param("ids", ids.stream().map(JobPostingId::value).toArray(UUID[]::new))
+        .query((rows, n) -> postingOf(rows))
+        .list();
+  }
+
   // El candado de transacción por reclutador pone en fila las publicaciones de una misma cuenta:
   // sin
   // él, dos simultáneas contarían ambas «una menos que el tope» y pasarían las dos. Es por cuenta,
