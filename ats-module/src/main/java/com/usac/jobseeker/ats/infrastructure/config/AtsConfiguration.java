@@ -1,7 +1,7 @@
 package com.usac.jobseeker.ats.infrastructure.config;
 
 import com.usac.jobseeker.ats.application.support.ApplicationSnapshotPort;
-import com.usac.jobseeker.ats.application.support.CandidateCapabilityPort;
+import com.usac.jobseeker.ats.application.support.ActorCapabilityPort;
 import com.usac.jobseeker.ats.application.usecase.submitapplication.ApplicantReadinessPort;
 import com.usac.jobseeker.ats.application.usecase.submitapplication.JobApplicationGatePort;
 import com.usac.jobseeker.ats.application.usecase.submitapplication.SubmitApplicationService;
@@ -34,7 +34,7 @@ class AtsConfiguration {
   // determinista en las pruebas.
   @Bean
   SubmitApplicationUseCase submitApplicationUseCase(
-      CandidateCapabilityPort capabilities,
+      ActorCapabilityPort capabilities,
       IdempotencyKeysPort idempotency,
       JobApplicationGatePort gate,
       ApplicantReadinessPort readiness,

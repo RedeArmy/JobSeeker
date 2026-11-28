@@ -3,6 +3,7 @@ package com.usac.jobseeker.ats.application.usecase.submitapplication;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.usac.jobseeker.ats.application.support.ActorCapabilityPort;
 import com.usac.jobseeker.ats.application.support.ApplicationSnapshotPort;
 import com.usac.jobseeker.ats.application.support.ApplicationStorePort;
 import com.usac.jobseeker.ats.domain.event.ApplicationEvents;
@@ -65,7 +66,17 @@ class SubmitApplicationServiceTest {
   private final SubmitApplicationService service =
       new SubmitApplicationService(
           new SubmitApplicationService.Ports(
-              account -> isCandidate,
+              new ActorCapabilityPort() {
+                @Override
+                public boolean isCandidate(AccountId accountId) {
+                  return isCandidate;
+                }
+
+                @Override
+                public boolean isRecruiter(AccountId accountId) {
+                  return false;
+                }
+              },
               keys,
               (account, jobId) -> gate,
               account -> readiness,
@@ -277,6 +288,28 @@ class SubmitApplicationServiceTest {
     @Override
     public Optional<Application> findById(ApplicationId id) {
       return Optional.ofNullable(rows.get(id.value()));
+    }
+
+    @Override
+    public boolean updateIfVersion(
+        Application application, StatusChange change, long expectedVersion) {
+      throw new UnsupportedOperationException("postular no modifica postulaciones");
+    }
+
+    @Override
+    public List<Application> findByCandidate(AccountId candidate) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public List<Application> findByJob(UUID jobPostingId, int limit) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Map<ApplicationId, List<StatusChange>> historyOf(
+        java.util.Collection<ApplicationId> ids) {
+      throw new UnsupportedOperationException();
     }
   }
 
