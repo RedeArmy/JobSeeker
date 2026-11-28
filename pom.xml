@@ -20,7 +20,7 @@
         <maven.compiler.release>25</maven.compiler.release>
         <!-- ADR-0014: Boot 3.4 salió del soporte OSS el 2025-12-31; 4.1.2 es la línea con la que
              ../Clavaris ya compila. Boot 4.1 termina el 2027-07-31: planificar una actualización menor. -->
-        <spring-boot.version>4.1.2</spring-boot.version>
+        <spring-boot.version>4.2.0</spring-boot.version>
 
         <!-- Versiones fijadas y verificadas juntas en el spike R13 (10-spike-r13-sprint-0.md). Se
              declaran aquí solo para que ningún módulo las repita; una biblioteca no entra al
