@@ -4,7 +4,7 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | 🟡 En revisión |
-| **Versión** | 0.3. Decisiones D1 a D6 cerradas por el responsable el 27-nov-2026; sub-pasos 0 a 2 construidos (§10) |
+| **Versión** | 0.4. Decisiones D1 a D6 cerradas por el responsable el 27-nov-2026; sub-pasos 0 a 4 construidos (§10) |
 | **Fecha** | 26-nov-2026 |
 | **Documentos relacionados** | ADR-0016 (bandeja de salida), ADR-0017 (F6, copia del perfil al postular), ADR-0021 (archivos), ADR-0027 (dueño de tablas), ADR-0031 (puntaje guardado), `domain-model.md` §3 a §6, `data-model.md` §4.8, §4.16 y §4.17, `03-lld.md` §4.1 y §7, `tdd/job-module.md`, `tdd/cv-module.md` §7, `tdd/matching-module.md` §4, BR-TRACK-01 y 02, BR-CAND-01, BR-ACCT-05, BR-JOB-09 y 10, BR-VIS-01 a 03, BR-DATA-04 y 05, REQ-C-03, REQ-C-07, REQ-R-01 y 03, TD-010, TD-017, TD-040 |
 
@@ -126,11 +126,12 @@ Casos de uso **internos** nuevos que `ats` y `tracker` consumen. Se nombran aqu�
 |---|---|---|---|
 | `job` | `getapplicationgate` (existe) | Para (cuenta, vacante): `OPEN`, `NOT_FOUND` (no existe o no es visible para candidatos), `NOT_ACCEPTING` (cerrada o con `acceptingApplications = false`, BR-JOB-10) u `OWN_JOB` (BR-ACCT-05) | `getjobposting` devuelve al candidato un contrato sin dueño ni pausa; `getownedjobstate` solo responde al dueño |
 | `job` | `getownedjobstate` (existe) | Si una vacante es del reclutador | Se reutiliza para autorizar el pipeline |
+| `job` | `getpostingsummaries` (existe) | Por lotes, el título y el estado de unas vacantes, **también las eliminadas** (BR-JOB-09), para el tracker del candidato. Nombrado el 28-nov-2026 al construir el sub-paso 3: la primera redacción decía «la lectura de vacantes de `job`» sin nombrarla | `getjobposting` y el almacén excluyen las eliminadas, y el candidato debe seguir viendo su postulación, marcada (regla 9) |
 | `cv` | `checkapplicationreadiness` (existe) | Qué le falta a la cuenta para postular según BR-CAND-01 (nombre, contacto, CV), el perfil de candidato y el identificador del CV vigente | El perfil de candidato no sabe si hay CV; la regla vive con el dato |
-| `cv` | `getapplicantprofiles` | Por lotes: nombre, titular y contacto de los postulantes. Solo lo llama `ats` **después** de autorizar al reclutador | `getprofilesnapshot` excluye nombre y contacto a propósito (minimización); el reclutador de una postulación sí debe verlos (REQ-C-07) |
+| `cv` | `getapplicantprofiles` (existe) | Por lotes: nombre, titular y contacto de los postulantes. Solo lo llama `ats` **después** de autorizar al reclutador | `getprofilesnapshot` excluye nombre y contacto a propósito (minimización); el reclutador de una postulación sí debe verlos (REQ-C-07) |
 | `cv` | `presigncvdownload` | La URL firmada de una versión concreta del CV (ADR-0021 §3), sin autorizar: autoriza quien la pide | La autorización depende de la postulación, que `cv` no conoce (ARCH-06) |
 | `matching` | `snapshotapplicationprofile` (existe) | Copia del perfil y foto del puntaje al postular y al cambiar de etapa. Su comando lleva la vacante como `UUID` y un motivo propio (`APPLIED`, `STAGE_CHANGED`): antes exponía tipos del dominio de `matching` y ARCH-04 impedía a `ats` construirlos | Cierra TD-040 |
-| `matching` | `getapplicantscores` | Por lotes, para una vacante y un conjunto de perfiles: el puntaje vigente con su desglose y el de la postulación | Hoy no hay lectura pública de puntajes guardados para el reclutador |
+| `matching` | `getapplicantscores` (existe) | Por lotes, para una vacante y un conjunto de perfiles: el puntaje vigente con su desglose y el de la postulación | Hoy no hay lectura pública de puntajes guardados para el reclutador |
 | `auth` | `resolveactor` (existe) | La capacidad del actor; una cuenta en periodo de gracia ya se rechaza (`PENDING_DELETION`), lo que cumple BR-DATA-04 («no puede postular») | — |
 
 ## 6. Reglas de diseño que cruzan casos de uso
@@ -235,8 +236,8 @@ Las pantallas HTMX (`/app/applications/**` del candidato y `/app/jobs/{id}/pipel
 | 0 | Subida y descarga del CV en `cv` (`checkapplicationreadiness` incluido). **Hecho:** la subida y la descarga llegaron con el bloque de archivos (ADR-0021); `checkapplicationreadiness` se construyó el 27-nov-2026 | ADR-0021 (aprobado) y sus verificaciones V1 a V3 |
 | 1 | Migración de `applications` (A1, A3, A4) y `application_status_history` (A2); dominio con la máquina de estados y su prueba exhaustiva. **Hecho** el 27-nov-2026 | 0 |
 | 2 | `getapplicationgate` en `job`; `submitapplication` con idempotencia, copia en `matching` (TD-040) y su evento; API. **Hecho** el 27-nov-2026 (§10.1) | 1 |
-| 3 | `withdrawapplication`; `listcandidateapplications`; `tracker` con `listmyapplications` y `getmyapplication` | 2 |
-| 4 | `getapplicantscores` en `matching` y `getapplicantprofiles` en `cv`; `listjobapplications` y `getapplication` | 2 |
+| 3 | `withdrawapplication`; `listcandidateapplications`; `tracker` con `listmyapplications` y `getmyapplication` **Hecho** el 28-nov-2026 (§10.2) | 2 |
+| 4 | `getapplicantscores` en `matching` y `getapplicantprofiles` en `cv`; `listjobapplications` y `getapplication` **Hecho** el 28-nov-2026 (§10.2) | 2 |
 | 5 | `changeapplicationstage`, `decideapplication` y `reopenapplication`; `presigncvdownload` y `getapplicationcv` | 4, 0 |
 | 6 | Pantallas HTMX del candidato y del pipeline | 3, 5 |
 
@@ -248,6 +249,23 @@ Las pantallas HTMX (`/app/applications/**` del candidato y `/app/jobs/{id}/pipel
 - **Idempotencia (paga TD-010):** la cabecera `Idempotency-Key` es **opcional**; sin ella, un duplicado es `409 ALREADY_APPLIED`. Con ella, repetir el envío devuelve `201` con la misma postulación, y la misma clave para otra vacante es `422 IDEMPOTENCY_KEY_REUSED`. El puerto vive en `common` y el adaptador en `app`, porque la tabla es de infraestructura; la reserva es un `INSERT … ON CONFLICT DO NOTHING` que hace esperar a un reintento simultáneo hasta que el primero confirme. Las claves se purgan cada hora con una retención de 24 h.
 - **Errores nuevos** (sobre estándar): `403 SELF_APPLICATION`, `409 ALREADY_APPLIED`, `422 APPLICATION_REQUIREMENTS_MISSING` (con `FULL_NAME`, `CONTACT` o `CV` en `details`) y `422 IDEMPOTENCY_KEY_REUSED`.
 - **Pendiente de este bloque:** la prueba «si la copia en `matching` falla, no queda postulación» se cubre en la unitaria (el caso de uso se detiene antes del evento y de la respuesta) y por la transacción de Spring; no hay una prueba de punta a punta que fuerce el fallo, porque `matching` solo falla si el perfil no existe, y eso ya lo rechaza antes `cv`.
+
+### 10.2 Lo construido en los sub-pasos 3 y 4 (28-nov-2026)
+
+- **Retirar** (`POST /api/v1/ats/applications/{id}/withdrawal`): compare-and-set sobre la versión leída, con su fila de historial y el evento `ats.application_status_changed`. La de otro candidato es `404`; una que ya terminó, `409 INVALID_TRANSITION`. Tras retirarse se puede volver a postular (REQ-C-03).
+- **Lo que ve el candidato** se arma en `ats` (`CandidateApplication`) **sin el motivo de un descarte**, para que ningún consumidor pueda mostrárselo por olvido (BR-TRACK-03).
+- **`tracker`** compone `listcandidateapplications` de `ats` con `getpostingsummaries` de `job` (dos lecturas por petición, sin tablas propias): `GET /api/v1/tracker/applications` y `GET /api/v1/tracker/applications/{id}`. La postulación a una vacante eliminada sigue apareciendo, con `job.status = DELETED` (BR-JOB-09).
+- **El pipeline** (`GET /api/v1/ats/jobs/{id}/applications`) se autoriza con `getownedjobstate` y ordena en memoria (regla 6):
+  - por puntaje, el mayor primero; a igual puntaje, quien postuló antes; los pendientes al final;
+  - o por fecha, la más reciente primero;
+  - filtra por estado, columna y puntaje mínimo (que deja fuera a los pendientes);
+  - pagina con `page` y `size` (hasta 100);
+  - pide a `cv` los datos solo de la página devuelta.
+  
+  Por encima de 1 000 postulaciones ordena solo las primeras y lo marca con `truncated: true`; es el disparador de la proyección de D4, registrado como TD-048.
+- **El detalle** (`GET /api/v1/ats/applications/{id}`) da al dueño de la vacante el contacto (REQ-C-07), el puntaje con su desglose y el de postular, y el historial con los motivos. Se autoriza antes de pedir nada a `cv`. Tras anonimizar al candidato, la postulación sigue con el marcador «Candidato eliminado» y sin contacto (BR-DATA-05).
+- **Hueco encontrado y corregido en `matching`** (TD-R57): el recálculo solo recorría los pares con puntaje guardado. Una postulación enviada antes de que existiera el vector del perfil o de la vacante habría quedado «pendiente» para siempre en el pipeline. Ahora el recálculo también recorre los pares postulados (`application_profile_snapshots`, con un índice nuevo por vacante) y los guarda con el motivo `APPLIED`.
+- **El puntaje real, de punta a punta:** dos casos en `MatchingEmbeddingEndToEndIntegrationTest`, que tiene un Ollama simulado. Con los vectores ya calculados, el pipeline y el detalle muestran el puntaje, su desglose de seis dimensiones, el de postular y el motivo `APPLIED`. Si se postula antes de que existan, el pipeline dice `PENDING` y el puntaje aparece cuando el trabajador los calcula (TD-R57). Este segundo caso se validó quitando la corrección: la prueba falla con `PENDING` donde esperaba `OK`.
 
 ## 11. Decisiones abiertas
 

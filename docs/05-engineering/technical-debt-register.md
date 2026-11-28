@@ -4,7 +4,7 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | 🟡 En revisión |
-| **Versión** | 1.26 — postular paga TD-010 y la mitad de TD-040 (sub-pasos 1 y 2 de `ats`) |
+| **Versión** | 1.27 — sub-pasos 3 y 4 de `ats`: TD-048 nueva (proyección del pipeline, D4) y TD-R57 (recálculo de pares postulados) |
 | **Fecha** | 27 de noviembre de 2026 |
 | **Dueño del documento** | Responsable del proyecto |
 | **Revisión del registro** | Al cerrar cada sprint y antes de cada hito de la hoja de ruta |
@@ -56,7 +56,7 @@ Corte: 27-nov-2026.
 | S4 Baja | 3 |
 | **Total** | **13** |
 
-- **Abiertas:** 7 · **Planificadas:** 5 · **Resueltas:** 56 · **Aceptadas:** 7.
+- **Abiertas:** 8 · **Planificadas:** 5 · **Resueltas:** 57 · **Aceptadas:** 7.
 - **S2 abiertas con disparador próximo** (decidir el siguiente sprint): TD-005 y TD-016 (primer despliegue), más TD-020 (antes de usuarios reales).
 - **Métricas a seguir en cada revisión:** deuda abierta por severidad, edad de las S2 en días, número de cierres por sprint, aceptadas vencidas.
 
@@ -71,6 +71,7 @@ Corte: 27-nov-2026.
 | TD-022 | Calibración y cobertura de ESCO sin datos reales; arnés fuera de CI | Pruebas | S3 | L | Medida | Abierta | Antes de fijar el modelo de embeddings (ADR-0018) |
 | TD-027 | Nombres fuera de las listas y decisión sobre las descripciones (los nombres frecuentes ya se redactan, TD-R47) | Privacidad | S4 | M | Medida | Abierta | Protocolo de 300 pares (TD-037) |
 | TD-029 | La latencia de `embedentity` no está medida: la VM de desarrollo no expone AVX2 | Operación | S3 | S | Leída | Abierta | Hardware con AVX2 disponible (ADR-0026); el instrumento ya existe |
+| TD-048 | El pipeline ordena en memoria con un tope de 1 000 postulaciones por vacante | Rendimiento | S4 | M | Leída | Abierta | Una vacante con más de 1 000 postulaciones, o el pipeline medido por encima de 1 s |
 | TD-023 | Fin de soporte de Spring Boot 4.1 (31-jul-2027) | Plataforma | S3 | L | Medida | Planificada | 2027-04-30 (inicio de la subida) |
 | TD-026 | Habilidades sin enlace a la taxonomía | Dominio | S4 | L | Medida | Planificada | Sub-paso de enlazado de ADR-0019 |
 | TD-037 | El puntaje se publica sin calibrar: `α`, pesos y Platt son valores iniciales | Calidad | S2 | M | Leída | Planificada | Pares etiquetados reales (protocolo de 300 pares); las herramientas ya existen |
@@ -153,6 +154,17 @@ Corte: 27-nov-2026.
 - **Remediación propuesta:** Ejecutar `python3 -I scripts/eval/embedding_latency.py --repeats 20 --out latencia.json` en ese hardware (se niega a medir sin AVX2), archivar la tabla en el doc 08 §8 y comprobar con `--num-thread` si fijarlo por debajo de la cuota de CPU estabiliza los tiempos. Procedimiento en `11-medicion-recuperacion-vectorial-y-latencia-de-embeddings.md` §3.3.
 - **Criterio de cierre:** Una medición archivada en hardware con AVX2 con el modelo vigente, y el p95 observado frente al objetivo.
 - **Referencias:** `docs/03-architecture/architecture-review-2026-11/08-medicion-ollama-y-bakeoff-embeddings.md` §8; `11-medicion-recuperacion-vectorial-y-latencia-de-embeddings.md`
+
+#### TD-048 — El pipeline ordena en memoria con un tope de 1 000 postulaciones por vacante
+
+**Rendimiento** · **S4 Baja** · esfuerzo **M** · confianza **Leída** · **Abierta**
+
+- **Evidencia:** `ListJobApplicationsService` lee hasta 1 000 postulaciones de la vacante, pide sus puntajes a `matching` en un lote y ordena en memoria (regla 6 y D4 del TDD de `ats`). Por encima del tope solo ordena las primeras y responde `truncated: true`.
+- **Interés (qué cuesta no pagarla):** Una vacante con más postulaciones no mostraría a todas en el orden correcto, y el costo de cada lectura crece con el número de postulaciones.
+- **Disparador:** Una vacante con más de 1 000 postulaciones (la métrica `jobseeker_usecase_total{use_case="list_job_applications",outcome="truncated"}` lo delata), o el pipeline medido por encima de 1 s.
+- **Remediación propuesta:** Una proyección del puntaje en `ats`, alimentada por un evento de `matching`, para ordenar y paginar en SQL (D4).
+- **Criterio de cierre:** El pipeline ordena y pagina en la base con cualquier número de postulaciones, probado con más de 1 000.
+- **Referencias:** `docs/03-architecture/tdd/ats-tracker-modules.md` §6 (regla 6), §10.2 y D4
 
 #### TD-023 — Fin de soporte de Spring Boot 4.1 (31-jul-2027)
 
@@ -269,6 +281,7 @@ Corte: 27-nov-2026.
 | TD-R54 | La bandeja marcaba los eventos procesados uno por uno (antes TD-011) | Rendimiento | S4 | 2026-11-27 | Rama `chore/quick-debt-fixes` | Una sentencia por pasada al final, con el intento de cada fila como testigo (TD-R34). Prueba: 50 eventos, una sola marca. |
 | TD-R55 | El análisis de Sonar del CI descargaba su plugin de Maven Central en cada ejecución y fallaba con un `429` (detectada en los PR #53, #54 y #58) | Operación | S3 | 2026-11-27 | Rama `ci/sonar-own-maven-cache` | Con la caché de `setup-java`, el job restauraba la que guarda el build (sin el plugin de Sonar) y, como la clave coincidía, nunca guardaba la suya. Ahora usa `actions/cache` con su propia clave (`sonar-maven-…`): descarga todo una vez y lo guarda, así que no vuelve a descargar mientras no cambien los `pom.xml` (y, si cambian, parte de su caché anterior). Comprobado en el PR #59: «Cache saved with key: sonar-maven-Linux-…». No puede partir de la caché de `setup-java`, porque `actions/cache` solo restaura cachés de las mismas rutas. |
 | TD-R56 | `idempotency_keys` sin escritor ni purga (TD-010) | Arquitectura | S4 | 2026-11-27 | Rama `feat/ats-submit-application` | Postular es el primer endpoint con `Idempotency-Key`. Puerto `IdempotencyKeysPort` en `common` y adaptador `JdbcIdempotencyKeys` en `app`: la reserva es un `INSERT … ON CONFLICT DO NOTHING` en la transacción del efecto, así un reintento simultáneo espera al primero y recibe su respuesta, y si el efecto falla la clave queda libre. Purga cada hora con retención de 24 h (`jobseeker.idempotency.retention`, nunca menos de una hora), por tandas y con su métrica. Probado contra Postgres, también la espera entre dos transacciones. |
+| TD-R57 | El recálculo no creaba el puntaje de una postulación enviada antes de que existiera el vector | Dominio | S2 | 2026-11-28 | Rama `feat/ats-tracker-and-pipeline` | Encontrada al construir el pipeline: el recálculo solo recorría `compatibility_scores_current`, así que una postulación sin vector al postular quedaba «pendiente» para siempre. Ahora recorre también los pares de `application_profile_snapshots` (índice nuevo `idx_aps_job`) y los guarda con el motivo `APPLIED`. Probado por perfil y por vacante, y que un sugerido sigue sugerido; de punta a punta con el Ollama simulado (postular sin vectores, embeber, y el pipeline pasa de `PENDING` a `OK`), una prueba que falla si se quita la corrección. |
 
 ## 7. Deuda aceptada
 
@@ -313,6 +326,7 @@ Corte: 27-nov-2026.
 | 1.24 | 2026-11-27 | Validación completa contra el código. Las 13 abiertas siguen vigentes; se corrigen dos evidencias (TD-016: 40 documentos en revisión, no 35; TD-026: `skill_id` existe pero está vacía). Las 54 resueltas tienen su evidencia en el repositorio y sus 23 PR están fusionados. Se completa TD-A02 (13 excepciones de squawk en 7 migraciones, antes nombraba dos) y se actualiza TD-A06 con el marcado por lotes de TD-R54. Las tablas de resueltas, aceptadas e historial vuelven a orden ascendente, que se había roto desde la 1.19. Sin cambios en el tablero. |
 | 1.25 | 2026-11-27 | Se registra y se paga en la misma PR el fallo recurrente del análisis de Sonar en el CI (TD-R55): tres PR seguidas fallaron por un `429` de Maven Central porque el job no tenía caché propia. Quedan 13 abiertas o planificadas, 55 resueltas y 7 aceptadas. |
 | 1.26 | 2026-11-27 | Sub-pasos 1 y 2 de `ats` (postular): se paga TD-010 (TD-R56) y TD-040 queda a medias (falta el cambio de etapa). Quedan 12 abiertas o planificadas, 56 resueltas y 7 aceptadas. |
+| 1.27 | 2026-11-28 | Sub-pasos 3 y 4 de `ats` (retirar, tracker, pipeline y detalle). Se registra TD-048, el disparador de la proyección del pipeline que D4 pedía anotar, y se resuelve TD-R57, un hueco del recálculo encontrado al construirlo. Quedan 13 abiertas o planificadas, 57 resueltas y 7 aceptadas. |
 
 ## 9. Plantilla de ficha
 
