@@ -112,4 +112,14 @@ class MyApplicationsTest {
     assertThat(postingReads).isEmpty();
     assertThat(metrics).containsExactly("forbidden");
   }
+
+  @Test
+  void theDetailAlsoNeedsTheCandidateCapability() {
+    UUID id = tracked(openJob, "ACTIVE");
+    isCandidate = false;
+    GetMyApplicationQuery query = new GetMyApplicationQuery(candidate, id);
+
+    assertThatThrownBy(() -> get.execute(query)).isInstanceOf(ForbiddenCapabilityException.class);
+    assertThat(metrics).containsExactly("forbidden");
+  }
 }
