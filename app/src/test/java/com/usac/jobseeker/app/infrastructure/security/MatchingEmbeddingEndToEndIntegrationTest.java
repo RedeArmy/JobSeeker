@@ -1097,6 +1097,133 @@ class MatchingEmbeddingEndToEndIntegrationTest {
         .isEqualTo("CANDIDATE_VIEW");
   }
 
+  // ---- el puntaje en el pipeline de `ats` (sub-paso 4; TD-R57) ----
+
+  /** Le da al candidato un CV vigente: BR-CAND-01 lo exige para postular. */
+  private void withCv(UUID candidate) {
+    jdbc.update(
+        "insert into candidate_cv_files (id, candidate_profile_id, object_key, display_name,"
+            + " file_type, size_bytes, sha256, is_current, uploaded_at)"
+            + " select ?, id, ?, 'cv.pdf', 'PDF', 10, repeat('a', 64), true, now()"
+            + " from candidate_profiles where account_id = ?",
+        UUID.randomUUID(),
+        "cv/" + UUID.randomUUID(),
+        candidate);
+  }
+
+  private String applyTo(UUID candidate, String jobId) throws Exception {
+    return com.jayway.jsonpath.JsonPath.read(
+        mvc.perform(authed(post("/api/v1/ats/jobs/" + jobId + "/applications"), candidate))
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString(),
+        "$.id");
+  }
+
+  private String pipelineOf(UUID owner, String jobId) throws Exception {
+    return mvc.perform(authed(get("/api/v1/ats/jobs/" + jobId + "/applications"), owner))
+        .andExpect(status().isOk())
+        .andReturn()
+        .getResponse()
+        .getContentAsString();
+  }
+
+  private String storedReason(UUID account, String jobId) {
+    return jdbc.queryForObject(
+        "select s.reason from compatibility_scores_current s join candidate_profiles c"
+            + " on c.id = s.candidate_profile_id where c.account_id = ? and s.job_posting_id = ?::uuid",
+        String.class,
+        account,
+        jobId);
+  }
+
+  // Con los vectores ya calculados, postular deja el puntaje y la foto de postular, y el reclutador
+  // los ve en el pipeline y en el detalle con el desglose completo (BR-MATCH-02, TD-040).
+  @Test
+  void theRecruiterSeesTheRealScoreOfAnApplicantInThePipelineAndTheDetail() throws Exception {
+    Pair pair = candidateAndPublishedJob();
+    withCv(pair.candidate());
+
+    String application = applyTo(pair.candidate(), pair.jobId());
+
+    String pipeline = pipelineOf(pair.owner(), pair.jobId());
+    assertThat((String) com.jayway.jsonpath.JsonPath.read(pipeline, "$.content[0].score.status"))
+        .isEqualTo("OK");
+    int overall =
+        ((Number) com.jayway.jsonpath.JsonPath.read(pipeline, "$.content[0].score.overall"))
+            .intValue();
+    assertThat(overall).isBetween(0, 100);
+    assertThat(
+            ((Number)
+                    com.jayway.jsonpath.JsonPath.read(
+                        pipeline, "$.content[0].score.appliedOverall"))
+                .intValue())
+        .as("la foto de postular coincide con el vigente: nada cambió desde entonces")
+        .isEqualTo(overall);
+    assertThat(
+            (Boolean) com.jayway.jsonpath.JsonPath.read(pipeline, "$.content[0].score.calibrated"))
+        .as("preliminar hasta la calibración (ADR-0030)")
+        .isFalse();
+    String detail =
+        mvc.perform(authed(get("/api/v1/ats/applications/" + application), pair.owner()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.score.status").value("OK"))
+            .andExpect(jsonPath("$.score.overall").value(overall))
+            .andExpect(jsonPath("$.score.algorithmVersion").isNotEmpty())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    assertThat(
+            (java.util.List<?>)
+                com.jayway.jsonpath.JsonPath.read(detail, "$.score.breakdown.dimensions"))
+        .hasSize(6);
+    assertThat(detail).doesNotContainIgnoringCase("cosine");
+    assertThat(storedReason(pair.candidate(), pair.jobId())).isEqualTo("APPLIED");
+  }
+
+  // TD-R57: si al postular aún no había vectores, el pipeline dice «pendiente», y el puntaje
+  // aparece cuando el trabajador los calcula, guardado como APPLIED. Antes quedaba pendiente para
+  // siempre, porque el recálculo solo recorría los pares que ya tenían puntaje.
+  @Test
+  void anApplicationSentBeforeTheVectorsGetsItsScoreWhenTheyArrive() throws Exception {
+    UUID candidate = candidateWithEverything();
+    withCv(candidate);
+    UUID owner = recruiterWith("VERIFIED");
+    String jobId = publishedJob(owner, "Backend");
+
+    applyTo(candidate, jobId);
+
+    assertThat(
+            (String)
+                com.jayway.jsonpath.JsonPath.read(
+                    pipelineOf(owner, jobId), "$.content[0].score.status"))
+        .isEqualTo("PENDING");
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from compatibility_scores_current where job_posting_id = ?::uuid",
+                Integer.class,
+                jobId))
+        .isZero();
+
+    deliverEvents();
+    runWorker();
+
+    String pipeline = pipelineOf(owner, jobId);
+    assertThat((String) com.jayway.jsonpath.JsonPath.read(pipeline, "$.content[0].score.status"))
+        .isEqualTo("OK");
+    assertThat(
+            ((Number) com.jayway.jsonpath.JsonPath.read(pipeline, "$.content[0].score.overall"))
+                .intValue())
+        .isBetween(0, 100);
+    assertThat(
+            (Object)
+                com.jayway.jsonpath.JsonPath.read(pipeline, "$.content[0].score.appliedOverall"))
+        .as("al postular estaba pendiente: no hay foto de entonces")
+        .isNull();
+    assertThat(storedReason(candidate, jobId)).isEqualTo("APPLIED");
+  }
+
   @Test
   void aJobTheCandidatesCannotSeeOrThatIsTheirOwnDoesNotExistForThem() throws Exception {
     UUID candidate = candidateWithEverything();
