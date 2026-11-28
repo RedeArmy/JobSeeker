@@ -31,7 +31,7 @@
         <!-- La que trae springdoc 3.2.0: un módulo solo necesita las anotaciones, no el generador. -->
         <swagger-core.version>2.2.55</swagger-core.version>
         <!-- Solo pruebas: valida el OpenAPI exportado (ADR-0010, decisión 4). Más de dos semanas de publicada. -->
-        <swagger-parser.version>2.1.47</swagger-parser.version>
+        <swagger-parser.version>2.1.49</swagger-parser.version>
         <bucket4j.version>8.22.0</bucket4j.version>
         <openhtmltopdf.version>1.1.114</openhtmltopdf.version>
         <!-- ADR-0021: cliente S3 del almacén de archivos, verificado con Java 25 en el spike V2
