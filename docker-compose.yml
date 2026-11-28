@@ -134,7 +134,7 @@ services:
     # credenciales obligatorias, para que las URLs firmadas se validen como en producción. La
     # identidad se genera desde .env al arrancar: no hay credenciales escritas en el repositorio.
     profiles: ["files"]
-    image: chrislusf/seaweedfs:4.53@sha256:ccad23e18639c8b98cee17e7100b95830a06077b56d8e5b006d6dcf8ec5e94a0
+    image: chrislusf/seaweedfs:4.55@sha256:7ca46aeae2f223b37e5d91593c17ab37738eec6df6ab69b48a0487f7643342b9
     # Opcionales para Compose: un .env anterior a este perfil no debe impedir levantar el resto del
     # stack (Compose exige las variables de todos los servicios, aunque su perfil esté inactivo).
     # Si se arranca el perfil sin credenciales, el contenedor se detiene con un mensaje claro.
