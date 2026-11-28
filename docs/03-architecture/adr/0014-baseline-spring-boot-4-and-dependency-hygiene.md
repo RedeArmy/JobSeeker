@@ -4,7 +4,7 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | ✅ Aprobado — 18-nov-2026, por el responsable del proyecto, tras la validación completa descrita al final de este documento |
-| **Versión** | 1.1 — ajustado el 18-nov-2026 tras la validación completa (ver §«Validación previa a la aprobación») |
+| **Versión** | 1.2 — 28-nov-2026: springdoc 3.2.1 con swagger 3.0.0 (ver ADR-0010, enmienda 1) |
 | **Fecha** | Noviembre 2026 |
 | **Documento relacionado** | `architecture-review-2026-11/02-hld-system-design.md` §11, las reglas del proyecto §3, ADR-0009 (retirado), `security-architecture.md` §2 |
 
@@ -75,4 +75,9 @@ las reglas del proyecto §3 fija **Spring Boot 3.4**, **Spring AI 1.0** y **JJWT
 - Línea base probada con código: Boot 4.1.2/Java 25 con Spring AI 2.0.2, Hibernate 7.4 + pgvector, Flyway, Bucket4j + Lettuce, springdoc 3.2.0, Spring Session y Actuator (`07-…`), más el cliente OAuth2 de Spring Security 7 contra Clavaris real (`06-…`).
 - Corregido: fecha de GA de Boot 4.0 no verificada (eliminada); el plan B de Boot 3.5 estaba caducado; faltaba la política de actualización y la sobrescritura de Testcontainers.
 - Referencias obsoletas fuera de las ADRs: `system-design-document.md` (diagrama «Spring Boot 3.4») y ADR-0010 (menciona Boot 3.x; springdoc 3.x es lo verificado). Se corrigen aparte.
+
+## Actualización de la línea base (28-nov-2026)
+
+- springdoc **3.2.1** con swagger **3.0.0** (Jakarta y Jackson 3), en lugar de springdoc 3.2.0. Una versión de parche de springdoc cambió de versión mayor a swagger-core, y la actualización solo de springdoc impedía arrancar la aplicación. El detalle y el cambio de la herramienta de validación del spec están en la enmienda 1 del ADR-0010.
+- Dependencia nueva, solo en pruebas: `com.networknt:json-schema-validator` 3.0.9 (Apache 2.0), fijada en el POM padre con su justificación, como pide la decisión 6.
 
