@@ -23,7 +23,7 @@ RUN --mount=type=cache,target=/root/.m2 \
  && java -Djarmode=tools -jar /tmp/app.jar extract --layers --launcher --destination /layers
 
 # ---- etapa de ejecución ----
-FROM eclipse-temurin:25.0.5_8-jre-noble@sha256:23481dc33a759b79d62814ceb1ec27a0d1a84da9d7aab0609577427176fbb1b7 AS runtime
+FROM eclipse-temurin:25.0.5.1_2-jre-noble@sha256:2ec98aa522c472deadfd2b7c5b39bca680e33ef522a53a72f10789bdf89a6bb5 AS runtime
 # Fuentes empaquetadas: la generación de PDF (openhtmltopdf) no debe depender de las del anfitrión.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends fontconfig fonts-dejavu-core \
