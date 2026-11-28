@@ -1,9 +1,16 @@
 package com.usac.jobseeker.ats.infrastructure.config;
 
 import com.usac.jobseeker.ats.application.support.ActorCapabilityPort;
+import com.usac.jobseeker.ats.application.support.ApplicantProfilesPort;
+import com.usac.jobseeker.ats.application.support.ApplicantScoresPort;
 import com.usac.jobseeker.ats.application.support.ApplicationSnapshotPort;
+import com.usac.jobseeker.ats.application.support.OwnedJobPort;
+import com.usac.jobseeker.ats.application.usecase.getapplication.GetApplicationService;
+import com.usac.jobseeker.ats.application.usecase.getapplication.GetApplicationUseCase;
 import com.usac.jobseeker.ats.application.usecase.listcandidateapplications.ListCandidateApplicationsService;
 import com.usac.jobseeker.ats.application.usecase.listcandidateapplications.ListCandidateApplicationsUseCase;
+import com.usac.jobseeker.ats.application.usecase.listjobapplications.ListJobApplicationsService;
+import com.usac.jobseeker.ats.application.usecase.listjobapplications.ListJobApplicationsUseCase;
 import com.usac.jobseeker.ats.application.usecase.submitapplication.ApplicantReadinessPort;
 import com.usac.jobseeker.ats.application.usecase.submitapplication.JobApplicationGatePort;
 import com.usac.jobseeker.ats.application.usecase.submitapplication.SubmitApplicationService;
@@ -69,5 +76,31 @@ class AtsConfiguration {
   ListCandidateApplicationsUseCase listCandidateApplicationsUseCase(
       JdbcApplicationRepository store, UseCaseMetricsPort metrics) {
     return new ListCandidateApplicationsService(store, metrics);
+  }
+
+  // Regla 6 del TDD: por encima de este tope el pipeline necesitaría la proyección de D4.
+  static final int PIPELINE_CAP = 1000;
+
+  @Bean
+  ListJobApplicationsUseCase listJobApplicationsUseCase(
+      ActorCapabilityPort capabilities,
+      OwnedJobPort jobs,
+      JdbcApplicationRepository store,
+      ApplicantScoresPort scores,
+      ApplicantProfilesPort profiles,
+      UseCaseMetricsPort metrics) {
+    return new ListJobApplicationsService(
+        capabilities, jobs, store, scores, profiles, metrics, PIPELINE_CAP);
+  }
+
+  @Bean
+  GetApplicationUseCase getApplicationUseCase(
+      ActorCapabilityPort capabilities,
+      OwnedJobPort jobs,
+      JdbcApplicationRepository store,
+      ApplicantScoresPort scores,
+      ApplicantProfilesPort profiles,
+      UseCaseMetricsPort metrics) {
+    return new GetApplicationService(capabilities, jobs, store, scores, profiles, metrics);
   }
 }
