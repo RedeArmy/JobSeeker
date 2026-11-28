@@ -32,9 +32,14 @@ public class JdbcApplicationRepository implements ApplicationStorePort {
   private static final String ID = "id";
   private static final String PROFILE = "profile";
   private static final String JOB = "job";
+  private static final String STATUS = "status";
+  private static final String STAGE = "stage";
+  private static final String REASON = "reason";
+  private static final String VERSION = "version";
   private static final String COLUMNS =
       "id, candidate_profile_id, candidate_account_id, job_posting_id, cv_file_id, status, stage,"
           + " rejection_reason, version, applied_at, updated_at";
+  private static final String SELECT = "select " + COLUMNS + " from applications";
 
   private final JdbcClient jdbc;
 
@@ -60,10 +65,10 @@ public class JdbcApplicationRepository implements ApplicationStorePort {
             .param("account", application.candidateAccountId().value())
             .param(JOB, application.jobPostingId())
             .param("cv", application.cvFileId())
-            .param("status", application.status().name())
-            .param("stage", application.stage().name())
-            .param("reason", name(application.rejectionReason()))
-            .param("version", application.version())
+            .param(STATUS, application.status().name())
+            .param(STAGE, application.stage().name())
+            .param(REASON, name(application.rejectionReason()))
+            .param(VERSION, application.version())
             .param("appliedAt", utc(application.appliedAt()))
             .param("updatedAt", utc(application.updatedAt()))
             .update();
@@ -84,10 +89,10 @@ public class JdbcApplicationRepository implements ApplicationStorePort {
                 "update applications set status = :status, stage = :stage, rejection_reason ="
                     + " :reason, version = :version, updated_at = :updatedAt where id = :id and"
                     + " version = :expected")
-            .param("status", application.status().name())
-            .param("stage", application.stage().name())
-            .param("reason", name(application.rejectionReason()))
-            .param("version", application.version())
+            .param(STATUS, application.status().name())
+            .param(STAGE, application.stage().name())
+            .param(REASON, name(application.rejectionReason()))
+            .param(VERSION, application.version())
             .param("updatedAt", utc(application.updatedAt()))
             .param(ID, application.id().value())
             .param("expected", expectedVersion)
@@ -112,7 +117,7 @@ public class JdbcApplicationRepository implements ApplicationStorePort {
 
   @Override
   public Optional<Application> findById(ApplicationId id) {
-    return jdbc.sql("select " + COLUMNS + " from applications where id = :id")
+    return jdbc.sql(SELECT + " where id = :id")
         .param(ID, id.value())
         .query((rows, n) -> applicationOf(rows))
         .optional();
@@ -121,10 +126,7 @@ public class JdbcApplicationRepository implements ApplicationStorePort {
   @Override
   public List<Application> findByCandidate(AccountId candidate) {
     return jdbc.sql(
-            "select "
-                + COLUMNS
-                + " from applications where candidate_account_id = :account"
-                + " order by applied_at desc, id")
+            SELECT + " where candidate_account_id = :account" + " order by applied_at desc, id")
         .param("account", candidate.value())
         .query((rows, n) -> applicationOf(rows))
         .list();
@@ -133,10 +135,7 @@ public class JdbcApplicationRepository implements ApplicationStorePort {
   @Override
   public List<Application> findByJob(UUID jobPostingId, int limit) {
     return jdbc.sql(
-            "select "
-                + COLUMNS
-                + " from applications where job_posting_id = :job"
-                + " order by applied_at, id limit :limit")
+            SELECT + " where job_posting_id = :job" + " order by applied_at, id limit :limit")
         .param(JOB, jobPostingId)
         .param("limit", limit)
         .query((rows, n) -> applicationOf(rows))
@@ -178,7 +177,7 @@ public class JdbcApplicationRepository implements ApplicationStorePort {
         .param("fromStage", name(change.fromStage()))
         .param("toStage", change.toStage().name())
         .param("actor", change.initiator().name())
-        .param("reason", name(change.rejectionReason()))
+        .param(REASON, name(change.rejectionReason()))
         .param("changedAt", utc(change.changedAt()))
         .update();
   }

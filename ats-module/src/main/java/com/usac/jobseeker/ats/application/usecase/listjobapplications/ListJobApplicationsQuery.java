@@ -32,6 +32,8 @@ public record ListJobApplicationsQuery(
 
   public static final int MAX_SIZE = 100;
 
+  private static final String OUT_OF_RANGE = "OUT_OF_RANGE";
+
   /** Por puntaje (mayor primero; los pendientes al final) o por fecha (más reciente primero). */
   public enum Sort {
     SCORE,
@@ -44,13 +46,13 @@ public record ListJobApplicationsQuery(
     Objects.requireNonNull(sort, "sort");
     List<FieldViolation> violations = new ArrayList<>();
     if (minScore != null && (minScore.isNaN() || minScore < 0 || minScore > 100)) {
-      violations.add(new FieldViolation("minScore", "OUT_OF_RANGE"));
+      violations.add(new FieldViolation("minScore", OUT_OF_RANGE));
     }
     if (page < 0) {
-      violations.add(new FieldViolation("page", "OUT_OF_RANGE"));
+      violations.add(new FieldViolation("page", OUT_OF_RANGE));
     }
     if (size < 1 || size > MAX_SIZE) {
-      violations.add(new FieldViolation("size", "OUT_OF_RANGE"));
+      violations.add(new FieldViolation("size", OUT_OF_RANGE));
     }
     if (!violations.isEmpty()) {
       throw new ValidationFailedException(violations);

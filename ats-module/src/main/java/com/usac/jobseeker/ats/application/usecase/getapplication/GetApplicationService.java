@@ -61,7 +61,8 @@ public class GetApplicationService implements GetApplicationUseCase {
     ApplicantScoresPort.Score score =
         scores
             .of(application.jobPostingId(), List.of(application.candidateProfileId()))
-            .getOrDefault(application.candidateProfileId(), ApplicantScoresPort.Score.pending());
+            .getOrDefault(
+                application.candidateProfileId(), ApplicantScoresPort.Score.notCalculatedYet());
     ApplicantProfilesPort.Profile candidate =
         profiles
             .of(List.of(application.candidateAccountId()))

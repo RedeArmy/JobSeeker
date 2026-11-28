@@ -77,7 +77,9 @@ class PipelineServicesTest {
         (jobId, ids) -> {
           Map<UUID, ApplicantScoresPort.Score> found = new HashMap<>();
           ids.forEach(
-              id -> found.put(id, scores.getOrDefault(id, ApplicantScoresPort.Score.pending())));
+              id ->
+                  found.put(
+                      id, scores.getOrDefault(id, ApplicantScoresPort.Score.notCalculatedYet())));
           return found;
         },
         profiles,
@@ -237,7 +239,9 @@ class PipelineServicesTest {
             0,
             20);
 
-    assertThatThrownBy(() -> list().execute(foreign)).isInstanceOf(NotFoundException.class);
+    ListJobApplicationsService service = list();
+
+    assertThatThrownBy(() -> service.execute(foreign)).isInstanceOf(NotFoundException.class);
     assertThat(profileReads).isEmpty();
   }
 
@@ -303,5 +307,22 @@ class PipelineServicesTest {
     assertThatThrownBy(() -> get.execute(foreign)).isInstanceOf(NotFoundException.class);
     assertThatThrownBy(() -> get.execute(unknown)).isInstanceOf(NotFoundException.class);
     assertThat(profileReads).isEmpty();
+  }
+
+  @Test
+  void theDetailAlsoNeedsTheRecruiterCapability() {
+    Application application = applied(0, 90.0);
+    isRecruiter = false;
+    GetApplicationQuery query = new GetApplicationQuery(recruiter, application.id().value());
+
+    assertThatThrownBy(() -> get.execute(query)).isInstanceOf(ForbiddenCapabilityException.class);
+    assertThat(profileReads).isEmpty();
+  }
+
+  @Test
+  void theCapMustBePositive() {
+    cap = 0;
+
+    assertThatThrownBy(this::list).isInstanceOf(IllegalArgumentException.class);
   }
 }

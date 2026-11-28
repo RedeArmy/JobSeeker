@@ -28,7 +28,7 @@ public interface ApplicantScoresPort {
 
     public static final String PENDING = "PENDING";
 
-    public static Score pending() {
+    public static Score notCalculatedYet() {
       return new Score(PENDING, null, false, null, null, null);
     }
 

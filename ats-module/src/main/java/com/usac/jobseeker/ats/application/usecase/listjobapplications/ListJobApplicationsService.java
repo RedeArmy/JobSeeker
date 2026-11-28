@@ -102,7 +102,7 @@ public class ListJobApplicationsService implements ListJobApplicationsUseCase {
                     new Row(
                         a,
                         scoreOf.getOrDefault(
-                            a.candidateProfileId(), ApplicantScoresPort.Score.pending())))
+                            a.candidateProfileId(), ApplicantScoresPort.Score.notCalculatedYet())))
             .filter(r -> passes(r, query.minScore()))
             .sorted(query.sort() == ListJobApplicationsQuery.Sort.SCORE ? BY_SCORE : BY_DATE)
             .toList();
