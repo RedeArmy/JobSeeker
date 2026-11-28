@@ -39,7 +39,7 @@ services:
   redis:
     # Sesiones web (ADR-0020), caché de scores y buckets de rate limit (ADR-0011) en espacios de
     # claves independientes de una sola instancia. AOF activo: perder las sesiones cierra la web.
-    image: redis:8.10.3-alpine@sha256:7958cfbb9d152f87dadfbc89f1b0b15938f0b81ff8982feb327476f4911935c3
+    image: redis:8.12.0-alpine@sha256:5af80107c1eeecb484a2269b80a26d12bfa6521787da4663bd9f19f60a163483
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?defínelo en .env (ver .env.example)}
     # La contraseña llega por entorno y no en la línea de comandos, que se vería en `ps`.
