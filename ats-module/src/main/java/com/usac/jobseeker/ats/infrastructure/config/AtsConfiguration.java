@@ -1,11 +1,15 @@
 package com.usac.jobseeker.ats.infrastructure.config;
 
-import com.usac.jobseeker.ats.application.support.ApplicationSnapshotPort;
 import com.usac.jobseeker.ats.application.support.ActorCapabilityPort;
+import com.usac.jobseeker.ats.application.support.ApplicationSnapshotPort;
+import com.usac.jobseeker.ats.application.usecase.listcandidateapplications.ListCandidateApplicationsService;
+import com.usac.jobseeker.ats.application.usecase.listcandidateapplications.ListCandidateApplicationsUseCase;
 import com.usac.jobseeker.ats.application.usecase.submitapplication.ApplicantReadinessPort;
 import com.usac.jobseeker.ats.application.usecase.submitapplication.JobApplicationGatePort;
 import com.usac.jobseeker.ats.application.usecase.submitapplication.SubmitApplicationService;
 import com.usac.jobseeker.ats.application.usecase.submitapplication.SubmitApplicationUseCase;
+import com.usac.jobseeker.ats.application.usecase.withdrawapplication.WithdrawApplicationService;
+import com.usac.jobseeker.ats.application.usecase.withdrawapplication.WithdrawApplicationUseCase;
 import com.usac.jobseeker.ats.infrastructure.adapter.out.persistence.JdbcApplicationRepository;
 import com.usac.jobseeker.common.application.idempotency.IdempotencyKeysPort;
 import com.usac.jobseeker.common.application.observability.UseCaseMetricsPort;
@@ -48,5 +52,22 @@ class AtsConfiguration {
         metrics,
         UUID::randomUUID,
         Clock.systemUTC());
+  }
+
+  @Bean
+  WithdrawApplicationUseCase withdrawApplicationUseCase(
+      ActorCapabilityPort capabilities,
+      JdbcApplicationRepository store,
+      DomainEventPublisherPort events,
+      UseCaseMetricsPort metrics) {
+    return new WithdrawApplicationService(
+        capabilities, store, events, metrics, UUID::randomUUID, Clock.systemUTC());
+  }
+
+  // Interna para `tracker`, que no tiene tablas (ADR-0027).
+  @Bean
+  ListCandidateApplicationsUseCase listCandidateApplicationsUseCase(
+      JdbcApplicationRepository store, UseCaseMetricsPort metrics) {
+    return new ListCandidateApplicationsService(store, metrics);
   }
 }
