@@ -5,9 +5,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 import com.usac.jobseeker.app.InfrastructureTestConfiguration;
 import io.swagger.v3.oas.models.OpenAPI;
-import io.swagger.v3.parser.OpenAPIV3Parser;
-import io.swagger.v3.parser.core.models.ParseOptions;
-import io.swagger.v3.parser.core.models.SwaggerParseResult;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -40,25 +37,24 @@ class OpenApiSpecIntegrationTest {
 
   @Test
   void theGeneratedSpecIsValidOpenApi31() throws Exception {
-    ParseOptions options = new ParseOptions();
-    options.setResolve(true);
+    String spec = export();
 
-    SwaggerParseResult result = new OpenAPIV3Parser().readContents(export(), null, options);
-
-    assertThat(result.getMessages()).as("errores del parser").isEmpty();
-    assertThat(result.getOpenAPI().getOpenapi()).startsWith("3.1");
+    assertThat(OpenApiDocuments.violationsOfTheOpenApi31Schema(spec))
+        .as("incumplimientos del esquema oficial de OpenAPI 3.1")
+        .isEmpty();
+    assertThat(OpenApiDocuments.parse(spec).getOpenapi()).startsWith("3.1");
   }
 
   @Test
   void theGeneratedSpecMeetsEveryProjectRule() throws Exception {
-    OpenAPI spec = new OpenAPIV3Parser().readContents(export(), null, null).getOpenAPI();
+    OpenAPI spec = OpenApiDocuments.parse(export());
 
     assertThat(OpenApiRules.violations(spec)).isEmpty();
   }
 
   @Test
   void theTemplateEndpointIsDocumentedWithItsModuleTagAndBusinessDescriptions() throws Exception {
-    OpenAPI spec = new OpenAPIV3Parser().readContents(export(), null, null).getOpenAPI();
+    OpenAPI spec = OpenApiDocuments.parse(export());
 
     var operation = spec.getPaths().get("/api/v1/me").getGet();
     assertThat(operation.getSummary()).isEqualTo("Consultar mi cuenta");
@@ -75,7 +71,7 @@ class OpenApiSpecIntegrationTest {
   @Test
   void everyOperationOfTheFourProfileCollectionsDocumentsTheSharedErrorResponses()
       throws Exception {
-    OpenAPI spec = new OpenAPIV3Parser().readContents(export(), null, null).getOpenAPI();
+    OpenAPI spec = OpenApiDocuments.parse(export());
     String base = "/api/v1/me/professional-profile/";
 
     for (String collection :
@@ -106,7 +102,7 @@ class OpenApiSpecIntegrationTest {
 
   @Test
   void theSpecIsASingleDocumentForTheWholeDeployable() throws Exception {
-    OpenAPI spec = new OpenAPIV3Parser().readContents(export(), null, null).getOpenAPI();
+    OpenAPI spec = OpenApiDocuments.parse(export());
 
     assertThat(spec.getInfo().getTitle()).isEqualTo("JobSeeker API");
     assertThat(spec.getComponents().getSecuritySchemes()).containsKey("bearer");
