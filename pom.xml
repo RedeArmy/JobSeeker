@@ -37,7 +37,7 @@
              con springdoc 3.2.1; la serie 3 de este validador usa Jackson 3. Más de dos semanas de publicada. -->
         <json-schema-validator.version>3.0.9</json-schema-validator.version>
         <bucket4j.version>8.22.0</bucket4j.version>
-        <openhtmltopdf.version>1.1.114</openhtmltopdf.version>
+        <openhtmltopdf.version>1.1.117</openhtmltopdf.version>
         <!-- ADR-0021: cliente S3 del almacén de archivos, verificado con Java 25 en el spike V2
              (13-spike-almacenamiento-s3-y-clamav.md). Publicada hace más de dos semanas. -->
         <awssdk.version>2.58.0</awssdk.version>
