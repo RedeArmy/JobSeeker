@@ -27,11 +27,15 @@
              classpath hasta que un módulo la declare como dependencia. -->
         <testcontainers.version>2.0.5</testcontainers.version>
         <archunit.version>1.5.1</archunit.version>
-        <springdoc.version>3.2.0</springdoc.version>
-        <!-- La que trae springdoc 3.2.0: un módulo solo necesita las anotaciones, no el generador. -->
-        <swagger-core.version>2.2.55</swagger-core.version>
-        <!-- Solo pruebas: valida el OpenAPI exportado (ADR-0010, decisión 4). Más de dos semanas de publicada. -->
-        <swagger-parser.version>2.1.47</swagger-parser.version>
+        <springdoc.version>3.2.1</springdoc.version>
+        <!-- La que trae springdoc 3.2.1 (swagger-core 3, sobre Jackson 3). Se fija aquí, y no solo las
+             anotaciones, porque otra dependencia que arrastre swagger-core 2.x ganaría la mediación de
+             Maven y la aplicación no arrancaría (falta io.swagger.v3.core.util.MapperCustomizer). -->
+        <swagger-core.version>3.0.0</swagger-core.version>
+        <!-- Solo pruebas: valida el OpenAPI exportado contra el esquema oficial de OpenAPI 3.1 (ADR-0010,
+             decisión 4). Sustituye a swagger-parser, que sigue sobre swagger-core 2 y Jackson 2 y no convive
+             con springdoc 3.2.1; la serie 3 de este validador usa Jackson 3. Más de dos semanas de publicada. -->
+        <json-schema-validator.version>3.0.9</json-schema-validator.version>
         <bucket4j.version>8.22.0</bucket4j.version>
         <openhtmltopdf.version>1.1.114</openhtmltopdf.version>
         <!-- ADR-0021: cliente S3 del almacén de archivos, verificado con Java 25 en el spike V2
@@ -128,15 +132,26 @@
                 <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
                 <version>${springdoc.version}</version>
             </dependency>
+            <!-- Desde la 3.0.0 los artefactos de swagger son Jakarta sin sufijo: `-jakarta` se quedó en la 2.2.x. -->
             <dependency>
                 <groupId>io.swagger.core.v3</groupId>
-                <artifactId>swagger-annotations-jakarta</artifactId>
+                <artifactId>swagger-annotations</artifactId>
                 <version>${swagger-core.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.swagger.parser.v3</groupId>
-                <artifactId>swagger-parser</artifactId>
-                <version>${swagger-parser.version}</version>
+                <groupId>io.swagger.core.v3</groupId>
+                <artifactId>swagger-core</artifactId>
+                <version>${swagger-core.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.swagger.core.v3</groupId>
+                <artifactId>swagger-models</artifactId>
+                <version>${swagger-core.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.networknt</groupId>
+                <artifactId>json-schema-validator</artifactId>
+                <version>${json-schema-validator.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.bucket4j</groupId>

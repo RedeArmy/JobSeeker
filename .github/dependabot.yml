@@ -17,6 +17,13 @@ updates:
     open-pull-requests-limit: 10
     labels:
       - "dependencies"
+    # springdoc y swagger se suben juntos: una versión de springdoc puede exigir otra mayor de
+    # swagger-core, y subir solo una deja la aplicación sin arrancar (ADR-0010, enmienda 1).
+    groups:
+      springdoc-and-swagger:
+        patterns:
+          - "org.springdoc:*"
+          - "io.swagger.core.v3:*"
 
   # Imágenes base del Dockerfile, fijadas por digest: sin esto el digest nunca se mueve y un cambio
   # de la imagen base llega sin revisión, o nunca.
