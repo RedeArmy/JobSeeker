@@ -27,7 +27,7 @@
              classpath hasta que un módulo la declare como dependencia. -->
         <testcontainers.version>2.0.5</testcontainers.version>
         <archunit.version>1.5.1</archunit.version>
-        <springdoc.version>3.2.0</springdoc.version>
+        <springdoc.version>3.2.1</springdoc.version>
         <!-- La que trae springdoc 3.2.0: un módulo solo necesita las anotaciones, no el generador. -->
         <swagger-core.version>2.2.55</swagger-core.version>
         <!-- Solo pruebas: valida el OpenAPI exportado (ADR-0010, decisión 4). Más de dos semanas de publicada. -->
