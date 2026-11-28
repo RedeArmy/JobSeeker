@@ -28,6 +28,8 @@ import com.usac.jobseeker.matching.application.usecase.explainscore.ExplainScore
 import com.usac.jobseeker.matching.application.usecase.explainscore.ExplainScoreUseCase;
 import com.usac.jobseeker.matching.application.usecase.explainscore.WhatIfScoreService;
 import com.usac.jobseeker.matching.application.usecase.explainscore.WhatIfScoreUseCase;
+import com.usac.jobseeker.matching.application.usecase.getapplicantscores.GetApplicantScoresService;
+import com.usac.jobseeker.matching.application.usecase.getapplicantscores.GetApplicantScoresUseCase;
 import com.usac.jobseeker.matching.application.usecase.migratealgorithmversion.MigrateAlgorithmVersionService;
 import com.usac.jobseeker.matching.application.usecase.migratealgorithmversion.MigrateAlgorithmVersionUseCase;
 import com.usac.jobseeker.matching.application.usecase.purgeexpiredprofileviews.ProfileViewRetentionPolicy;
@@ -365,5 +367,12 @@ class MatchingConfiguration {
       ScoreCalculator calculator,
       UseCaseMetricsPort metrics) {
     return new WhatIfScoreService(access, sources, calculator, metrics);
+  }
+
+  // Interna para `ats`: los puntajes de los postulantes de su pipeline (TDD de `ats` §5).
+  @Bean
+  GetApplicantScoresUseCase getApplicantScoresUseCase(
+      JdbcScoreStore store, UseCaseMetricsPort metrics) {
+    return new GetApplicantScoresService(store, metrics);
   }
 }

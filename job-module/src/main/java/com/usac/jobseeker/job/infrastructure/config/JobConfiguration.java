@@ -16,6 +16,8 @@ import com.usac.jobseeker.job.application.usecase.getjobposting.GetJobPostingUse
 import com.usac.jobseeker.job.application.usecase.getjobsignals.GetJobSignalsService;
 import com.usac.jobseeker.job.application.usecase.getownedjobstate.GetOwnedJobStateService;
 import com.usac.jobseeker.job.application.usecase.getownedjobstate.GetOwnedJobStateUseCase;
+import com.usac.jobseeker.job.application.usecase.getpostingsummaries.GetPostingSummariesService;
+import com.usac.jobseeker.job.application.usecase.getpostingsummaries.GetPostingSummariesUseCase;
 import com.usac.jobseeker.job.application.usecase.managejobrequirements.ManageJobRequirementsService;
 import com.usac.jobseeker.job.application.usecase.managejobrequirements.ManageJobRequirementsUseCase;
 import com.usac.jobseeker.job.application.usecase.setacceptingapplications.SetAcceptingApplicationsService;
@@ -113,6 +115,13 @@ class JobConfiguration {
   @Bean
   SetRecruitingStageUseCase setRecruitingStageUseCase(JobChange change) {
     return new SetRecruitingStageService(change, Clock.systemUTC());
+  }
+
+  // Interna para `tracker`: título y estado, también de las eliminadas (BR-JOB-09).
+  @Bean
+  GetPostingSummariesUseCase getPostingSummariesUseCase(
+      JdbcJobPostingRepository postings, UseCaseMetricsPort metrics) {
+    return new GetPostingSummariesService(postings, metrics);
   }
 
   // Interna para `ats`: si una cuenta puede postular (tdd/ats-tracker-modules.md §5).

@@ -2,6 +2,8 @@ package com.usac.jobseeker.ats.infrastructure.adapter.in.web;
 
 import com.usac.jobseeker.ats.application.usecase.submitapplication.SubmitApplicationCommand;
 import com.usac.jobseeker.ats.application.usecase.submitapplication.SubmitApplicationUseCase;
+import com.usac.jobseeker.ats.application.usecase.withdrawapplication.WithdrawApplicationCommand;
+import com.usac.jobseeker.ats.application.usecase.withdrawapplication.WithdrawApplicationUseCase;
 import com.usac.jobseeker.common.domain.error.NotFoundException;
 import com.usac.jobseeker.common.domain.model.AccountId;
 import io.swagger.v3.oas.annotations.Operation;
@@ -32,9 +34,12 @@ public class ApplicationController {
   private static final String ERROR_ENVELOPE = "#/components/schemas/ErrorEnvelope";
 
   private final SubmitApplicationUseCase submit;
+  private final WithdrawApplicationUseCase withdraw;
 
-  public ApplicationController(SubmitApplicationUseCase submit) {
+  public ApplicationController(
+      SubmitApplicationUseCase submit, WithdrawApplicationUseCase withdraw) {
     this.submit = submit;
+    this.withdraw = withdraw;
   }
 
   @PostMapping("/api/v1/ats/jobs/{id}/applications")
@@ -88,8 +93,49 @@ public class ApplicationController {
           @RequestHeader(name = "Idempotency-Key", required = false)
           String idempotencyKey) {
     var submitted =
-        submit.execute(new SubmitApplicationCommand(caller(principal), jobId(id), idempotencyKey));
+        submit.execute(
+            new SubmitApplicationCommand(caller(principal), uuidOrNotFound(id), idempotencyKey));
     return ResponseEntity.status(HttpStatus.CREATED).body(ApplicationResponse.from(submitted));
+  }
+
+  /**
+   * Retirar no borra nada: la postulación se conserva y cambia de estado, por eso es un `POST` a un
+   * subrecurso y no un `DELETE` (desvío del LLD §7, tdd/ats-tracker-modules.md §8).
+   */
+  @PostMapping("/api/v1/ats/applications/{id}/withdrawal")
+  @Operation(
+      summary = "Retirar una postulación propia",
+      description =
+          "Pasa una postulación en proceso a `WITHDRAWN` (REQ-C-03). Después se puede volver a"
+              + " postular a la misma vacante mientras acepte postulaciones.",
+      security = @SecurityRequirement(name = "bearer"))
+  @ApiResponse(responseCode = "200", description = "La postulación retirada, con su historial.")
+  @ApiResponse(
+      responseCode = "401",
+      description = "Falta el token, o no vale.",
+      content = @Content(schema = @Schema(ref = ERROR_ENVELOPE)))
+  @ApiResponse(
+      responseCode = "403",
+      description = "Sin la capacidad de candidato (`FORBIDDEN_CAPABILITY`).",
+      content = @Content(schema = @Schema(ref = ERROR_ENVELOPE)))
+  @ApiResponse(
+      responseCode = "404",
+      description = "La postulación no existe o es de otro candidato: no se distingue.",
+      content = @Content(schema = @Schema(ref = ERROR_ENVELOPE)))
+  @ApiResponse(
+      responseCode = "409",
+      description =
+          "`INVALID_TRANSITION` si ya terminó (contratada, descartada o retirada);"
+              + " `STALE_STATE` si otro cambio llegó antes.",
+      content = @Content(schema = @Schema(ref = ERROR_ENVELOPE)))
+  @ApiResponse(
+      responseCode = "429",
+      description = "Se superó el límite de peticiones; reintentar tras `Retry-After`.",
+      content = @Content(schema = @Schema(ref = ERROR_ENVELOPE)))
+  public CandidateApplicationResponse withdrawApplication(
+      Principal principal, @PathVariable String id) {
+    return CandidateApplicationResponse.from(
+        withdraw.execute(new WithdrawApplicationCommand(caller(principal), uuidOrNotFound(id))));
   }
 
   // `sub` ya fue validado como UUID por el decodificador de la cadena (`SubjectValidator`).
@@ -97,8 +143,8 @@ public class ApplicationController {
     return new AccountId(UUID.fromString(principal.getName()));
   }
 
-  // Un identificador que no es un UUID no puede existir: se trata como una vacante inexistente.
-  private static UUID jobId(String raw) {
+  // Un identificador que no es un UUID no puede existir: se trata como un recurso inexistente.
+  private static UUID uuidOrNotFound(String raw) {
     try {
       return UUID.fromString(raw);
     } catch (IllegalArgumentException _) {

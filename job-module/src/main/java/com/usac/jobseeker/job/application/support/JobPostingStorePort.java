@@ -38,4 +38,11 @@ public interface JobPostingStorePort {
    * *compare-and-set* de toda edición y transición. `false` si otra se adelantó.
    */
   boolean updateIfVersion(JobPosting posting, long expectedVersion);
+
+  /**
+   * Las vacantes pedidas **incluidas las eliminadas**, en una consulta. Solo para quien debe seguir
+   * mostrando una vacante borrada, como el tracker del candidato (BR-JOB-09); el resto del sistema
+   * usa las lecturas que las excluyen.
+   */
+  List<JobPosting> findAllByIdsIncludingDeleted(Collection<JobPostingId> ids);
 }

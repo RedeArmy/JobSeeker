@@ -1,15 +1,15 @@
 package com.usac.jobseeker.ats.application.usecase.submitapplication;
 
+import com.usac.jobseeker.ats.application.support.ActorCapabilityPort;
+import com.usac.jobseeker.ats.application.support.ApplicationOutbox;
 import com.usac.jobseeker.ats.application.support.ApplicationSnapshotPort;
 import com.usac.jobseeker.ats.application.support.ApplicationStorePort;
-import com.usac.jobseeker.ats.application.support.CandidateCapabilityPort;
 import com.usac.jobseeker.ats.domain.event.ApplicationEvents;
 import com.usac.jobseeker.ats.domain.model.Application;
 import com.usac.jobseeker.ats.domain.model.ApplicationId;
 import com.usac.jobseeker.common.application.idempotency.IdempotencyKeysPort;
 import com.usac.jobseeker.common.application.observability.UseCaseMetricsPort;
 import com.usac.jobseeker.common.application.outbox.DomainEventPublisherPort;
-import com.usac.jobseeker.common.application.outbox.OutboxEvent;
 import com.usac.jobseeker.common.domain.error.ApplicationDeniedException;
 import com.usac.jobseeker.common.domain.error.ApplicationRequirementsMissingException;
 import com.usac.jobseeker.common.domain.error.ForbiddenCapabilityException;
@@ -26,7 +26,6 @@ import java.util.UUID;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -40,7 +39,6 @@ public class SubmitApplicationService implements SubmitApplicationUseCase {
 
   private static final Logger LOG = LoggerFactory.getLogger(SubmitApplicationService.class);
   private static final String USE_CASE = "submit_application";
-  private static final String TRACE_ID_KEY = "traceId";
 
   private final Ports ports;
   private final UseCaseMetricsPort metrics;
@@ -49,7 +47,7 @@ public class SubmitApplicationService implements SubmitApplicationUseCase {
 
   /** Los puertos de salida, agrupados para que el constructor siga siendo legible. */
   public record Ports(
-      CandidateCapabilityPort capabilities,
+      ActorCapabilityPort capabilities,
       IdempotencyKeysPort idempotency,
       JobApplicationGatePort gate,
       ApplicantReadinessPort readiness,
@@ -170,16 +168,7 @@ public class SubmitApplicationService implements SubmitApplicationUseCase {
   private void publish(Application application) {
     ports
         .events()
-        .publish(
-            new OutboxEvent(
-                ids.get(),
-                ApplicationEvents.AGGREGATE_TYPE,
-                application.id().value(),
-                application.version(),
-                ApplicationEvents.SUBMITTED,
-                OutboxEvent.FIRST_EVENT_VERSION,
-                ApplicationEvents.payload(application),
-                MDC.get(TRACE_ID_KEY)));
+        .publish(ApplicationOutbox.event(ids.get(), application, ApplicationEvents.SUBMITTED));
   }
 
   // La huella distingue la operación y la vacante: la misma clave para otra vacante es un error

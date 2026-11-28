@@ -161,6 +161,21 @@ class JdbcJobRepositoriesTest {
         .isOne();
   }
 
+  // BR-JOB-09: el tracker sigue viendo la eliminada; la lectura normal por lotes no.
+  @Test
+  void onlyTheIncludingDeletedReadReturnsADeletedPosting() {
+    JobPosting posting = draft();
+    postings.insert(posting);
+    postings.updateIfVersion(
+        posting.transition(JobStatus.DELETED, Initiator.OWNER, false, T1), posting.version());
+
+    assertThat(postings.findAllByIds(List.of(posting.id()))).isEmpty();
+    assertThat(postings.findAllByIdsIncludingDeleted(List.of(posting.id())))
+        .singleElement()
+        .satisfies(found -> assertThat(found.status()).isEqualTo(JobStatus.DELETED));
+    assertThat(postings.findAllByIdsIncludingDeleted(List.of())).isEmpty();
+  }
+
   @Test
   void theOwnerAndCreationDateAreNeverRewrittenByAnUpdate() {
     JobPosting posting = draft();

@@ -36,6 +36,7 @@ public class JdbcJobPostingRepository implements JobPostingStorePort {
       "id, recruiter_account_id, title, description, modality, country, salary_min, salary_max,"
           + " salary_currency, salary_period, status, accepting_applications, recruiting_stage,"
           + " version, created_at, updated_at, published_at, closed_at, archived_at, deleted_at";
+  private static final String SELECT = "select " + COLUMNS + " from job_postings";
 
   private final JdbcClient jdbc;
 
@@ -45,8 +46,7 @@ public class JdbcJobPostingRepository implements JobPostingStorePort {
 
   @Override
   public Optional<JobPosting> findById(JobPostingId id) {
-    return jdbc.sql(
-            "select " + COLUMNS + " from job_postings where id = :id and status <> 'DELETED'")
+    return jdbc.sql(SELECT + " where id = :id and status <> 'DELETED'")
         .param(ID, id.value())
         .query((rows, n) -> postingOf(rows))
         .optional();
@@ -57,8 +57,20 @@ public class JdbcJobPostingRepository implements JobPostingStorePort {
     if (ids.isEmpty()) {
       return List.of();
     }
-    return jdbc.sql(
-            "select " + COLUMNS + " from job_postings where id = any(:ids) and status <> 'DELETED'")
+    return jdbc.sql(SELECT + " where id = any(:ids) and status <> 'DELETED'")
+        .param("ids", ids.stream().map(JobPostingId::value).toArray(UUID[]::new))
+        .query((rows, n) -> postingOf(rows))
+        .list();
+  }
+
+  // BR-JOB-09: la fila de una eliminada se conserva justo para esto, que el candidato la siga
+  // viendo.
+  @Override
+  public List<JobPosting> findAllByIdsIncludingDeleted(Collection<JobPostingId> ids) {
+    if (ids.isEmpty()) {
+      return List.of();
+    }
+    return jdbc.sql(SELECT + " where id = any(:ids)")
         .param("ids", ids.stream().map(JobPostingId::value).toArray(UUID[]::new))
         .query((rows, n) -> postingOf(rows))
         .list();

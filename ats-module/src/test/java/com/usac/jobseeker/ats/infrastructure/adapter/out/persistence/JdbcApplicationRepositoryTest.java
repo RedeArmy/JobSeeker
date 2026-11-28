@@ -5,6 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.usac.jobseeker.ats.domain.model.Application;
 import com.usac.jobseeker.ats.domain.model.ApplicationId;
+import com.usac.jobseeker.ats.domain.model.ChangeInitiator;
+import com.usac.jobseeker.ats.domain.model.RejectionReason;
+import com.usac.jobseeker.ats.domain.model.StatusChange;
 import com.usac.jobseeker.ats.infrastructure.AtsPostgres;
 import com.usac.jobseeker.ats.infrastructure.AtsPostgres.Parties;
 import com.usac.jobseeker.common.domain.model.AccountId;
@@ -174,6 +177,81 @@ class JdbcApplicationRepositoryTest {
             NOW);
 
     assertThatThrownBy(() -> insert(submitted)).isInstanceOf(DataIntegrityViolationException.class);
+  }
+
+  // El compare-and-set: solo escribe desde la versión leída, y con su fila de historial.
+  @Test
+  void aMoveIsWrittenOnlyFromTheVersionThatWasRead() {
+    Application.Transition submitted = submission(parties.job());
+    insert(submitted);
+    Application current = submitted.application();
+    Application.Transition withdrawn =
+        current.withdraw(ChangeInitiator.CANDIDATE, UUID.randomUUID(), NOW.plusSeconds(60));
+
+    assertThat(store.updateIfVersion(withdrawn.application(), withdrawn.change(), 7)).isFalse();
+    assertThat(historyOf(current.id())).isEqualTo(1);
+    assertThat(
+            store.updateIfVersion(withdrawn.application(), withdrawn.change(), current.version()))
+        .isTrue();
+
+    assertThat(store.findById(current.id())).contains(withdrawn.application());
+    assertThat(store.historyOf(List.of(current.id())).get(current.id()))
+        .containsExactly(submitted.change(), withdrawn.change());
+  }
+
+  // El motivo del descarte queda en el historial aunque reabrir lo quite de la postulación (D5).
+  @Test
+  void theHistoryKeepsTheRejectionReasonAfterReopening() {
+    Application.Transition submitted = submission(parties.job());
+    insert(submitted);
+    Application.Transition rejected =
+        submitted
+            .application()
+            .reject(
+                RejectionReason.CANDIDATE_UNRESPONSIVE,
+                ChangeInitiator.RECRUITER,
+                UUID.randomUUID(),
+                NOW.plusSeconds(1));
+    store.updateIfVersion(rejected.application(), rejected.change(), 1);
+    Application.Transition reopened =
+        rejected
+            .application()
+            .reopen(ChangeInitiator.RECRUITER, UUID.randomUUID(), NOW.plusSeconds(2));
+    store.updateIfVersion(reopened.application(), reopened.change(), 2);
+
+    assertThat(store.findById(submitted.application().id()).orElseThrow().rejectionReason())
+        .isNull();
+    assertThat(store.historyOf(List.of(submitted.application().id())).values())
+        .singleElement()
+        .satisfies(
+            changes ->
+                assertThat(changes)
+                    .extracting(StatusChange::rejectionReason)
+                    .containsExactly(null, RejectionReason.CANDIDATE_UNRESPONSIVE, null));
+  }
+
+  @Test
+  void theCandidatesApplicationsComeNewestFirstAndAJobsOldestFirstWithALimit() {
+    Application.Transition first = submission(parties.job());
+    insert(first);
+    UUID otherJob = AtsPostgres.job(jdbc, AtsPostgres.account(jdbc, false, true));
+    Application.Transition second =
+        Application.submit(
+            new ApplicationId(UUID.randomUUID()),
+            parties.profile(),
+            new AccountId(parties.account()),
+            otherJob,
+            parties.cvFile(),
+            UUID.randomUUID(),
+            NOW.plusSeconds(60));
+    insert(second);
+
+    assertThat(store.findByCandidate(new AccountId(parties.account())))
+        .extracting(Application::id)
+        .containsExactly(second.application().id(), first.application().id());
+    assertThat(store.findByJob(parties.job(), 10)).containsExactly(first.application());
+    assertThat(store.findByJob(otherJob, 0)).isEmpty();
+    assertThat(store.historyOf(List.of())).isEmpty();
   }
 
   // Regla 4 del TDD: dos envíos simultáneos, cada uno en su transacción, tienen exactamente un

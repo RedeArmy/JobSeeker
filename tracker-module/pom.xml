@@ -14,8 +14,61 @@
     <packaging>jar</packaging>
 
     <name>tracker-module</name>
-    <description>POM de marcador de posición del módulo tracker. Aún sin dependencias.</description>
+    <description>Módulo tracker: el seguimiento de postulaciones del candidato. Ver docs/03-architecture/tdd/ats-tracker-modules.md.</description>
 
-    <!-- Los starters de Spring Boot y las dependencias propias del módulo se añadirán más adelante. -->
+    <dependencies>
+        <dependency>
+            <groupId>com.usac.jobseeker</groupId>
+            <artifactId>common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- `tracker` no tiene tablas (ADR-0027): lee las postulaciones por los casos de uso públicos de ats y
+             los títulos de las vacantes por los de job, y la capacidad por los de auth, siempre desde
+             infrastructure.adapter (ARCH-04). Ninguno de ellos depende de tracker (ARCH-05, ARCH-06). -->
+        <dependency>
+            <groupId>com.usac.jobseeker</groupId>
+            <artifactId>auth-module</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.usac.jobseeker</groupId>
+            <artifactId>ats-module</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.usac.jobseeker</groupId>
+            <artifactId>job-module</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- Transacciones en application (ADR-0015, ARCH-02): las dos lecturas ven el mismo estado. -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-tx</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
+        </dependency>
+        <!-- Adaptador de entrada web (ARCH-08) y las anotaciones de OpenAPI que lo documentan (ADR-0010). -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.swagger.core.v3</groupId>
+            <artifactId>swagger-annotations-jakarta</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 
 </project>

@@ -132,6 +132,11 @@ public final class JobFixture {
     }
 
     @Override
+    public List<JobPosting> findAllByIdsIncludingDeleted(java.util.Collection<JobPostingId> ids) {
+      return ids.stream().map(postings::get).filter(java.util.Objects::nonNull).toList();
+    }
+
+    @Override
     public void insert(JobPosting posting) {
       postings.put(posting.id(), posting);
     }
