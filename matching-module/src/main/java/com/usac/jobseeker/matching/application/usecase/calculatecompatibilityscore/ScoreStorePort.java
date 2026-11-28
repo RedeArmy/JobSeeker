@@ -8,6 +8,7 @@ import com.usac.jobseeker.matching.domain.model.StoredScore;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -32,6 +33,27 @@ public interface ScoreStorePort {
    * Los perfiles con puntaje vigente en esta vacante, los más recientes primero y hasta `limit`.
    */
   List<CandidateProfileId> profilesOfJob(JobPostingId job, int limit);
+
+  /**
+   * Las vacantes a las que el perfil postuló (las que tienen copia del perfil al postular), hasta
+   * `limit`. El recálculo las recorre aunque no tengan puntaje vigente: si al postular aún no había
+   * vector, el puntaje se crea cuando llega, en vez de quedar pendiente para siempre.
+   */
+  List<JobPostingId> appliedJobsOfProfile(CandidateProfileId profile, int limit);
+
+  /** Los perfiles que postularon a la vacante, hasta `limit`; por la misma razón. */
+  List<CandidateProfileId> appliedProfilesOfJob(JobPostingId job, int limit);
+
+  /** Los puntajes vigentes de estos perfiles en la vacante, en una sola consulta. */
+  Map<CandidateProfileId, StoredScore> findCurrentForJob(
+      JobPostingId job, Collection<CandidateProfileId> profiles);
+
+  /**
+   * El puntaje de cada perfil **al postular** (la foto `APPLIED` más reciente), en una sola
+   * consulta. Falta si al postular el puntaje estaba pendiente.
+   */
+  Map<CandidateProfileId, Double> appliedOverallForJob(
+      JobPostingId job, Collection<CandidateProfileId> profiles);
 
   /**
    * Hasta `limit` puntajes vigentes calculados con **otra** versión del algoritmo, los más viejos

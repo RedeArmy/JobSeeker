@@ -716,6 +716,7 @@ Infraestructura transversal, sin claves foráneas (ADR-0027): el historial de au
 | `idx_pe_embedding_model` sobre `profile_embeddings (embedding_model)` parcial `WHERE embedding IS NOT NULL` (y el equivalente de vacantes) | Contar y localizar vectores que no son del modelo vigente durante un cambio de modelo (§5.1) |
 | `compatibility_scores (cv_profile_id, job_posting_id, computed_at DESC)` | Recuperar el score vigente sin escanear histórico completo |
 | `applications (job_posting_id, status)` | Renderizado del pipeline de reclutador con hasta 200 candidatos (NFR-PERF-02) |
+| `application_profile_snapshots (job_posting_id)` | El recálculo de una vacante encuentra a sus postulantes aunque aún no tengan puntaje (TD-R57) |
 | `candidate_profiles (discoverable)` parcial (`WHERE discoverable = true`) | Acelera la consulta de sugerencia de candidatos (BR-MATCH-06), que filtra primero por descubribilidad antes de rankear por similitud/score |
 | `candidate_profiles (availability_status)` | Soporta el `ORDER BY` que prioriza `OPEN_TO_WORK` en el listado de sugeridos (BR-MATCH-07) sin escanear toda la tabla |
 | `job_postings (recruiting_stage)` | La consulta de generación de sugerencias (BR-MATCH-06) excluye vacantes en `REVIEWING` (BR-MATCH-08) antes de calcular/rankear |

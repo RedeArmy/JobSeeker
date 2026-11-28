@@ -17,6 +17,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -163,6 +164,70 @@ public class JdbcScoreStore implements ScoreStorePort {
         .param(JOB, job.value())
         .query((rows, n) -> storedOf(rows))
         .optional();
+  }
+
+  @Override
+  public List<JobPostingId> appliedJobsOfProfile(CandidateProfileId profile, int limit) {
+    return jdbc.sql(
+            "select job_posting_id from application_profile_snapshots"
+                + " where candidate_profile_id = :profile group by job_posting_id"
+                + " order by max(created_at) desc limit :limit")
+        .param(PROFILE, profile.value())
+        .param(LIMIT, limit)
+        .query((rows, n) -> new JobPostingId(rows.getObject(1, UUID.class)))
+        .list();
+  }
+
+  @Override
+  public List<CandidateProfileId> appliedProfilesOfJob(JobPostingId job, int limit) {
+    return jdbc.sql(
+            "select candidate_profile_id from application_profile_snapshots"
+                + " where job_posting_id = :job group by candidate_profile_id"
+                + " order by max(created_at) desc limit :limit")
+        .param(JOB, job.value())
+        .param(LIMIT, limit)
+        .query((rows, n) -> new CandidateProfileId(rows.getObject(1, UUID.class)))
+        .list();
+  }
+
+  // Una consulta para todo el pipeline, nunca una por postulante (coding-standards §8.1).
+  @Override
+  public Map<CandidateProfileId, StoredScore> findCurrentForJob(
+      JobPostingId job, Collection<CandidateProfileId> profiles) {
+    if (profiles.isEmpty()) {
+      return Map.of();
+    }
+    Map<CandidateProfileId, StoredScore> found = new HashMap<>();
+    jdbc.sql(SELECT_CURRENT + " where job_posting_id = :job and candidate_profile_id = any(:ids)")
+        .param(JOB, job.value())
+        .param("ids", profiles.stream().map(CandidateProfileId::value).toArray(UUID[]::new))
+        .query((rows, n) -> storedOf(rows))
+        .list()
+        .forEach(stored -> found.put(stored.profile(), stored));
+    return found;
+  }
+
+  // La foto más reciente de cada perfil con motivo APPLIED, también en una consulta.
+  @Override
+  public Map<CandidateProfileId, Double> appliedOverallForJob(
+      JobPostingId job, Collection<CandidateProfileId> profiles) {
+    if (profiles.isEmpty()) {
+      return Map.of();
+    }
+    Map<CandidateProfileId, Double> found = new HashMap<>();
+    jdbc.sql(
+            "select distinct on (candidate_profile_id) candidate_profile_id, overall"
+                + " from compatibility_score_snapshots where job_posting_id = :job"
+                + " and reason = 'APPLIED' and candidate_profile_id = any(:ids)"
+                + " order by candidate_profile_id, created_at desc")
+        .param(JOB, job.value())
+        .param("ids", profiles.stream().map(CandidateProfileId::value).toArray(UUID[]::new))
+        .query(
+            (rows, n) ->
+                Map.entry(new CandidateProfileId(rows.getObject(1, UUID.class)), rows.getDouble(2)))
+        .list()
+        .forEach(entry -> found.put(entry.getKey(), entry.getValue()));
+    return found;
   }
 
   @Override

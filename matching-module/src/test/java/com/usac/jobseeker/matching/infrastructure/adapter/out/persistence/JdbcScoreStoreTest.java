@@ -384,6 +384,59 @@ class JdbcScoreStoreTest {
 
   // ---- copia del perfil al postular ----
 
+  // Los pares postulados se encuentran por perfil y por vacante, también sin puntaje vigente.
+  @Test
+  void appliedPairsAreFoundFromBothSidesEvenWithoutACurrentScore() {
+    StoredScore pair = aPair(ScoreReason.APPLIED);
+    store.insertApplicationSnapshot(application(pair, UUID.randomUUID(), "perfil"));
+
+    assertThat(store.appliedJobsOfProfile(pair.profile(), 10)).containsExactly(pair.job());
+    assertThat(store.appliedProfilesOfJob(pair.job(), 10)).containsExactly(pair.profile());
+    assertThat(store.appliedProfilesOfJob(pair.job(), 0)).isEmpty();
+    assertThat(store.findCurrent(pair.profile(), pair.job())).isEmpty();
+  }
+
+  // El pipeline lee el vigente y el de postular de todos sus postulantes en una consulta cada uno.
+  @Test
+  void theCurrentAndTheAppliedScoreOfSeveralApplicantsAreReadTogether() {
+    var job = world.job("PUBLISHED");
+    var scoredCandidate = world.candidate("Java");
+    var pendingCandidate = world.candidate("Go");
+    StoredScore current = stored(scoredCandidate, job, 0.8, ScoreReason.APPLIED, T0);
+    store.upsertCurrent(List.of(current));
+    StoredScore atApplying = stored(scoredCandidate, job, 0.4, ScoreReason.APPLIED, T0);
+    store.insertSnapshot(
+        new ScoreSnapshot(
+            UUID.randomUUID(),
+            scoredCandidate.profileId(),
+            job.jobId(),
+            SnapshotReason.STAGE_CHANGED,
+            current.score(),
+            T0.plusSeconds(60)));
+    store.insertSnapshot(
+        new ScoreSnapshot(
+            UUID.randomUUID(),
+            scoredCandidate.profileId(),
+            job.jobId(),
+            SnapshotReason.APPLIED,
+            atApplying.score(),
+            T0));
+    var both = List.of(scoredCandidate.profileId(), pendingCandidate.profileId());
+
+    var currents = store.findCurrentForJob(job.jobId(), both);
+    var applied = store.appliedOverallForJob(job.jobId(), both);
+
+    assertThat(currents).containsOnlyKeys(scoredCandidate.profileId());
+    assertThat(currents.get(scoredCandidate.profileId()).score().overall())
+        .isCloseTo(current.score().overall(), org.assertj.core.data.Offset.offset(0.01));
+    assertThat(applied).containsOnlyKeys(scoredCandidate.profileId());
+    assertThat(applied.get(scoredCandidate.profileId()))
+        .as("la foto de postular, no la del cambio de etapa")
+        .isCloseTo(atApplying.score().overall(), org.assertj.core.data.Offset.offset(0.01));
+    assertThat(store.findCurrentForJob(job.jobId(), List.of())).isEmpty();
+    assertThat(store.appliedOverallForJob(job.jobId(), List.of())).isEmpty();
+  }
+
   private ApplicationProfileSnapshot application(
       StoredScore pair, UUID applicationId, String text) {
     return new ApplicationProfileSnapshot(

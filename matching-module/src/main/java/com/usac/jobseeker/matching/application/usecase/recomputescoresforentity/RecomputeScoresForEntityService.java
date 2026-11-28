@@ -13,10 +13,13 @@ import com.usac.jobseeker.matching.domain.model.StoredScore;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Transactional;
@@ -73,7 +76,10 @@ public class RecomputeScoresForEntityService implements RecomputeScoresForEntity
     if (profile.isEmpty()) {
       return 0;
     }
-    List<JobPostingId> jobs = sources.store().jobsOfProfile(profile.get(), maxPairs);
+    Set<JobPostingId> applied =
+        new HashSet<>(sources.store().appliedJobsOfProfile(profile.get(), maxPairs));
+    List<JobPostingId> jobs =
+        union(sources.store().jobsOfProfile(profile.get(), maxPairs), applied);
     Optional<CandidateSignals> signals =
         jobs.isEmpty() ? Optional.empty() : sources.candidates().read(account);
     if (signals.isEmpty()) {
@@ -89,7 +95,15 @@ public class RecomputeScoresForEntityService implements RecomputeScoresForEntity
       JobSignals signalsOfJob = jobSignals.get(job);
       Double cosine = cosines.get(job);
       if (signalsOfJob != null && cosine != null) {
-        fresh.add(recomputed(signals.get(), profile.get(), job, signalsOfJob, cosine, now));
+        fresh.add(
+            recomputed(
+                signals.get(),
+                profile.get(),
+                job,
+                signalsOfJob,
+                cosine,
+                applied.contains(job),
+                now));
       }
     }
     return save(fresh, jobs.size());
@@ -97,8 +111,14 @@ public class RecomputeScoresForEntityService implements RecomputeScoresForEntity
 
   private int forJob(JobPostingId job) {
     Optional<JobSignals> jobSignals = sources.jobs().read(job);
+    Set<CandidateProfileId> applied =
+        jobSignals.isEmpty()
+            ? Set.of()
+            : new HashSet<>(sources.store().appliedProfilesOfJob(job, maxPairs));
     List<CandidateProfileId> profiles =
-        jobSignals.isEmpty() ? List.of() : sources.store().profilesOfJob(job, maxPairs);
+        jobSignals.isEmpty()
+            ? List.of()
+            : union(sources.store().profilesOfJob(job, maxPairs), applied);
     if (profiles.isEmpty()) {
       return 0;
     }
@@ -112,23 +132,39 @@ public class RecomputeScoresForEntityService implements RecomputeScoresForEntity
       CandidateSignals signals = account == null ? null : signalsOf.get(account);
       Double cosine = cosines.get(profile);
       if (signals != null && cosine != null) {
-        fresh.add(recomputed(signals, profile, job, jobSignals.get(), cosine, now));
+        fresh.add(
+            recomputed(
+                signals, profile, job, jobSignals.get(), cosine, applied.contains(profile), now));
       }
     }
     return save(fresh, profiles.size());
   }
 
   // Se pasa el motivo MÁS DÉBIL a propósito: el almacén conserva el más fuerte que el par ya tenga
-  // (un postulado sigue postulado, un par visto por el candidato sigue visto).
+  // (un postulado sigue postulado, un par visto por el candidato sigue visto). La excepción es un
+  // par postulado: puede no tener fila todavía, si al postular faltaba el vector, y debe nacer como
+  // APPLIED (ADR-0031), no como sugerido.
   private StoredScore recomputed(
       CandidateSignals signals,
       CandidateProfileId profile,
       JobPostingId job,
       JobSignals jobSignals,
       double cosine,
+      boolean applied,
       Instant now) {
     return new StoredScore(
-        profile, job, calculator.score(signals, jobSignals, cosine), ScoreReason.SUGGESTED, now);
+        profile,
+        job,
+        calculator.score(signals, jobSignals, cosine),
+        applied ? ScoreReason.APPLIED : ScoreReason.SUGGESTED,
+        now);
+  }
+
+  // Los pares con puntaje vigente más los postulados, sin repetir y en un orden estable.
+  private static <T> List<T> union(List<T> stored, Set<T> applied) {
+    Set<T> all = new LinkedHashSet<>(stored);
+    all.addAll(applied);
+    return List.copyOf(all);
   }
 
   private int save(List<StoredScore> fresh, int pairs) {

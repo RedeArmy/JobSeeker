@@ -73,6 +73,54 @@ class RecomputeScoresForEntityServiceTest {
     assertThat(world.metrics).containsExactly("recomputed");
   }
 
+  /** Lo que deja postular cuando aún no hay vector: la copia del perfil, sin puntaje. */
+  private void appliedWithoutScore(CandidateSignals candidate, JobSignals job) {
+    world.store.insertApplicationSnapshot(
+        new com.usac.jobseeker.matching.domain.model.ApplicationProfileSnapshot(
+            java.util.UUID.randomUUID(),
+            candidate.profileId(),
+            job.jobId(),
+            java.util.UUID.randomUUID(),
+            "perfil",
+            "c".repeat(64),
+            "v1",
+            OLD));
+  }
+
+  // ADR-0031: si al postular faltaba el vector, el puntaje nace cuando llega, y como APPLIED; antes
+  // el recálculo solo recorría pares con puntaje y la postulación quedaba pendiente para siempre.
+  @Test
+  void anAppliedPairWithoutAScoreGetsOneAsAppliedWhenItsProfileIsRecomputed() {
+    var candidate = world.candidate("Java");
+    var job = world.job("PUBLISHED");
+    appliedWithoutScore(candidate, job);
+    world.similar(candidate, job, 0.8);
+
+    assertThat(recomputeProfile(candidate)).isEqualTo(1);
+
+    var created = world.store.findCurrent(candidate.profileId(), job.jobId()).orElseThrow();
+    assertThat(created.reason()).isEqualTo(ScoreReason.APPLIED);
+    assertThat(created.score()).isEqualTo(world.calculator.score(candidate, job, 0.8));
+  }
+
+  @Test
+  void anAppliedPairWithoutAScoreGetsOneAsAppliedWhenItsJobIsRecomputed() {
+    var candidate = world.candidate("Java");
+    var job = world.job("PUBLISHED");
+    var suggested = world.candidate("Go");
+    appliedWithoutScore(candidate, job);
+    stored(suggested, job, ScoreReason.SUGGESTED);
+    world.similar(candidate, job, 0.8);
+
+    assertThat(recomputeJob(job)).isEqualTo(2);
+
+    assertThat(world.store.findCurrent(candidate.profileId(), job.jobId()).orElseThrow().reason())
+        .isEqualTo(ScoreReason.APPLIED);
+    assertThat(world.store.findCurrent(suggested.profileId(), job.jobId()).orElseThrow().reason())
+        .as("un sugerido sigue sugerido")
+        .isEqualTo(ScoreReason.SUGGESTED);
+  }
+
   @Test
   void whenAJobChangesEveryStoredPairOfThatJobIsRecomputedWithEachCandidateOwnSignals() {
     var job = world.job("PUBLISHED");

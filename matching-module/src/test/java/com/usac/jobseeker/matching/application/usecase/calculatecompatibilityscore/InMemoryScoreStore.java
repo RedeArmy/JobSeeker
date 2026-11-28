@@ -83,6 +83,53 @@ public final class InMemoryScoreStore implements ScoreStorePort {
   }
 
   @Override
+  public List<JobPostingId> appliedJobsOfProfile(CandidateProfileId profile, int limit) {
+    return applicationSnapshots.stream()
+        .filter(s -> s.profile().equals(profile))
+        .map(ApplicationProfileSnapshot::job)
+        .distinct()
+        .limit(limit)
+        .toList();
+  }
+
+  @Override
+  public List<CandidateProfileId> appliedProfilesOfJob(JobPostingId job, int limit) {
+    return applicationSnapshots.stream()
+        .filter(s -> s.job().equals(job))
+        .map(ApplicationProfileSnapshot::profile)
+        .distinct()
+        .limit(limit)
+        .toList();
+  }
+
+  @Override
+  public Map<CandidateProfileId, StoredScore> findCurrentForJob(
+      JobPostingId job, Collection<CandidateProfileId> profiles) {
+    Map<CandidateProfileId, StoredScore> found = new java.util.HashMap<>();
+    for (CandidateProfileId profile : profiles) {
+      StoredScore stored = current.get(key(profile, job));
+      if (stored != null) {
+        found.put(profile, stored);
+      }
+    }
+    return found;
+  }
+
+  @Override
+  public Map<CandidateProfileId, Double> appliedOverallForJob(
+      JobPostingId job, Collection<CandidateProfileId> profiles) {
+    Map<CandidateProfileId, Double> found = new java.util.HashMap<>();
+    for (ScoreSnapshot snapshot : snapshots) {
+      if (snapshot.job().equals(job)
+          && profiles.contains(snapshot.profile())
+          && snapshot.reason() == com.usac.jobseeker.matching.domain.model.SnapshotReason.APPLIED) {
+        found.put(snapshot.profile(), snapshot.score().overall());
+      }
+    }
+    return found;
+  }
+
+  @Override
   public List<StoredScore> staleVersion(String currentVersion, int limit) {
     return current.values().stream()
         .filter(s -> !s.score().version().value().equals(currentVersion))
